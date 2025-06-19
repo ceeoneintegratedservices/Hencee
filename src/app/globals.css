@@ -3,6 +3,30 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --ceeone-black: #101828;
+  --ceeone-white: #F9F9F9;
+  --primary-main: #02016A;
+  --primary-100: #5570F1;
+  --primary-50: #97A5EB;
+  --primary-10: #DBDEEE;
+  --secondary-2: #E9F4FF;
+  --secondary-main: #11518C;
+  --secondary-100: #FFCC91;
+  --secondary-20: #FEF5EA;
+  --action-red: #CC5F5F;
+  --action-green: #519C66;
+  --black-100: #1C1D22;
+  --black-60: #45464E;
+  --black-50: #53545C;
+  --black-40: #6E7079;
+  --black-30: #8B8D97;
+  --black-20: #A6A8B1;
+  --black-10: #BEC0CA;
+  --main-bg: #F4F5FA;
+  --gray-white: #FFFFFF;
+  --on-surface: #1D1B20;
+  --on-primary: #ffffff;
+  --corner-large: 20px;
 }
 
 @theme inline {
@@ -20,7 +44,24 @@
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--ceeone-white);
+  color: var(--ceeone-black);
+  font-family: 'Inter', 'Work Sans', 'Poppins', Arial, sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6, .font-bold {
+  font-family: 'Work Sans', 'Poppins', Arial, sans-serif;
+  font-weight: 700;
+}
+
+.font-poppins {
+  font-family: 'Poppins', Arial, sans-serif;
+}
+
+.font-inter {
+  font-family: 'Inter', Arial, sans-serif;
+}
+
+.font-work-sans {
+  font-family: 'Work Sans', Arial, sans-serif;
 }
