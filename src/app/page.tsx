@@ -121,9 +121,9 @@ function BrandCarousel() {
   return (
     <div className="w-full flex justify-center">
       <div className="flex gap-8 justify-center items-center my-6 min-h-[80px] w-full max-w-6xl px-4 md:px-8">
-        {visible.map((src, idx) => (
-          <div key={idx} className="flex items-center justify-center w-40 h-40">
-            <Image src={src} alt={`Brand ${idx}`} width={120} height={120} style={{ objectFit: 'contain', maxHeight: 120 }} />
+        {visible.map((src) => (
+          <div key={src} className="flex items-center justify-center w-40 h-40">
+            <Image src={src} alt={`Brand logo`} width={120} height={120} style={{ objectFit: 'contain', maxHeight: 120 }} />
           </div>
         ))}
       </div>
@@ -238,24 +238,33 @@ function FeaturesSection() {
   );
 }
 
-function GetStartedSection() {
+function ProductShowcaseSection() {
   return (
-    <section className="w-full bg-[#f7f7f8] py-16 flex flex-col items-center animate-fade-in">
-      <div className="w-full max-w-3xl flex flex-col items-center gap-6 px-4 md:px-0">
-        <h2 className="text-2xl md:text-4xl font-bold text-[#171717]">Get Started with Ceeone today.</h2>
-        <p className="text-lg text-[#444]">Sign up for a free account and experience the next generation of ERP for your business.</p>
-        <div className="flex gap-4 flex-wrap items-center">
-          <button
-            className="px-8 py-3 min-h-[48px] flex items-center rounded bg-[#02016a] text-white font-semibold shadow-lg hover:bg-blue-700 transition-transform hover:scale-105 text-[16px]"
-            onClick={() => window.location.href = '/signup'}
+    <section className="w-full bg-[#FAFAFA] py-20">
+      <div className="w-full max-w-5xl mx-auto px-4 md:px-8 flex flex-col items-start">
+        <h2 className="text-2xl md:text-4xl font-bold text-zinc-800" style={{ fontFamily: "'Work Sans', sans-serif" }}>
+          Get Started with Ceeone today.
+        </h2>
+        <Link href="/signup" className="group text-lg text-blue-600 hover:text-blue-800 transition-colors duration-300 mt-4 flex items-center gap-2">
+          Sign up for a free account
+          <svg
+            className="w-5 h-5 transition-transform duration-300 group-hover:translate-x-1"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
           >
-            Get started
-          </button>
-          <button
-            className="px-8 py-3 min-h-[48px] flex items-center rounded bg-white border border-[#e5e7eb] text-[#02016a] font-semibold hover:bg-blue-50 transition-transform hover:scale-105 text-[16px]"
-          >
-            Contact Sales
-          </button>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
+          </svg>
+        </Link>
+        <div className="mt-10 w-full">
+          <Image
+            src="/images/orders.png"
+            alt="Ceeone Dashboard Orders Page"
+            width={1120}
+            height={700}
+            className="rounded-xl shadow-lg w-full h-auto"
+          />
         </div>
       </div>
     </section>
@@ -307,7 +316,7 @@ export default function Home() {
       <HeroSection />
       <CompaniesSection />
       <FeaturesSection />
-      <GetStartedSection />
+      <ProductShowcaseSection />
       <FAQSection />
     </main>
   );

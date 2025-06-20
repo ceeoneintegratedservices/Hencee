@@ -71,7 +71,7 @@ export default function LoginPage() {
           </button>
         </form>
         <button className="w-full mt-4 flex items-center justify-center gap-2 border rounded px-4 py-2 bg-white hover:bg-gray-50">
-          <img src="/icons/globe.svg" alt="Google" className="w-5 h-5" /> Sign in with Google
+          <img src="/icons/google.svg" alt="Google" className="w-5 h-5" /> Sign in with Google
         </button>
         {error && <div className="mt-4 text-red-600 text-center">{error}</div>}
         <div className="mt-4 text-center text-sm text-gray-600">
