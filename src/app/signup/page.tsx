@@ -7,6 +7,7 @@ export default function SignupPage() {
     email: "",
     phone: "",
     userType: "",
+    staffRole: "",
     password: "",
   });
   const [loading, setLoading] = useState(false);
@@ -32,6 +33,7 @@ export default function SignupPage() {
       if (form.email === "test@exists.com" || form.phone === "1234567890") {
         setError("Email or phone number already exists.");
       } else {
+        console.log("New User Data:", form);
         setSuccess("Account created! Please check your email to verify your account.");
       }
       setLoading(false);
@@ -78,11 +80,27 @@ export default function SignupPage() {
             onChange={handleChange}
             required
           >
-            <option value="">Select user-type</option>
-            <option value="customer">Customer</option>
+            <option value="">Select user type</option>
             <option value="staff">Staff</option>
-            <option value="admin">Admin</option>
           </select>
+          {form.userType === "staff" && (
+            <select
+                name="staffRole"
+                className="border rounded px-3 py-2"
+                value={form.staffRole}
+                onChange={handleChange}
+                required
+            >
+                <option value="">Select role of staff</option>
+                <option value="sales_representative">Sales Representative</option>
+                <option value="general_manager">General Manager</option>
+                <option value="book_storekeeper">Book/storekeeper</option>
+                <option value="technical_support">Technical Support</option>
+                <option value="auditor">Auditor</option>
+                <option value="human_resources">Human Resources</option>
+                <option value="accountant">Accountant</option>
+            </select>
+          )}
           <input
             name="password"
             type="password"
@@ -102,7 +120,7 @@ export default function SignupPage() {
           </button>
         </form>
         <button className="w-full mt-4 flex items-center justify-center gap-2 border rounded px-4 py-2 bg-white hover:bg-gray-50">
-          <img src="/icons/globe.svg" alt="Google" className="w-5 h-5" /> Sign up with Google
+          <img src="/icons/google.svg" alt="Google" className="w-5 h-5" /> Sign up with Google
         </button>
         {error && <div className="mt-4 text-red-600 text-center">{error}</div>}
         {success && <div className="mt-4 text-green-600 text-center">{success}</div>}
