@@ -6,9 +6,9 @@ export default function SignupPage() {
     name: "",
     email: "",
     phone: "",
-    userType: "",
     staffRole: "",
     password: "",
+    confirmPassword: "",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -22,6 +22,13 @@ export default function SignupPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate password match
+    if (form.password !== form.confirmPassword) {
+      setError("Passwords do not match. Please try again.");
+      return;
+    }
+
     setLoading(true);
     setError("");
     setSuccess("");
@@ -71,36 +78,23 @@ export default function SignupPage() {
             className="border rounded px-3 py-2"
             value={form.phone}
             onChange={handleChange}
-            required
           />
           <select
-            name="userType"
+            name="staffRole"
             className="border rounded px-3 py-2"
-            value={form.userType}
+            value={form.staffRole}
             onChange={handleChange}
             required
           >
-            <option value="">Select user type</option>
-            <option value="staff">Staff</option>
+            <option value="">Select role of staff</option>
+            <option value="sales_representative">Sales Representative</option>
+            <option value="general_manager">General Manager</option>
+            <option value="book_storekeeper">Book/storekeeper</option>
+            <option value="technical_support">Technical Support</option>
+            <option value="auditor">Auditor</option>
+            <option value="human_resources">Human Resources</option>
+            <option value="accountant">Accountant</option>
           </select>
-          {form.userType === "staff" && (
-            <select
-                name="staffRole"
-                className="border rounded px-3 py-2"
-                value={form.staffRole}
-                onChange={handleChange}
-                required
-            >
-                <option value="">Select role of staff</option>
-                <option value="sales_representative">Sales Representative</option>
-                <option value="general_manager">General Manager</option>
-                <option value="book_storekeeper">Book/storekeeper</option>
-                <option value="technical_support">Technical Support</option>
-                <option value="auditor">Auditor</option>
-                <option value="human_resources">Human Resources</option>
-                <option value="accountant">Accountant</option>
-            </select>
-          )}
           <input
             name="password"
             type="password"
@@ -111,12 +105,22 @@ export default function SignupPage() {
             minLength={8}
             required
           />
+          <input
+            name="confirmPassword"
+            type="password"
+            placeholder="Confirm password"
+            className="border rounded px-3 py-2"
+            value={form.confirmPassword}
+            onChange={handleChange}
+            minLength={8}
+            required
+          />
           <button
             type="submit"
             className="bg-blue-600 text-white rounded px-4 py-2 font-semibold disabled:opacity-60"
             disabled={loading}
           >
-            {loading ? "Creating..." : "Get started"}
+            {loading ? "Creating..." : "Create account"}
           </button>
         </form>
         <button className="w-full mt-4 flex items-center justify-center gap-2 border rounded px-4 py-2 bg-white hover:bg-gray-50">
