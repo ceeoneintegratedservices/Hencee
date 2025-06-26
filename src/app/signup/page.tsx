@@ -32,19 +32,29 @@ export default function SignupPage() {
     setLoading(true);
     setError("");
     setSuccess("");
-    // Placeholder for API call
-    // 1. Check if email/phone exists
-    // 2. If exists, setError("Email or phone number already exists.")
-    // 3. Else, create user, send verification email, setSuccess("Account created! Please check your email to verify your account.")
-    setTimeout(() => {
-      if (form.email === "test@exists.com" || form.phone === "1234567890") {
-        setError("Email or phone number already exists.");
+    try {
+      const res = await fetch("https://your-render-url.onrender.com/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+          staffRole: form.staffRole,
+          password: form.password,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.message || "Registration failed.");
       } else {
-        console.log("New User Data:", form);
         setSuccess("Account created! Please check your email to verify your account.");
       }
+    } catch (err) {
+      setError("An error occurred. Please try again.");
+    } finally {
       setLoading(false);
-    }, 1200);
+    }
   };
 
   return (
@@ -87,6 +97,7 @@ export default function SignupPage() {
             required
           >
             <option value="">Select role of staff</option>
+            <option value="managing_director">Managing Director</option>
             <option value="sales_representative">Sales Representative</option>
             <option value="general_manager">General Manager</option>
             <option value="book_storekeeper">Book/storekeeper</option>

@@ -6,45 +6,45 @@ import Link from "next/link";
 const features = [
   {
     icon: (
-      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2Z"/><path d="M3 10h18"/><path d="M7 16v2"/><path d="M17 16v2"/></svg>
     ),
-    title: "Domain Marketplace",
-    desc: "Branded domains are the perfect solution for any company looking to stand out and scale."
+    title: "Inventory Management",
+    desc: "Track product stock, handle multi-location warehouses, set reorder points, and run reconciliations."
   },
   {
     icon: (
-      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path strokeLinecap="round" strokeLinejoin="round" d="M8 12l2 2 4-4" /></svg>
+      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M16 16v-1a4 4 0 0 0-8 0v1"/><rect width="20" height="8" x="2" y="16" rx="2"/></svg>
     ),
-    title: "Find the Perfect Name",
-    desc: "Powerful and unique brandable domain names are hard to find. Our collection is hand-selected by branding experts."
+    title: "User Management",
+    desc: "Create users, assign roles, and control access — with secure login, MFA, and full audit logs."
   },
   {
     icon: (
-      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2" /><path strokeLinecap="round" strokeLinejoin="round" d="M2 10h20" /></svg>
+      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 2v4"/><path d="M16 2v4"/><path d="M4 10h16"/><path d="M10 14h4"/><path d="M10 18h4"/></svg>
     ),
-    title: "Payment Plans",
-    desc: "Flexible payment options to help you get started quickly and easily."
+    title: "Sales & Invoicing",
+    desc: "Generate invoices, process payments (full or partial), manage returns, and track sales performance."
   },
   {
     icon: (
-      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3" /><circle cx="12" cy="12" r="10" /></svg>
+      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
     ),
-    title: "Fast Transfer",
-    desc: "Get your domain transferred to you quickly and securely after purchase."
+    title: "Customer Management",
+    desc: "View transaction history, set credit limits, and build loyalty with custom dashboards."
   },
   {
     icon: (
-      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 6.5a5 5 0 0 0-10 0c0 2.5 2.5 4.5 5 4.5s5-2 5-4.5Z"/></svg>
     ),
-    title: "Trademark Assistance",
-    desc: "Guidance on trademark and business registration for your new domain."
+    title: "Financial Management",
+    desc: "Handle pricing, expenses, and budgets with real-time profit tracking and visual reports."
   },
   {
     icon: (
-      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path strokeLinecap="round" strokeLinejoin="round" d="M8 12l2 2 4-4" /></svg>
+      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect width="7" height="9" x="7" y="7" rx="1"/><path d="M17 7v9"/></svg>
     ),
-    title: "Customer Support",
-    desc: "Our team is here to help you every step of the way."
+    title: "Reporting & Analytics",
+    desc: "Build custom dashboards, schedule reports, and track KPIs across teams and departments."
   }
 ];
 
@@ -78,7 +78,7 @@ const brandImages = [
   "/images/goodyear.png",
   "/images/michelin.png",
   "/images/Bridgestone.png",
-  "/images/Pirelli.png",
+  "/images/pirelli.png",
   "/images/hankook.png",
   "/images/yokohama.png",
   "/images/maxxis.png",
@@ -135,7 +135,7 @@ function CompaniesSection() {
   return (
     <section className="w-full flex flex-col items-center justify-center py-16" style={{ background: '#d3d3d3' }}>
       <div className="font-bold text-center mb-6" style={{ color: 'var(--ceeone-black)', fontFamily: 'Work Sans, sans-serif', fontSize: 20 }}>
-        Over 20,000 People and Companies uses Ceeone
+      Trusted by 20,000+ Businesses and Professionals Worldwide. <br /> From startups to industry giants — companies rely on Ceeone every day.
       </div>
       <BrandCarousel />
       <div className="flex justify-center mt-6 items-center">
@@ -153,6 +153,46 @@ function CompaniesSection() {
           >
             Contact Sales
           </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function MissionSection() {
+  return (
+    <section className="w-full bg-[#f7f7f8] py-8 flex flex-col md:flex-row items-center justify-center animate-fade-in">
+      <div className="flex-1 flex flex-col gap-4 max-w-xl px-4 md:px-8">
+        <div className="flex items-center gap-3 mb-2">
+          <svg width="28" height="28" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="#02016A" strokeWidth="2"/><path d="M8 12l2 2 4-4" stroke="#02016A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          <h2 className="text-3xl md:text-4xl font-bold text-[#171717]">About Ceeone</h2>
+        </div>
+        <p className="text-lg text-[#444] mb-4">Ceeone provides attentive services and safest tire solutions, which is made to protect and empower every bond built along the way. No matter which path you are going to choose — Ceeone is here to support you on your drive towards a life you love.</p>
+        <div className="mb-2 bg-white/80 rounded-lg p-4 shadow flex flex-col gap-2">
+          <div className="flex items-center gap-2 mb-1">
+            <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" stroke="#5570F1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <h3 className="font-bold text-lg">Proactive</h3>
+          </div>
+          <p className="text-[#444]">With Ceeone, we hope to make your every moment on the road the moment to be cherished. We make every effort to provide products and services that support you and your loved ones through the path to the desired destination, rooted in the love of companionship</p>
+        </div>
+        <div className="mb-2 bg-white/80 rounded-lg p-4 shadow flex flex-col gap-2">
+          <div className="flex items-center gap-2 mb-1">
+            <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke="#519C66" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <h3 className="font-bold text-lg">Our Vision</h3>
+          </div>
+          <p className="text-[#444]">To support you towards a life you love and make every journey counts.<br/>Making every journey count, driving you towards the life you love.</p>
+        </div>
+        <div className="bg-white/80 rounded-lg p-4 shadow flex flex-col gap-2">
+          <div className="flex items-center gap-2 mb-1">
+            <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2" stroke="#CC5F5F" strokeWidth="2"/><path d="M2 10h20" stroke="#CC5F5F" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <h3 className="font-bold text-lg">Our Mission</h3>
+          </div>
+          <p className="text-[#444]">Providing personalized tire products and services with harmonious technology to safeguard every bond built along the road.</p>
+        </div>
+      </div>
+      <div className="flex-1 flex justify-center items-center mt-10 md:mt-0 px-4 md:px-0">
+        <div className="w-full max-w-md md:max-w-lg h-auto flex justify-center items-center">
+          <Image src="/icons/illustration.png" alt="Ceeone Mission" width={0} height={0} sizes="100vw" className="w-full h-auto" />
         </div>
       </div>
     </section>
@@ -184,7 +224,7 @@ function HeroSection() {
       <div className="flex flex-col md:flex-row items-center w-full max-w-6xl px-4 md:px-8 gap-8">
         <div className="flex-1 flex flex-col gap-4 animate-slide-up">
           <h1 className="text-3xl md:text-5xl font-bold" style={{ color: 'var(--ceeone-black)', fontFamily: 'Work Sans, sans-serif' }}>Award-Winning ERP<br />Simplified</h1>
-          <p className="text-lg md:text-xl" style={{ color: 'var(--black-60)', fontFamily: 'Inter, sans-serif' }}>Meet Ceeone — the next generation ERP platform that's simple, fast, and built for modern businesses. Automate inventory, streamline sales, manage customers, and gain full financial control — all from one powerful, easy-to-use system.</p>
+          <p className="text-lg md:text-xl" style={{ color: 'var(--black-60)', fontFamily: 'Inter, sans-serif' }}>Meet Ceeone — a next-gen ERP platform designed to simplify your operations. Automate inventory, streamline sales, manage customer relationships, and gain total financial visibility — all in one intelligent system.</p>
           <div className="flex gap-4 flex-wrap items-center">
      <button
        className="px-8 py-3 min-h-[48px] flex items-center rounded bg-[#02016a] text-white font-semibold shadow-lg hover:bg-blue-700 transition-transform hover:scale-105 text-[16px]"
@@ -271,53 +311,15 @@ function ProductShowcaseSection() {
   );
 }
 
-function FAQSection() {
-  const [open, setOpen] = useState<number | null>(null);
-  return (
-    <section className="w-full bg-white py-16 flex flex-col items-center animate-fade-in">
-      <h2 className="text-2xl md:text-4xl font-bold mb-10 text-[#171717]">Frequently Asked Questions</h2>
-      <div className="w-full max-w-3xl flex flex-col gap-4 px-4 md:px-0">
-        {faqs.map((faq, i) => (
-          <div key={i} className="border-b border-gray-200 py-4">
-            <button
-              className="w-full flex justify-between items-center text-left text-lg font-medium text-[#171717] focus:outline-none transition-colors hover:text-blue-700"
-              onClick={() => setOpen(open === i ? null : i)}
-              aria-expanded={open === i}
-              aria-controls={`faq-${i}`}
-            >
-              {faq.q}
-              <svg
-                className={`w-5 h-5 transform transition-transform ${open === i ? 'rotate-180' : ''}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            </button>
-            <div
-              id={`faq-${i}`}
-              className={`mt-2 text-[#444] overflow-hidden transition-all duration-300 ${
-                open === i ? 'max-h-40' : 'max-h-0'
-              }`}
-            >
-              {faq.a}
-            </div>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 export default function Home() {
   return (
     <main className="min-h-screen">
       <HeroSection />
       <CompaniesSection />
+      <MissionSection />
       <FeaturesSection />
       <ProductShowcaseSection />
-      <FAQSection />
+      {/* <FAQSection /> */}
     </main>
   );
 }
