@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { API_ENDPOINTS } from "../../config/api";
 
 export default function PasswordRecoveryPage() {
   const [input, setInput] = useState("");
@@ -16,24 +17,48 @@ export default function PasswordRecoveryPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    // Placeholder for API call
-    setTimeout(() => {
-      if (input !== "user@example.com" && input !== "1234567890") {
-        setError("It looks like there's no account associated with this email or whatsapp number. Please double-check for typos.");
+    
+    try {
+      const res = await fetch(API_ENDPOINTS.passwordReset, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identifier: input,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.message || "It looks like there's no account associated with this email or whatsapp number. Please double-check for typos.");
         setSent(false);
       } else {
         setSent(true);
       }
+    } catch (err) {
+      setError("An error occurred. Please try again.");
+      setSent(false);
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
-  const handleResend = () => {
+  const handleResend = async () => {
     setLoading(true);
-    setTimeout(() => {
-      setSent(true);
+    try {
+      const res = await fetch(API_ENDPOINTS.passwordReset, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identifier: input,
+        }),
+      });
+      if (res.ok) {
+        setSent(true);
+      }
+    } catch (err) {
+      setError("An error occurred. Please try again.");
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   return (

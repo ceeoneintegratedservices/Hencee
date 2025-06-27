@@ -1,5 +1,7 @@
 "use client";
 import { useState } from "react";
+import { API_ENDPOINTS } from "../../config/api";
+import { useRouter } from "next/navigation";
 
 export default function SignupPage() {
   const [form, setForm] = useState({
@@ -13,6 +15,8 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [showVerifyLink, setShowVerifyLink] = useState(false);
+  const router = useRouter();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -32,8 +36,9 @@ export default function SignupPage() {
     setLoading(true);
     setError("");
     setSuccess("");
+    setShowVerifyLink(false);
     try {
-      const res = await fetch("https://your-render-url.onrender.com/auth/register", {
+      const res = await fetch(API_ENDPOINTS.register, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -49,6 +54,16 @@ export default function SignupPage() {
         setError(data.message || "Registration failed.");
       } else {
         setSuccess("Account created! Please check your email to verify your account.");
+        // Try to redirect to verify-email page after a short delay
+        setTimeout(() => {
+          try {
+            router.push(`/verify-email?email=${encodeURIComponent(form.email)}`);
+          } catch {
+            setShowVerifyLink(true);
+          }
+        }, 1200);
+        // Also show the link in case redirect fails
+        setShowVerifyLink(true);
       }
     } catch (err) {
       setError("An error occurred. Please try again.");
@@ -138,7 +153,16 @@ export default function SignupPage() {
           <img src="/icons/google.svg" alt="Google" className="w-5 h-5" /> Sign up with Google
         </button>
         {error && <div className="mt-4 text-red-600 text-center">{error}</div>}
-        {success && <div className="mt-4 text-green-600 text-center">{success}</div>}
+        {success && (
+          <div className="mt-4 text-green-600 text-center">
+            {success}
+            {showVerifyLink && (
+              <div className="mt-2">
+                Didn't get redirected? <a href={`/verify-email?email=${encodeURIComponent(form.email)}`} className="text-blue-600 font-semibold">Click here to verify your email</a>
+              </div>
+            )}
+          </div>
+        )}
         <div className="mt-4 text-center text-sm text-gray-600">
           Already have an account? <a href="/login" className="text-blue-600 font-semibold">Log in</a>
         </div>
