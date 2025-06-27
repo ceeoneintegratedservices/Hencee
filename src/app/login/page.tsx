@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { API_ENDPOINTS } from "../../config/api";
 
 export default function LoginPage() {
   const [form, setForm] = useState({
@@ -18,18 +19,29 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    // Placeholder for API call
-    // 1. Check credentials
-    // 2. If incorrect, setError("Password/email/whatsapp no does not match.")
-    // 3. If correct, redirect or show success
-    setTimeout(() => {
-      if (form.identifier !== "user@example.com" || form.password !== "password123") {
-        setError("Password/email/whatsapp no does not match.");
+    
+    try {
+      const res = await fetch(API_ENDPOINTS.login, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          identifier: form.identifier,
+          password: form.password,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.message || "Password/email/whatsapp no does not match.");
       } else {
-        // Redirect or show success (not implemented)
+        // Handle successful login (redirect or store token)
+        console.log("Login successful:", data);
+        // You can add redirect logic here
       }
+    } catch (err) {
+      setError("An error occurred. Please try again.");
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   return (
