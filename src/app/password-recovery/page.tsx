@@ -3,13 +3,13 @@ import { useState } from "react";
 import { API_ENDPOINTS } from "../../config/api";
 
 export default function PasswordRecoveryPage() {
-  const [input, setInput] = useState("");
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInput(e.target.value);
+    setEmail(e.target.value);
     setError("");
   };
 
@@ -23,7 +23,7 @@ export default function PasswordRecoveryPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          identifier: input,
+          email: email,
         }),
       });
       const data = await res.json();
@@ -48,7 +48,7 @@ export default function PasswordRecoveryPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          identifier: input,
+          email: email,
         }),
       });
       if (res.ok) {
@@ -68,11 +68,11 @@ export default function PasswordRecoveryPage() {
         <p className="text-center mb-6 text-gray-600">Lets help you get back to your account!</p>
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
           <input
-            name="input"
-            type="text"
-            placeholder="Enter your email/phone no"
+            name="email"
+            type="email"
+            placeholder="Enter your email"
             className="border rounded px-3 py-2"
-            value={input}
+            value={email}
             onChange={handleChange}
             required
           />

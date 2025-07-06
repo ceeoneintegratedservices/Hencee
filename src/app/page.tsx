@@ -311,6 +311,51 @@ function ProductShowcaseSection() {
   );
 }
 
+function FAQSection() {
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  const toggleFAQ = (index: number) => {
+    setOpenIndex(openIndex === index ? null : index);
+  };
+
+  return (
+    <section className="w-full bg-white py-16">
+      <div className="w-full max-w-4xl mx-auto px-4 md:px-8">
+        <h2 className="text-2xl md:text-4xl font-bold text-center mb-12 text-[#171717]">
+          Frequently Asked Questions
+        </h2>
+        <div className="space-y-4">
+          {faqs.map((faq, index) => (
+            <div key={index} className="border border-gray-200 rounded-lg overflow-hidden">
+              <button
+                className="w-full px-6 py-4 text-left bg-white hover:bg-gray-50 transition-colors duration-200 flex justify-between items-center"
+                onClick={() => toggleFAQ(index)}
+              >
+                <span className="font-semibold text-[#171717]">{faq.q}</span>
+                <svg
+                  className={`w-5 h-5 text-gray-500 transition-transform duration-200 ${
+                    openIndex === index ? 'rotate-180' : ''
+                  }`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {openIndex === index && (
+                <div className="px-6 pb-4 bg-gray-50">
+                  <p className="text-[#444] leading-relaxed">{faq.a}</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function Home() {
   return (
     <main className="min-h-screen">
@@ -319,7 +364,7 @@ export default function Home() {
       <MissionSection />
       <FeaturesSection />
       <ProductShowcaseSection />
-      {/* <FAQSection /> */}
+      <FAQSection />
     </main>
   );
 }

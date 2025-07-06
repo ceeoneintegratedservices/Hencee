@@ -4,7 +4,7 @@ import { API_ENDPOINTS } from "../../config/api";
 
 export default function LoginPage() {
   const [form, setForm] = useState({
-    identifier: "",
+    email: "",
     password: "",
   });
   const [loading, setLoading] = useState(false);
@@ -25,7 +25,7 @@ export default function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          identifier: form.identifier,
+          email: form.email,
           password: form.password,
         }),
       });
@@ -51,11 +51,11 @@ export default function LoginPage() {
         <p className="text-center mb-6 text-gray-600">Welcome back! Please enter your details.</p>
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
           <input
-            name="identifier"
-            type="text"
-            placeholder="Enter your email/phone no/staff Id"
+            name="email"
+            type="email"
+            placeholder="Enter your email"
             className="border rounded px-3 py-2"
-            value={form.identifier}
+            value={form.email}
             onChange={handleChange}
             required
           />
