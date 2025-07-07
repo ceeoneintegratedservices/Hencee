@@ -123,7 +123,7 @@ Manages the entire sales process from quotation to invoicing, including partial 
 -   Discount application
 -   Tax calculation
 -   Returns and refunds processing
--   Attribution to front desk employee
+-   Attribution to front desk employee.
 
 **Design Elements**
 
