@@ -1,0 +1,444 @@
+"use client";
+
+import { useState, useEffect } from "react";
+
+interface CreateOrderModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onCreate: (orderData: OrderData) => void;
+}
+
+interface OrderData {
+  customer: string;
+  paymentType: string;
+  orderType: string;
+  orderDate: string;
+  orderTime: string;
+  orderStatus: string;
+  orderNote: string;
+  items: OrderItem[];
+}
+
+interface OrderItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  total: number;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  stock: number;
+}
+
+export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOrderModalProps) {
+  const [orderData, setOrderData] = useState<OrderData>({
+    customer: "",
+    paymentType: "",
+    orderType: "",
+    orderDate: "12/12/2020",
+    orderTime: "12:00 PM",
+    orderStatus: "Pending",
+    orderNote: "",
+    items: []
+  });
+
+  const [isNewCustomer, setIsNewCustomer] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
+  const [showProductList, setShowProductList] = useState(false);
+
+  // Sample product data
+  const products: Product[] = [
+    { id: "1", name: "Michelin Pilot Sport 4", price: 25000, category: "Tires", stock: 15 },
+    { id: "2", name: "Bridgestone Potenza RE-71R", price: 22000, category: "Tires", stock: 8 },
+    { id: "3", name: "Continental ContiSportContact 5", price: 28000, category: "Tires", stock: 12 },
+    { id: "4", name: "Pirelli P Zero", price: 30000, category: "Tires", stock: 6 },
+    { id: "5", name: "Goodyear Eagle F1", price: 24000, category: "Tires", stock: 10 },
+    { id: "6", name: "Dunlop Sport Maxx RT", price: 21000, category: "Tires", stock: 14 },
+    { id: "7", name: "Hankook Ventus V12 evo2", price: 19000, category: "Tires", stock: 20 },
+    { id: "8", name: "Yokohama Advan Sport V105", price: 26000, category: "Tires", stock: 7 },
+    { id: "9", name: "Maxxis Victra Sport 5", price: 18000, category: "Tires", stock: 18 },
+    { id: "10", name: "Firestone Firehawk Indy 500", price: 20000, category: "Tires", stock: 9 }
+  ];
+
+  // Handle product search
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const filtered = products.filter(product =>
+        product.name.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+      setFilteredProducts(filtered);
+      setShowProductList(true);
+    } else {
+      setFilteredProducts([]);
+      setShowProductList(false);
+    }
+  }, [searchQuery]);
+
+  // Add product to order
+  const addProductToOrder = (product: Product) => {
+    const existingItem = orderData.items.find(item => item.id === product.id);
+    
+    if (existingItem) {
+      // Update quantity if product already exists
+      const updatedItems = orderData.items.map(item =>
+        item.id === product.id
+          ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.price }
+          : item
+      );
+      setOrderData(prev => ({ ...prev, items: updatedItems }));
+    } else {
+      // Add new product to order
+      const newItem: OrderItem = {
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        quantity: 1,
+        total: product.price
+      };
+      setOrderData(prev => ({ ...prev, items: [...prev.items, newItem] }));
+    }
+    
+    // Clear search and hide product list
+    setSearchQuery("");
+    setShowProductList(false);
+  };
+
+  // Update product quantity
+  const updateProductQuantity = (productId: string, newQuantity: number) => {
+    if (newQuantity <= 0) {
+      removeProductFromOrder(productId);
+      return;
+    }
+
+    const updatedItems = orderData.items.map(item =>
+      item.id === productId
+        ? { ...item, quantity: newQuantity, total: newQuantity * item.price }
+        : item
+    );
+    setOrderData(prev => ({ ...prev, items: updatedItems }));
+  };
+
+  // Remove product from order
+  const removeProductFromOrder = (productId: string) => {
+    const updatedItems = orderData.items.filter(item => item.id !== productId);
+    setOrderData(prev => ({ ...prev, items: updatedItems }));
+  };
+
+  // Calculate total order amount
+  const calculateTotal = () => {
+    return orderData.items.reduce((total, item) => total + item.total, 0);
+  };
+
+  const handleCreate = () => {
+    onCreate(orderData);
+    onClose();
+  };
+
+  const handleOverlayClick = (e: React.MouseEvent) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="absolute inset-0 flex items-start justify-center z-50 pt-20 px-4" onClick={handleOverlayClick}>
+      <div className="bg-white rounded-xl w-full max-w-4xl max-h-[600px] overflow-y-auto shadow-[0_20px_50px_rgba(0,0,0,0.15)]">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-[20px] font-semibold text-[#45464e]">Create New Order</h2>
+          <button 
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex">
+          {/* Left Section - Order Details */}
+          <div className="flex-1 p-6 border-r border-gray-200">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-[16px] font-medium text-[#45464e]">Order Details</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-[14px] text-[#45464e]">New Customer</span>
+                <button
+                  onClick={() => setIsNewCustomer(!isNewCustomer)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    isNewCustomer ? 'bg-[#02016a]' : 'bg-gray-300'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      isNewCustomer ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* Select Customer */}
+              <div>
+                <label className="block text-[14px] text-[#45464e] mb-2">Select Customer</label>
+                <select
+                  value={orderData.customer}
+                  onChange={(e) => setOrderData(prev => ({ ...prev, customer: e.target.value }))}
+                  className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                >
+                  <option value="">Select Customer</option>
+                  <option value="Janet Adebayo">Janet Adebayo</option>
+                  <option value="Samuel Johnson">Samuel Johnson</option>
+                  <option value="Francis Doe">Francis Doe</option>
+                  <option value="Christian Dior">Christian Dior</option>
+                </select>
+              </div>
+
+              {/* Payment Type & Order Type */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[14px] text-[#45464e] mb-2">Payment Type</label>
+                  <select
+                    value={orderData.paymentType}
+                    onChange={(e) => setOrderData(prev => ({ ...prev, paymentType: e.target.value }))}
+                    className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                  >
+                    <option value="">Payment Type</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Card">Card</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[14px] text-[#45464e] mb-2">Order Type</label>
+                  <select
+                    value={orderData.orderType}
+                    onChange={(e) => setOrderData(prev => ({ ...prev, orderType: e.target.value }))}
+                    className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                  >
+                    <option value="">Order Type</option>
+                    <option value="Home Delivery">Home Delivery</option>
+                    <option value="Pick Up">Pick Up</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Order Time & Date */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[14px] text-[#45464e] mb-2">Order Date</label>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={orderData.orderDate}
+                      onChange={(e) => setOrderData(prev => ({ ...prev, orderDate: e.target.value }))}
+                      className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent pl-10"
+                      placeholder="Select date or type"
+                    />
+                    <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" stroke="currentColor" />
+                    </svg>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[14px] text-[#45464e] mb-2">Order Time</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={orderData.orderTime}
+                      onChange={(e) => setOrderData(prev => ({ ...prev, orderTime: e.target.value }))}
+                      className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent pl-10"
+                    />
+                    <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Order Status */}
+              <div>
+                <label className="block text-[14px] text-[#45464e] mb-2">Order Status</label>
+                <select
+                  value={orderData.orderStatus}
+                  onChange={(e) => setOrderData(prev => ({ ...prev, orderStatus: e.target.value }))}
+                  className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                >
+                  <option value="Pending">Pending</option>
+                  <option value="In-Progress">In-Progress</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Canceled">Canceled</option>
+                </select>
+              </div>
+
+              {/* Order Note */}
+              <div>
+                <label className="block text-[14px] text-[#45464e] mb-2">Order Note</label>
+                <textarea
+                  value={orderData.orderNote}
+                  onChange={(e) => setOrderData(prev => ({ ...prev, orderNote: e.target.value }))}
+                  placeholder="Order Note"
+                  rows={3}
+                  className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent resize-none"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Right Section - Items */}
+          <div className="flex-1 p-6">
+            <h3 className="text-[16px] font-medium text-[#45464e] mb-4">Items</h3>
+            
+            {/* Search Product */}
+            <div className="relative mb-6">
+              <input
+                type="text"
+                placeholder="Search product name"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent pl-10"
+              />
+              <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              
+              {/* Product Search Results */}
+              {showProductList && filteredProducts.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
+                  {filteredProducts.map((product) => (
+                    <div
+                      key={product.id}
+                      onClick={() => addProductToOrder(product)}
+                      className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <h4 className="text-[14px] font-medium text-[#45464e]">{product.name}</h4>
+                          <p className="text-[12px] text-[#8b8d97]">{product.category}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[14px] font-medium text-[#45464e]">₦{product.price.toLocaleString()}</p>
+                          <p className="text-[12px] text-[#8b8d97]">Stock: {product.stock}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* No Results */}
+              {showProductList && filteredProducts.length === 0 && searchQuery.trim() && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 p-4">
+                  <p className="text-[14px] text-[#8b8d97] text-center">No products found</p>
+                </div>
+              )}
+            </div>
+
+            {/* Selected Products */}
+            {orderData.items.length > 0 ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[14px] font-medium text-[#45464e]">Selected Products</h4>
+                  <span className="text-[12px] text-[#8b8d97]">{orderData.items.length} item(s)</span>
+                </div>
+                
+                <div className="space-y-3 max-h-64 overflow-y-auto">
+                  {orderData.items.map((item) => (
+                    <div key={item.id} className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex-1">
+                          <h5 className="text-[14px] font-medium text-[#45464e] mb-1">{item.name}</h5>
+                          <p className="text-[12px] text-[#8b8d97]">₦{item.price.toLocaleString()} each</p>
+                        </div>
+                        <button
+                          onClick={() => removeProductFromOrder(item.id)}
+                          className="p-1 hover:bg-gray-200 rounded transition-colors"
+                        >
+                          <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                      
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => updateProductQuantity(item.id, item.quantity - 1)}
+                            className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded hover:bg-gray-100 transition-colors"
+                          >
+                            <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                            </svg>
+                          </button>
+                          <span className="w-12 text-center text-[14px] font-medium text-[#45464e]">{item.quantity}</span>
+                          <button
+                            onClick={() => updateProductQuantity(item.id, item.quantity + 1)}
+                            className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded hover:bg-gray-100 transition-colors"
+                          >
+                            <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                          </button>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[14px] font-semibold text-[#45464e]">₦{item.total.toLocaleString()}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Order Total */}
+                <div className="border-t border-gray-200 pt-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[16px] font-semibold text-[#45464e]">Total</span>
+                    <span className="text-[18px] font-bold text-[#02016a]">₦{calculateTotal().toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Empty State for Products */
+              <div className="flex flex-col items-center justify-center py-12">
+                <div className="w-[120px] h-[120px] rounded-full bg-[#f4f5fa] flex items-center justify-center mb-6">
+                  <div className="w-[50px] h-[50px] flex items-center justify-center">
+                    <svg className="w-full h-full" fill="none" viewBox="0 0 18 20">
+                      <path d="M14.0865 5C15.3503 5 16.6767 5.90969 17.1451 8.12012L17.9137 14.3145C18.4793 18.3533 16.2078 20 13.1588 20H4.86873C1.81092 20 -0.531257 18.8626 0.105058 14.3145L0.883378 8.12012C1.28109 5.84602 2.65071 5 3.93221 5H14.0865ZM6.09725 8.3291C5.60921 8.32918 5.21346 8.73693 5.21346 9.23926C5.21363 9.74144 5.60932 10.1484 6.09725 10.1484C6.58524 10.1484 6.98086 9.74149 6.98103 9.23926C6.98103 8.73688 6.58535 8.3291 6.09725 8.3291ZM11.8863 8.3291C11.3982 8.3291 11.0025 8.73688 11.0025 9.23926C11.0027 9.74149 11.3983 10.1484 11.8863 10.1484C12.3743 10.1484 12.7699 9.74146 12.7701 9.23926C12.7701 8.73691 12.3744 8.32915 11.8863 8.3291Z" fill="#130F26"/>
+                      <path d="M13.9743 4.77432C13.9774 4.85189 13.9625 4.92913 13.9307 5H12.4936C12.4658 4.92794 12.451 4.85153 12.4501 4.77432C12.4501 2.85682 10.8903 1.30238 8.96615 1.30238C7.04204 1.30238 5.48224 2.85682 5.48224 4.77432C5.49542 4.84898 5.49542 4.92535 5.48224 5H4.01029C3.9971 4.92535 3.9971 4.84898 4.01029 4.77432C4.12212 2.10591 6.32539 0 9.00534 0C11.6853 0 13.8886 2.10591 14.0004 4.77432H13.9743Z" fill="#130F26" opacity="0.4"/>
+                    </svg>
+                  </div>
+                </div>
+                <span className="font-medium text-[16px] text-[#45464e] mb-2">Add Products to Your Order</span>
+                <span className="text-[14px] text-[#8b8d97] text-center">Search and add products to this order.</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer Buttons */}
+        <div className="flex items-center justify-end gap-4 p-6 border-t border-gray-200">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 border border-[#02016a] text-[#02016a] rounded-lg font-medium text-[14px] hover:bg-[#f4f5fa] transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleCreate}
+            className="px-6 py-2 bg-[#02016a] text-white rounded-lg font-medium text-[14px] hover:bg-[#03024a] transition-colors"
+          >
+            Create Order
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
