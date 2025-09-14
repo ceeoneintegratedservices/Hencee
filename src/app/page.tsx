@@ -254,7 +254,7 @@ function HeroSection() {
    </div>
         </div>
         <div className="flex-1 flex justify-center animate-fade-in">
-          <Image src="/images/Dashboard.png" alt="Dashboard Preview" width={600} height={320} className="rounded-xl shadow-lg" />
+          <Image src="/images/Dashboard.svg" alt="Dashboard Preview" width={600} height={320} className="rounded-xl shadow-lg" />
         </div>
       </div>
     </section>
