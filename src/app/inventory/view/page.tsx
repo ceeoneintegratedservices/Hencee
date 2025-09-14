@@ -104,7 +104,7 @@ function ViewInventoryContent() {
     if (inventoryItem) {
       const updatedItem = { ...inventoryItem, status: 'Unpublished' as const };
       setInventoryItem(updatedItem);
-      showSuccess('Product unpublished successfully');
+      showSuccess('Success', 'Product unpublished successfully');
     }
   };
 
@@ -112,14 +112,14 @@ function ViewInventoryContent() {
     if (inventoryItem) {
       const updatedItem = { ...inventoryItem, status: 'Published' as const };
       setInventoryItem(updatedItem);
-      showSuccess('Product published successfully');
+      showSuccess('Success', 'Product published successfully');
     }
   };
 
   const handleDateFilter = (dateFilter: any) => {
     // Handle date filtering logic here
     console.log('Date filter applied:', dateFilter);
-    showSuccess('Date filter applied successfully');
+    showSuccess('Success', 'Date filter applied successfully');
   };
 
   if (loading) {
@@ -140,15 +140,14 @@ function ViewInventoryContent() {
   return (
     <div className="flex w-full h-screen bg-gray-50 overflow-hidden">
       {/* Sidebar */}
-      <Sidebar showSidebar={showSidebar} setShowSidebar={setShowSidebar} />
+      <Sidebar sidebarOpen={showSidebar} setSidebarOpen={setShowSidebar} />
       
       {/* Main Content */}
       <main className="flex-1 h-screen overflow-y-auto transition-all duration-300 relative">
         <Header 
-          title="Inventory" 
-          showMobileMenu={showMobileMenu}
-          setShowMobileMenu={setShowMobileMenu}
-          mobileMenuRef={mobileMenuRef}
+          title="View Tyre Product" 
+          sidebarOpen={showSidebar}
+          setSidebarOpen={setShowSidebar}
         />
         
         <div className="p-4 sm:p-6">
@@ -228,7 +227,10 @@ function ViewInventoryContent() {
                     className="w-full h-full object-cover"
                     onError={(e) => {
                       e.currentTarget.style.display = 'none';
-                      e.currentTarget.nextElementSibling!.style.display = 'flex';
+                      const nextElement = e.currentTarget.nextElementSibling as HTMLElement;
+                      if (nextElement) {
+                        nextElement.style.display = 'flex';
+                      }
                     }}
                   />
                   <div className="w-full h-full bg-gray-200 flex items-center justify-center hidden">
