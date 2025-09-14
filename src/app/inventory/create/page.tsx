@@ -111,34 +111,34 @@ export default function CreateInventoryPage() {
   const handleSaveAsDraft = () => {
     // Validate required fields
     if (!formData.productName.trim()) {
-      showError('Product name is required');
+      showError('Validation Error', 'Product name is required');
       return;
     }
     
-    showSuccess('Product saved as draft successfully');
+    showSuccess('Success', 'Product saved as draft successfully');
     router.push('/inventory');
   };
 
   const handleSaveAndPublish = () => {
     // Validate required fields
     if (!formData.productName.trim()) {
-      showError('Product name is required');
+      showError('Validation Error', 'Product name is required');
       return;
     }
     if (!formData.category) {
-      showError('Product category is required');
+      showError('Validation Error', 'Product category is required');
       return;
     }
     if (!formData.sellingPrice.trim()) {
-      showError('Selling price is required');
+      showError('Validation Error', 'Selling price is required');
       return;
     }
     if (!formData.costPrice.trim()) {
-      showError('Cost price is required');
+      showError('Validation Error', 'Cost price is required');
       return;
     }
     
-    showSuccess('Product saved and published successfully');
+    showSuccess('Success', 'Product saved and published successfully');
     router.push('/inventory');
   };
 
@@ -160,14 +160,14 @@ export default function CreateInventoryPage() {
   return (
     <div className="flex w-full h-screen bg-gray-50 overflow-hidden">
       {/* Sidebar */}
-      <Sidebar showSidebar={showSidebar} setShowSidebar={setShowSidebar} />
+      <Sidebar sidebarOpen={showSidebar} setSidebarOpen={setShowSidebar} />
       
       {/* Main Content */}
       <main className="flex-1 h-screen overflow-y-auto transition-all duration-300 relative">
         <Header 
-          title="Inventory" 
-          showMobileMenu={showMobileMenu}
-          setShowMobileMenu={setShowMobileMenu}
+          title="Add New Tyre" 
+          sidebarOpen={showSidebar}
+          setSidebarOpen={setShowSidebar}
         />
         
         <div className="p-4 sm:p-6">

@@ -30,7 +30,7 @@ export default function InventoryPage() {
   const [priceFilter, setPriceFilter] = useState('All');
   const [sortBy, setSortBy] = useState('productName');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [selectedTimePeriod, setSelectedTimePeriod] = useState('This Week');
+  const [selectedTimePeriod, setSelectedTimePeriod] = useState<'This Week' | 'This Month'>('This Week');
   
   // Dropdown states
   const [showStatusDropdown, setShowStatusDropdown] = useState<number | null>(null);
@@ -145,7 +145,7 @@ export default function InventoryPage() {
     updatedItems[index] = { ...updatedItems[index], status: newStatus };
     setInventoryItems(updatedItems);
     setShowStatusDropdown(null);
-    showSuccess(`Product status changed to ${newStatus}`);
+    showSuccess('Success', `Product status changed to ${newStatus}`);
   };
 
   const handleSort = (column: string) => {
@@ -160,7 +160,7 @@ export default function InventoryPage() {
   const handleDateFilter = (dateFilter: any) => {
     // Handle date filtering logic here
     console.log('Date filter applied:', dateFilter);
-    showSuccess('Date filter applied successfully');
+    showSuccess('Success', 'Date filter applied successfully');
   };
 
   const getTimePeriodData = () => {
@@ -200,15 +200,14 @@ export default function InventoryPage() {
   return (
     <div className="flex w-full h-screen bg-gray-50 overflow-hidden">
       {/* Sidebar */}
-      <Sidebar showSidebar={showSidebar} setShowSidebar={setShowSidebar} />
+      <Sidebar sidebarOpen={showSidebar} setSidebarOpen={setShowSidebar} />
       
       {/* Main Content */}
       <main className="flex-1 h-screen overflow-y-auto transition-all duration-300 relative">
         <Header 
           title="Tyre Inventory" 
-          showMobileMenu={showMobileMenu}
-          setShowMobileMenu={setShowMobileMenu}
-          mobileMenuRef={mobileMenuRef}
+          sidebarOpen={showSidebar}
+          setSidebarOpen={setShowSidebar}
         />
         
         <div className="p-4 sm:p-6">
@@ -593,7 +592,7 @@ export default function InventoryPage() {
                             <button 
                               onClick={() => {
                                 setShowBulkActionDropdown(false);
-                                showSuccess('Selected items published successfully');
+                                showSuccess('Success', 'Selected items published successfully');
                               }}
                               className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
@@ -602,7 +601,7 @@ export default function InventoryPage() {
                             <button 
                               onClick={() => {
                                 setShowBulkActionDropdown(false);
-                                showSuccess('Selected items unpublished successfully');
+                                showSuccess('Success', 'Selected items unpublished successfully');
                               }}
                               className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
@@ -611,7 +610,7 @@ export default function InventoryPage() {
                             <button 
                               onClick={() => {
                                 setShowBulkActionDropdown(false);
-                                showSuccess('Selected items archived successfully');
+                                showSuccess('Success', 'Selected items archived successfully');
                               }}
                               className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
@@ -620,7 +619,7 @@ export default function InventoryPage() {
                             <button 
                               onClick={() => {
                                 setShowBulkActionDropdown(false);
-                                showSuccess('Selected items deleted successfully');
+                                showSuccess('Success', 'Selected items deleted successfully');
                               }}
                               className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
@@ -724,7 +723,10 @@ export default function InventoryPage() {
                               className="w-10 h-10 object-contain"
                               onError={(e) => { 
                                 e.currentTarget.style.display = 'none'; 
-                                e.currentTarget.nextElementSibling!.style.display = 'flex'; 
+                                const nextElement = e.currentTarget.nextElementSibling as HTMLElement;
+                                if (nextElement) {
+                                  nextElement.style.display = 'flex';
+                                }
                               }}
                             />
                             <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center text-xs font-semibold text-gray-600 hidden">
@@ -837,7 +839,10 @@ export default function InventoryPage() {
                         className="w-10 h-10 object-contain"
                         onError={(e) => { 
                           e.currentTarget.style.display = 'none'; 
-                          e.currentTarget.nextElementSibling!.style.display = 'flex'; 
+                          const nextElement = e.currentTarget.nextElementSibling as HTMLElement;
+                          if (nextElement) {
+                            nextElement.style.display = 'flex';
+                          }
                         }}
                       />
                       <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center text-xs font-semibold text-gray-600 hidden">
