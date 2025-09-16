@@ -6,6 +6,7 @@ import { Suspense } from 'react';
 import { InventoryDataService, InventoryItem, Purchase } from '@/services/InventoryDataService';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import FilterByDateModal from '@/components/FilterByDateModal';
+import EditProductModal from '@/components/EditProductModal';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 
@@ -30,6 +31,7 @@ function ViewInventoryContent() {
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showBulkActionDropdown, setShowBulkActionDropdown] = useState(false);
   const [showDateFilterModal, setShowDateFilterModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   
   // Refs for click outside detection
   const filterDropdownRef = useRef<HTMLDivElement>(null);
@@ -52,8 +54,24 @@ function ViewInventoryContent() {
     if (isAuthenticated) {
       const itemId = searchParams.get('id') || 'item-1';
       
-      // Generate sample inventory item
-      const item = InventoryDataService.generateInventoryItem(itemId);
+      // Try to load the actual item from localStorage first
+      const storedItems = localStorage.getItem('inventoryItems');
+      let item: InventoryItem | null = null;
+      
+      if (storedItems) {
+        try {
+          const items: InventoryItem[] = JSON.parse(storedItems);
+          item = items.find(i => i.id === itemId) || null;
+        } catch (error) {
+          console.error('Error parsing stored inventory items:', error);
+        }
+      }
+      
+      // If not found in localStorage, generate a new one (fallback)
+      if (!item) {
+        item = InventoryDataService.generateInventoryItem(itemId);
+      }
+      
       setInventoryItem(item);
       
       // Generate sample purchases
@@ -97,13 +115,65 @@ function ViewInventoryContent() {
   }, []);
 
   const handleEditProduct = () => {
-    router.push(`/inventory/edit?id=${inventoryItem?.id}`);
+    setShowEditModal(true);
+  };
+
+  const handleSaveProduct = (formData: any, mainImage: string | null, additionalImages: string[]) => {
+    if (inventoryItem) {
+      // Update the inventory item with new data
+      const updatedItem = {
+        ...inventoryItem,
+        productName: formData.productName,
+        category: formData.category,
+        unitPrice: parseFloat(formData.sellingPrice) || inventoryItem.unitPrice,
+        costPrice: parseFloat(formData.costPrice) || inventoryItem.costPrice,
+        inStock: parseInt(formData.quantityInStock) || inventoryItem.inStock,
+        brand: formData.productBrand,
+        description: formData.shortDescription,
+        longDescription: formData.longDescription,
+        image: mainImage || inventoryItem.image,
+        additionalImages: additionalImages.length > 0 ? additionalImages : inventoryItem.additionalImages
+      };
+      
+      setInventoryItem(updatedItem);
+      
+      // Update localStorage with the updated item
+      const storedItems = localStorage.getItem('inventoryItems');
+      if (storedItems) {
+        try {
+          const items: InventoryItem[] = JSON.parse(storedItems);
+          const updatedItems = items.map(item => 
+            item.id === updatedItem.id ? updatedItem : item
+          );
+          localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
+        } catch (error) {
+          console.error('Error updating stored inventory items:', error);
+        }
+      }
+      
+      showSuccess('Success', 'Product updated successfully');
+    }
   };
 
   const handleUnpublishProduct = () => {
     if (inventoryItem) {
       const updatedItem = { ...inventoryItem, status: 'Unpublished' as const };
       setInventoryItem(updatedItem);
+      
+      // Update localStorage
+      const storedItems = localStorage.getItem('inventoryItems');
+      if (storedItems) {
+        try {
+          const items: InventoryItem[] = JSON.parse(storedItems);
+          const updatedItems = items.map(item => 
+            item.id === updatedItem.id ? updatedItem : item
+          );
+          localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
+        } catch (error) {
+          console.error('Error updating stored inventory items:', error);
+        }
+      }
+      
       showSuccess('Success', 'Product unpublished successfully');
     }
   };
@@ -112,6 +182,21 @@ function ViewInventoryContent() {
     if (inventoryItem) {
       const updatedItem = { ...inventoryItem, status: 'Published' as const };
       setInventoryItem(updatedItem);
+      
+      // Update localStorage
+      const storedItems = localStorage.getItem('inventoryItems');
+      if (storedItems) {
+        try {
+          const items: InventoryItem[] = JSON.parse(storedItems);
+          const updatedItems = items.map(item => 
+            item.id === updatedItem.id ? updatedItem : item
+          );
+          localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
+        } catch (error) {
+          console.error('Error updating stored inventory items:', error);
+        }
+      }
+      
       showSuccess('Success', 'Product published successfully');
     }
   };
@@ -140,7 +225,7 @@ function ViewInventoryContent() {
   return (
     <div className="flex w-full h-screen bg-gray-50 overflow-hidden">
       {/* Sidebar */}
-      <Sidebar sidebarOpen={showSidebar} setSidebarOpen={setShowSidebar} />
+      <Sidebar currentPage="inventory" sidebarOpen={showSidebar} setSidebarOpen={setShowSidebar} />
       
       {/* Main Content */}
       <main className="flex-1 h-screen overflow-y-auto transition-all duration-300 relative">
@@ -683,6 +768,14 @@ function ViewInventoryContent() {
         isOpen={showDateFilterModal}
         onClose={() => setShowDateFilterModal(false)}
         onApply={handleDateFilter}
+      />
+
+      {/* Edit Product Modal */}
+      <EditProductModal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        onSave={handleSaveProduct}
+        inventoryItem={inventoryItem}
       />
     </div>
   );
