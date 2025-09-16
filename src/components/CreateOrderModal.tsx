@@ -35,6 +35,16 @@ interface Product {
   stock: number;
 }
 
+interface Customer {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  isFavorite: boolean;
+  totalOrders: number;
+  lastOrderDate: string;
+}
+
 export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOrderModalProps) {
   const [orderData, setOrderData] = useState<OrderData>({
     customer: "",
@@ -51,6 +61,24 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [showProductList, setShowProductList] = useState(false);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState("");
+  const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
+  const [showCustomerList, setShowCustomerList] = useState(false);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.customer-dropdown') && !target.closest('.customer-input')) {
+        setShowCustomerList(false);
+      }
+    };
+
+    if (showCustomerList) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showCustomerList]);
 
   // Sample product data
   const products: Product[] = [
@@ -66,6 +94,18 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
     { id: "10", name: "Firestone Firehawk Indy 500", price: 20000, category: "Tires", stock: 9 }
   ];
 
+  // Sample customer data
+  const customers: Customer[] = [
+    { id: "1", name: "Janet Adebayo", email: "janet@example.com", phone: "+234 801 234 5678", isFavorite: true, totalOrders: 15, lastOrderDate: "2024-01-10" },
+    { id: "2", name: "Samuel Johnson", email: "samuel@example.com", phone: "+234 802 345 6789", isFavorite: true, totalOrders: 8, lastOrderDate: "2024-01-08" },
+    { id: "3", name: "Francis Doe", email: "francis@example.com", phone: "+234 803 456 7890", isFavorite: false, totalOrders: 3, lastOrderDate: "2024-01-05" },
+    { id: "4", name: "Christian Dior", email: "christian@example.com", phone: "+234 804 567 8901", isFavorite: true, totalOrders: 12, lastOrderDate: "2024-01-12" },
+    { id: "5", name: "Mary Okafor", email: "mary@example.com", phone: "+234 805 678 9012", isFavorite: false, totalOrders: 5, lastOrderDate: "2024-01-03" },
+    { id: "6", name: "David Okonkwo", email: "david@example.com", phone: "+234 806 789 0123", isFavorite: true, totalOrders: 20, lastOrderDate: "2024-01-14" },
+    { id: "7", name: "Grace Adebisi", email: "grace@example.com", phone: "+234 807 890 1234", isFavorite: false, totalOrders: 2, lastOrderDate: "2024-01-01" },
+    { id: "8", name: "Michael Ogun", email: "michael@example.com", phone: "+234 808 901 2345", isFavorite: true, totalOrders: 18, lastOrderDate: "2024-01-13" }
+  ];
+
   // Handle product search
   useEffect(() => {
     if (searchQuery.trim()) {
@@ -79,6 +119,38 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
       setShowProductList(false);
     }
   }, [searchQuery]);
+
+  // Handle customer search
+  useEffect(() => {
+    if (customerSearchQuery.trim()) {
+      const filtered = customers.filter(customer =>
+        customer.name.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
+        customer.email.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
+        customer.phone.includes(customerSearchQuery)
+      );
+      // Sort favorites first, then by name
+      const sortedFiltered = filtered.sort((a, b) => {
+        if (a.isFavorite && !b.isFavorite) return -1;
+        if (!a.isFavorite && b.isFavorite) return 1;
+        return a.name.localeCompare(b.name);
+      });
+      setFilteredCustomers(sortedFiltered);
+      setShowCustomerList(true);
+    } else {
+      // Show favorites first when no search query
+      const favorites = customers.filter(customer => customer.isFavorite);
+      const others = customers.filter(customer => !customer.isFavorite);
+      setFilteredCustomers([...favorites, ...others]);
+      setShowCustomerList(true);
+    }
+  }, [customerSearchQuery]);
+
+  // Select customer
+  const selectCustomer = (customer: Customer) => {
+    setOrderData(prev => ({ ...prev, customer: customer.name }));
+    setCustomerSearchQuery(customer.name);
+    setShowCustomerList(false);
+  };
 
   // Add product to order
   const addProductToOrder = (product: Product) => {
@@ -189,19 +261,62 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
             <div className="space-y-4">
               {/* Customer Selection */}
               {!isNewCustomer ? (
-                <div>
-                  <label className="block text-[14px] text-[#45464e] mb-2">Select Customer</label>
-                  <select
-                    value={orderData.customer}
-                    onChange={(e) => setOrderData(prev => ({ ...prev, customer: e.target.value }))}
-                    className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
-                  >
-                    <option value="">Select Customer</option>
-                    <option value="Janet Adebayo">Janet Adebayo</option>
-                    <option value="Samuel Johnson">Samuel Johnson</option>
-                    <option value="Francis Doe">Francis Doe</option>
-                    <option value="Christian Dior">Christian Dior</option>
-                  </select>
+                <div className="relative">
+                <label className="block text-[14px] text-[#45464e] mb-2">Select Customer</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={customerSearchQuery}
+                      onChange={(e) => {
+                        setCustomerSearchQuery(e.target.value);
+                        setOrderData(prev => ({ ...prev, customer: e.target.value }));
+                      }}
+                      onFocus={() => setShowCustomerList(true)}
+                      placeholder="Search customers..."
+                      className="customer-input w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                    />
+                    <svg className="absolute right-3 top-3.5 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                  
+                  {/* Customer Dropdown */}
+                  {showCustomerList && (
+                    <div className="customer-dropdown absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {filteredCustomers.length > 0 ? (
+                        filteredCustomers.map((customer) => (
+                          <div
+                            key={customer.id}
+                            onClick={() => selectCustomer(customer)}
+                            className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-medium text-gray-900">{customer.name}</p>
+                                  {customer.isFavorite && (
+                                    <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                    </svg>
+                                  )}
+                                </div>
+                                <p className="text-xs text-gray-500">{customer.email}</p>
+                                <p className="text-xs text-gray-500">{customer.phone}</p>
+                                <div className="flex items-center gap-4 mt-1">
+                                  <span className="text-xs text-gray-400">{customer.totalOrders} orders</span>
+                                  <span className="text-xs text-gray-400">Last: {customer.lastOrderDate}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="p-3 text-sm text-gray-500 text-center">
+                          No customers found
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 /* New Customer Form Fields */
@@ -263,7 +378,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                           <option value="+234">🇳🇬 +234</option>
                           <option value="+1">🇺🇸 +1</option>
                           <option value="+44">🇬🇧 +44</option>
-                        </select>
+                </select>
                         <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
                           <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -276,7 +391,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                         className="flex-1 px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
                       />
                     </div>
-                  </div>
+              </div>
                   
                   <div>
                     <label className="block text-[14px] text-[#45464e] mb-2">Address</label>
