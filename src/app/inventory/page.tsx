@@ -66,6 +66,9 @@ export default function InventoryPage() {
       setInventoryItems(items);
       setFilteredItems(items);
       
+      // Store items in localStorage so view page can access the same data
+      localStorage.setItem('inventoryItems', JSON.stringify(items));
+      
       const summary = InventoryDataService.generateInventorySummary(items);
       setSummaryData(summary);
     }
@@ -200,7 +203,7 @@ export default function InventoryPage() {
   return (
     <div className="flex w-full h-screen bg-gray-50 overflow-hidden">
       {/* Sidebar */}
-      <Sidebar sidebarOpen={showSidebar} setSidebarOpen={setShowSidebar} />
+      <Sidebar currentPage="inventory" sidebarOpen={showSidebar} setSidebarOpen={setShowSidebar} />
       
       {/* Main Content */}
       <main className="flex-1 h-screen overflow-y-auto transition-all duration-300 relative">

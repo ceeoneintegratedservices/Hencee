@@ -158,7 +158,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <svg className="w-6 h-6 text-gray-600" fill="none" viewBox="0 0 24 24">
+            <svg className="w-6 h-6 text-red-500 hover:text-red-700" fill="none" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
@@ -187,21 +187,115 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
             </div>
 
             <div className="space-y-4">
-              {/* Select Customer */}
-              <div>
-                <label className="block text-[14px] text-[#45464e] mb-2">Select Customer</label>
-                <select
-                  value={orderData.customer}
-                  onChange={(e) => setOrderData(prev => ({ ...prev, customer: e.target.value }))}
-                  className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
-                >
-                  <option value="">Select Customer</option>
-                  <option value="Janet Adebayo">Janet Adebayo</option>
-                  <option value="Samuel Johnson">Samuel Johnson</option>
-                  <option value="Francis Doe">Francis Doe</option>
-                  <option value="Christian Dior">Christian Dior</option>
-                </select>
-              </div>
+              {/* Customer Selection */}
+              {!isNewCustomer ? (
+                <div>
+                  <label className="block text-[14px] text-[#45464e] mb-2">Select Customer</label>
+                  <select
+                    value={orderData.customer}
+                    onChange={(e) => setOrderData(prev => ({ ...prev, customer: e.target.value }))}
+                    className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                  >
+                    <option value="">Select Customer</option>
+                    <option value="Janet Adebayo">Janet Adebayo</option>
+                    <option value="Samuel Johnson">Samuel Johnson</option>
+                    <option value="Francis Doe">Francis Doe</option>
+                    <option value="Christian Dior">Christian Dior</option>
+                  </select>
+                </div>
+              ) : (
+                /* New Customer Form Fields */
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[14px] text-[#45464e] mb-2">First Name</label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Enter first name"
+                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[14px] text-[#45464e] mb-2">Last Name</label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Enter last name"
+                          className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-[14px] text-[#45464e] mb-2">Email</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <input
+                        type="email"
+                        placeholder="Enter email address"
+                        className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-[14px] text-[#45464e] mb-2">Phone Number</label>
+                    <div className="flex gap-3">
+                      <div className="relative">
+                        <select className="block w-24 pl-3 pr-8 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent appearance-none">
+                          <option value="+234">🇳🇬 +234</option>
+                          <option value="+1">🇺🇸 +1</option>
+                          <option value="+44">🇬🇧 +44</option>
+                        </select>
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                          <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                      <input
+                        type="tel"
+                        placeholder="Enter phone number"
+                        className="flex-1 px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-[14px] text-[#45464e] mb-2">Address</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Enter address"
+                        className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Payment Type & Order Type */}
               <div className="grid grid-cols-2 gap-4">

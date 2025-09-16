@@ -1,11 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { InventoryDataService } from '@/services/InventoryDataService';
-import { NotificationContainer, useNotifications } from '@/components/Notification';
-import Sidebar from '@/components/Sidebar';
-import Header from '@/components/Header';
+import { InventoryDataService, InventoryItem } from '@/services/InventoryDataService';
 
 interface FormData {
   productName: string;
@@ -26,17 +22,14 @@ interface FormData {
   returnPolicyTime: string;
 }
 
-export default function CreateInventoryPage() {
-  const router = useRouter();
-  const { notifications, removeNotification, showSuccess, showError } = useNotifications();
-  
-  // Authentication check
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [showSidebar, setShowSidebar] = useState(false);
-  const [showMobileMenu, setShowMobileMenu] = useState(false);
-  
-  // Form data
+interface EditProductModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (formData: FormData, mainImage: string | null, additionalImages: string[]) => void;
+  inventoryItem: InventoryItem | null;
+}
+
+export default function EditProductModal({ isOpen, onClose, onSave, inventoryItem }: EditProductModalProps) {
   const [formData, setFormData] = useState<FormData>({
     productName: '',
     category: '',
@@ -84,16 +77,37 @@ export default function CreateInventoryPage() {
     'Vredestein'
   ];
 
-  // Authentication check
+  // Initialize form data when inventory item changes
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      setIsAuthenticated(true);
-    } else {
-      router.push('/login');
+    if (inventoryItem && isOpen) {
+      setFormData({
+        productName: inventoryItem.productName || '',
+        category: inventoryItem.category || '',
+        sellingPrice: inventoryItem.unitPrice?.toString() || '',
+        costPrice: inventoryItem.costPrice?.toString() || '',
+        quantityInStock: inventoryItem.inStock?.toString() || '1',
+        productBrand: inventoryItem.brand || '',
+        addDiscount: false,
+        discountType: 'percentage',
+        discountValue: '',
+        addExpiryDate: false,
+        expiryDate: '',
+        shortDescription: inventoryItem.description || '',
+        longDescription: inventoryItem.longDescription || '',
+        addReturnPolicy: false,
+        returnPolicyDate: '',
+        returnPolicyTime: '12:00 PM'
+      });
+
+      // Set images if available
+      if (inventoryItem.image) {
+        setMainImage(inventoryItem.image);
+      }
+      if (inventoryItem.additionalImages) {
+        setAdditionalImages(inventoryItem.additionalImages);
+      }
     }
-    setLoading(false);
-  }, [router]);
+  }, [inventoryItem, isOpen]);
 
   const handleInputChange = (field: keyof FormData, value: string | boolean) => {
     setFormData(prev => ({
@@ -132,113 +146,45 @@ export default function CreateInventoryPage() {
     }
   };
 
-  const handleSaveAsDraft = () => {
-    // Validate required fields
-    if (!formData.productName.trim()) {
-      showError('Validation Error', 'Product name is required');
-      return;
-    }
-    
-    showSuccess('Success', 'Product saved as draft successfully');
-    router.push('/inventory');
+  const handleSave = () => {
+    onSave(formData, mainImage, additionalImages);
+    onClose();
   };
 
-  const handleSaveAndPublish = () => {
-    // Validate required fields
-    if (!formData.productName.trim()) {
-      showError('Validation Error', 'Product name is required');
-      return;
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      onClose();
     }
-    if (!formData.category) {
-      showError('Validation Error', 'Product category is required');
-      return;
-    }
-    if (!formData.sellingPrice.trim()) {
-      showError('Validation Error', 'Selling price is required');
-      return;
-    }
-    if (!formData.costPrice.trim()) {
-      showError('Validation Error', 'Cost price is required');
-      return;
-    }
-    
-    showSuccess('Success', 'Product saved and published successfully');
-    router.push('/inventory');
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return null;
-  }
+  if (!isOpen) return null;
 
   return (
-    <div className="flex w-full h-screen bg-gray-50 overflow-hidden">
-      {/* Sidebar */}
-      <Sidebar currentPage="inventory" sidebarOpen={showSidebar} setSidebarOpen={setShowSidebar} />
-      
-      {/* Main Content */}
-      <main className="flex-1 h-screen overflow-y-auto transition-all duration-300 relative">
-        <Header 
-          title="Add New Tyre" 
-          sidebarOpen={showSidebar}
-          setSidebarOpen={setShowSidebar}
-        />
-        
-        <div className="p-4 sm:p-6">
-          {/* Breadcrumb */}
-          <div className="mb-6">
-            <nav className="flex items-center space-x-2 text-sm text-gray-500">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-              </svg>
-              <span>Inventory</span>
-              <span>/</span>
-              <span>New Inventory</span>
-            </nav>
-          </div>
+    <div 
+      className="fixed inset-0 flex items-center justify-center z-50 p-4"
+      onClick={handleBackdropClick}
+    >
+      <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-2xl font-semibold text-gray-900">Edit Product</h2>
+          <button
+            onClick={onClose}
+            className="text-red-500 hover:text-red-700 transition-colors"
+          >
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
 
-          {/* Page Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-4 sm:mb-0">New Inventory Item</h1>
-            
-            {/* Action Buttons */}
-            <div className="flex gap-3">
-              <div className="relative">
-                <button
-                  onClick={handleSaveAsDraft}
-                  className="bg-gray-800 text-white px-6 py-3 rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
-                >
-                  Save as Draft
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-              </div>
-              <button
-                onClick={handleSaveAndPublish}
-                className="bg-[#02016a] text-white px-6 py-3 rounded-lg hover:bg-[#03024a] transition-colors"
-              >
-                Save & Publish
-              </button>
-            </div>
-          </div>
-
-          {/* Form Content */}
+        {/* Content */}
+        <div className="p-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Left Column - Product Details */}
             <div className="space-y-6">
               {/* Product Name */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="bg-gray-50 p-4 rounded-lg">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Product Name
                 </label>
@@ -252,7 +198,7 @@ export default function CreateInventoryPage() {
               </div>
 
               {/* Product Category */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="bg-gray-50 p-4 rounded-lg">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Select Product Category
                 </label>
@@ -278,7 +224,7 @@ export default function CreateInventoryPage() {
               </div>
 
               {/* Pricing */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="bg-gray-50 p-4 rounded-lg">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -308,7 +254,7 @@ export default function CreateInventoryPage() {
               </div>
 
               {/* Quantity in Stock */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="bg-gray-50 p-4 rounded-lg">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Quantity in Stock
                 </label>
@@ -340,7 +286,7 @@ export default function CreateInventoryPage() {
               </div>
 
               {/* Product Brand */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="bg-gray-50 p-4 rounded-lg">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Product Brand
                 </label>
@@ -368,7 +314,7 @@ export default function CreateInventoryPage() {
               </div>
 
               {/* Discount */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="bg-gray-50 p-4 rounded-lg">
                 <div className="flex items-center justify-between mb-4">
                   <label className="text-sm font-medium text-gray-700">Discount</label>
                   <button
@@ -413,7 +359,7 @@ export default function CreateInventoryPage() {
               </div>
 
               {/* Expiry Date */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="bg-gray-50 p-4 rounded-lg">
                 <div className="flex items-center justify-between mb-4">
                   <label className="text-sm font-medium text-gray-700">Expiry Date</label>
                   <button
@@ -452,7 +398,7 @@ export default function CreateInventoryPage() {
             {/* Middle Column - Descriptions & Policies */}
             <div className="space-y-6">
               {/* Short Description */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="bg-gray-50 p-4 rounded-lg">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Short Description
                 </label>
@@ -466,7 +412,7 @@ export default function CreateInventoryPage() {
               </div>
 
               {/* Product Long Description */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="bg-gray-50 p-4 rounded-lg">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Product Long Description
                 </label>
@@ -534,7 +480,7 @@ export default function CreateInventoryPage() {
               </div>
 
               {/* Return Policy */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="bg-gray-50 p-4 rounded-lg">
                 <div className="flex items-center justify-between mb-4">
                   <label className="text-sm font-medium text-gray-700">Return Policy</label>
                   <button
@@ -589,30 +535,30 @@ export default function CreateInventoryPage() {
             {/* Right Column - Images */}
             <div className="space-y-6">
               {/* Main Product Image */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Upload Image (Cover Image)</h3>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
                   {mainImage ? (
                     <div className="relative">
                       <img
                         src={mainImage}
                         alt="Main product"
-                        className="w-full h-48 object-cover rounded-lg"
+                        className="w-full h-32 object-cover rounded-lg"
                       />
                       <div className="absolute top-2 right-2 flex gap-2">
                         <button
                           onClick={() => document.getElementById('main-image-upload')?.click()}
-                          className="p-2 bg-white rounded-full shadow-md hover:bg-gray-50"
+                          className="p-1 bg-white rounded-full shadow-md hover:bg-gray-50"
                         >
-                          <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg className="w-3 h-3 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
                         </button>
                         <button
                           onClick={() => removeImage(0, true)}
-                          className="p-2 bg-white rounded-full shadow-md hover:bg-gray-50"
+                          className="p-1 bg-white rounded-full shadow-md hover:bg-gray-50"
                         >
-                          <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg className="w-3 h-3 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                         </button>
@@ -620,18 +566,14 @@ export default function CreateInventoryPage() {
                     </div>
                   ) : (
                     <div>
-                      <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className="w-12 h-12 text-gray-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                       </svg>
-                      <p className="text-gray-600 mb-2">Upload Image</p>
-                      <p className="text-sm text-gray-500 mb-4">Upload a cover image for your product.</p>
-                      <p className="text-xs text-gray-400 mb-4">
-                        File Format jpeg, png<br />
-                        Recommended Size 600x600 (1:1)
-                      </p>
+                      <p className="text-gray-600 mb-2 text-sm">Upload Image</p>
+                      <p className="text-xs text-gray-500 mb-2">Upload a cover image for your product.</p>
                       <button
                         onClick={() => document.getElementById('main-image-upload')?.click()}
-                        className="px-4 py-2 bg-[#02016a] text-white rounded-lg hover:bg-[#03024a] transition-colors"
+                        className="px-3 py-1 bg-[#02016a] text-white rounded text-sm hover:bg-[#03024a] transition-colors"
                       >
                         Choose File
                       </button>
@@ -651,22 +593,22 @@ export default function CreateInventoryPage() {
               </div>
 
               {/* Additional Images */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+              <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Additional Images</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   {additionalImages.map((image, index) => (
                     <div key={index} className="relative">
                       <img
                         src={image}
                         alt={`Additional ${index + 1}`}
-                        className="w-full h-32 object-cover rounded-lg"
+                        className="w-full h-24 object-cover rounded-lg"
                       />
-                      <div className="absolute top-2 right-2 flex gap-1">
+                      <div className="absolute top-1 right-1 flex gap-1">
                         <button
                           onClick={() => document.getElementById(`additional-image-upload-${index}`)?.click()}
                           className="p-1 bg-white rounded-full shadow-md hover:bg-gray-50"
                         >
-                          <svg className="w-3 h-3 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg className="w-2 h-2 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
                         </button>
@@ -674,7 +616,7 @@ export default function CreateInventoryPage() {
                           onClick={() => removeImage(index)}
                           className="p-1 bg-white rounded-full shadow-md hover:bg-gray-50"
                         >
-                          <svg className="w-3 h-3 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <svg className="w-2 h-2 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
                         </button>
@@ -694,11 +636,11 @@ export default function CreateInventoryPage() {
                   
                   {/* Add more images button */}
                   {additionalImages.length < 4 && (
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-                      <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center">
+                      <svg className="w-6 h-6 text-gray-400 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                       </svg>
-                      <p className="text-xs text-gray-500 mb-2">Upload Image</p>
+                      <p className="text-xs text-gray-500 mb-1">Upload Image</p>
                       <button
                         onClick={() => document.getElementById('additional-image-upload-new')?.click()}
                         className="text-xs text-[#02016a] hover:text-[#03024a]"
@@ -722,12 +664,23 @@ export default function CreateInventoryPage() {
             </div>
           </div>
         </div>
-      </main>
 
-      <NotificationContainer 
-        notifications={notifications} 
-        onRemove={removeNotification} 
-      />
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-6 py-2 bg-[#02016a] text-white rounded-lg hover:bg-[#03024a] transition-colors"
+          >
+            Save Changes
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
