@@ -9,6 +9,7 @@ export interface InventoryItem {
   totalValue: number;
   status: "Published" | "Unpublished" | "Draft";
   image: string;
+  additionalImages?: string[];
   shortDescription?: string;
   longDescription?: string;
   expiryDate?: string;
@@ -17,6 +18,8 @@ export interface InventoryItem {
   lastOrder?: string;
   views: number;
   favorites: number;
+  brand?: string;
+  description?: string;
 }
 
 export interface InventorySummary {
