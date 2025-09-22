@@ -1,5 +1,6 @@
 import { API_ENDPOINTS } from "../config/api";
 import type { SalesDashboardQuery, SalesDashboardResponse, SaleDetail } from "../types/sales";
+import { authFetch } from "./authFetch";
 
 const cache = new Map<string, { t: number; data: SalesDashboardResponse }>();
 const CACHE_TTL_MS = 15_000;
@@ -25,26 +26,8 @@ export async function fetchSalesDashboard(params: SalesDashboardQuery = {}): Pro
   if (cached && now - cached.t < CACHE_TTL_MS) {
     return cached.data;
   }
-  let token: string | null = null;
-  if (typeof window !== "undefined") {
-    try {
-      token = localStorage.getItem("authToken");
-    } catch {
-      token = null;
-    }
-  }
-
-  const headers: HeadersInit = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-
-  const res = await fetch(url, { headers, next: { revalidate: 30 } });
+  const res = await authFetch(url, { next: { revalidate: 30 } });
   if (!res.ok) {
-    if (res.status === 401) {
-      throw new Error("Unauthorized (401). Please log in to continue.");
-    }
-    if (res.status === 403) {
-      throw new Error("Forbidden (403). Your account lacks the 'sales.view' permission.");
-    }
     const text = await res.text().catch(() => "");
     throw new Error(text || `Failed to fetch sales dashboard (${res.status})`);
   }
@@ -55,20 +38,8 @@ export async function fetchSalesDashboard(params: SalesDashboardQuery = {}): Pro
 
 export async function fetchSaleById(id: string): Promise<SaleDetail> {
   const url = `${API_ENDPOINTS.sales}/id/${encodeURIComponent(id)}`;
-  let token: string | null = null;
-  if (typeof window !== "undefined") {
-    try {
-      token = localStorage.getItem("authToken");
-    } catch {
-      token = null;
-    }
-  }
-  const headers: HeadersInit = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(url, { headers, next: { revalidate: 15 } });
+  const res = await authFetch(url, { next: { revalidate: 15 } });
   if (!res.ok) {
-    if (res.status === 401) throw new Error("Unauthorized (401). Please log in to continue.");
-    if (res.status === 403) throw new Error("Forbidden (403). Your account lacks required permissions.");
     const text = await res.text().catch(() => "");
     throw new Error(text || `Failed to fetch sale (${res.status})`);
   }

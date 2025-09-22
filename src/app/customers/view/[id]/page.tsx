@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import Breadcrumb from "@/components/Breadcrumb";
+import { useSearchParams } from "next/navigation";
+import { getCustomer } from "@/services/customers";
+import type { CustomerRecord } from "@/types/customers";
 
 interface Order {
   id: string;
@@ -18,28 +21,50 @@ export default function CustomerDetailsPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [customer, setCustomer] = useState<any | null>(null);
+  const params = useSearchParams();
+  const id = params.get("id");
 
-  // Sample customer data
-  const customer = {
-    id: "743648",
-    name: "Janet Adebayo",
-    email: "janet.adebayo@gmail.com",
-    phone: "+2348065650633",
-    customerSince: "12 Sept 2022 - 12:55 pm",
-    trackingId: "9348fjr73",
-    status: "Active",
-    lastOrder: "12 Sept 2022",
-    homeAddress: "No. 15 Adekunle Street, Yaba, Lagos State",
-    billingAddress: "No. 15 Adekunle Street, Yaba, Lagos State",
-    totalOrdersValue: 250000,
-    totalOrders: 10,
-    pendingOrders: 2,
-    completedOrders: 8,
-    canceledOrders: 0,
-    returnedOrders: 0,
-    damagedOrders: 0,
-    abandonedCarts: 2
-  };
+  useEffect(() => {
+    let aborted = false;
+    async function run() {
+      if (!id) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await getCustomer(id);
+        if (aborted) return;
+        setCustomer({
+          id: data.id,
+          name: data.name,
+          email: data.email,
+          phone: data.phone,
+          customerSince: data.customerSince || "",
+          trackingId: (data as any).trackingId || "",
+          status: (data as any).status || "Active",
+          lastOrder: (data as any).lastOrder || "",
+          homeAddress: data.address || "",
+          billingAddress: data.address || "",
+          totalOrdersValue: (data as any).totalOrdersValue || 0,
+          totalOrders: (data as any).totalOrders || 0,
+          pendingOrders: (data as any).pendingOrders || 0,
+          completedOrders: (data as any).completedOrders || 0,
+          canceledOrders: (data as any).canceledOrders || 0,
+          returnedOrders: (data as any).returnedOrders || 0,
+          damagedOrders: (data as any).damagedOrders || 0,
+          abandonedCarts: (data as any).abandonedCarts || 0,
+        });
+      } catch (e: any) {
+        setError(e?.message || "Failed to load customer");
+      } finally {
+        if (!aborted) setLoading(false);
+      }
+    }
+    run();
+    return () => { aborted = true; };
+  }, [id]);
 
   // Sample orders data
   const orders: Order[] = [
