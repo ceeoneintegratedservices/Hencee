@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import { OrderDataService, Order } from "@/services/OrderDataService";
+import { fetchSaleById } from "@/services/sales";
 import { NotificationContainer, useNotifications } from "@/components/Notification";
 
 function ViewOrderContent() {
@@ -34,21 +35,44 @@ function ViewOrderContent() {
   const [showItemStatusDropdown, setShowItemStatusDropdown] = useState<number | null>(null);
 
 
-  // Load order data using the service
+  // Load order data: try backend first, then fallback to mock
   useEffect(() => {
-    if (finalOrderId) {
-      // Simulate API call
-      setTimeout(() => {
+    let aborted = false;
+    async function run() {
+      if (!finalOrderId) {
+        setLoading(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const api = await fetchSaleById(finalOrderId);
+        if (aborted) return;
+        // Map API -> UI Order shape
+        const mapped: Order = OrderDataService.generateOrder(finalOrderId);
+        if (api.customerName) mapped.customer.name = api.customerName;
+        if (api.orderDate) mapped.orderDate = api.orderDate;
+        if (api.orderType) mapped.orderType = api.orderType;
+        if (api.trackingId) mapped.trackingId = api.trackingId;
+        if (api.orderTotal != null) mapped.totalAmount = typeof api.orderTotal === 'string' ? Number(String(api.orderTotal).replace(/[^0-9.-]/g, '')) : api.orderTotal;
+        if (api.status) mapped.status = api.status as any;
+        if (api.homeAddress) mapped.homeAddress = api.homeAddress;
+        if (api.billingAddress) mapped.billingAddress = api.billingAddress;
+        if (api.paymentMethod) mapped.paymentMethod = api.paymentMethod;
+        setOrder(mapped);
+        const previousOrdersData = OrderDataService.generatePreviousOrders(mapped.customer.id, finalOrderId);
+        setPreviousOrders(previousOrdersData);
+      } catch (e) {
+        // Fallback to mock
         const orderData = OrderDataService.generateOrder(finalOrderId);
         const previousOrdersData = OrderDataService.generatePreviousOrders(orderData.customer.id, finalOrderId);
-        
         setOrder(orderData);
         setPreviousOrders(previousOrdersData);
-        setLoading(false);
-      }, 1000);
-    } else {
-      setLoading(false);
+      } finally {
+        if (!aborted) setLoading(false);
+      }
     }
+    run();
+    return () => { aborted = true; };
   }, [finalOrderId]);
 
   // Close sidebar on escape key

@@ -19,6 +19,7 @@ export const API_ENDPOINTS = {
   
   // Sales endpoints
   sales: `${API_BASE_URL}/sales`,
+  salesDashboard: `${API_BASE_URL}/sales/dashboard`,
   
   // Payment endpoints
   payments: `${API_BASE_URL}/payments`,

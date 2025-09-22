@@ -12,6 +12,8 @@ import Breadcrumb from "../../components/Breadcrumb";
 import TimePeriodSelector from "../../components/TimePeriodSelector";
 import { OrderDataService, Order } from "../../services/OrderDataService";
 import { NotificationContainer, useNotifications } from "../../components/Notification";
+import { fetchSalesDashboard } from "../../services/sales";
+import type { SalesDashboardResponse } from "../../types/sales";
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -36,6 +38,11 @@ export default function OrdersPage() {
   // Mobile menu state
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
+  // API data state
+  const [apiData, setApiData] = useState<SalesDashboardResponse | null>(null);
+  const [apiLoading, setApiLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+
   const handleFilterApply = (filters: any) => {
     setAppliedFilters({ ...appliedFilters, ...filters });
     setCurrentPage(1); // Reset to first page when filtering
@@ -55,18 +62,79 @@ export default function OrdersPage() {
     setSelectedTimePeriod(period);
   };
 
+  // Fetch real orders from API
+  useEffect(() => {
+    let aborted = false;
+    async function run() {
+      setApiLoading(true);
+      setApiError(null);
+      try {
+        const sortByMap: Record<string, string> = {
+          "Customer Name": "customerName",
+          "Order Date": "orderDate",
+          "Order Type": "orderType",
+          "Tracking ID": "trackingId",
+          "Order Total": "orderTotal",
+          "Status": "status",
+        };
+        const sortBy = sortColumn ? sortByMap[sortColumn] : undefined;
+        const statusParam = appliedFilters?.status && appliedFilters.status !== "All" ? String(appliedFilters.status) : undefined;
+        const df = appliedFilters?.dateFilter?.from || appliedFilters?.dateFilter?.start || undefined;
+        const dt = appliedFilters?.dateFilter?.to || appliedFilters?.dateFilter?.end || undefined;
+        const res = await fetchSalesDashboard({
+          page: currentPage,
+          limit: itemsPerPage,
+          search: searchTerm || undefined,
+          status: statusParam,
+          dateFrom: df,
+          dateTo: dt,
+          sortBy,
+          sortDir: (sortDirection as "asc" | "desc") || undefined,
+        });
+        if (!aborted) setApiData(res);
+      } catch (e: any) {
+        if (!aborted) setApiError(e?.message || "Failed to load orders");
+      } finally {
+        if (!aborted) setApiLoading(false);
+      }
+    }
+    run();
+    return () => { aborted = true; };
+  }, [currentPage, itemsPerPage, searchTerm, appliedFilters, sortColumn, sortDirection]);
+
   // Generate orders using the service
-  const sampleOrders = OrderDataService.generateOrders(200).map(order => ({
-    id: order.id,
-    name: order.customer.name,
-    date: order.orderDate,
-    type: order.orderType,
-    tracking: order.trackingId,
-    total: OrderDataService.formatCurrency(order.totalAmount),
-    action: order.status,
-    status: order.status,
-    statusColor: order.statusColor
-  }));
+  const sampleOrders = (apiData
+    ? apiData.orders.map(o => {
+        const colorMap: Record<string, string> = {
+          green: 'bg-green-100 text-green-800',
+          orange: 'bg-orange-100 text-orange-800',
+          blue: 'bg-blue-100 text-blue-800',
+          red: 'bg-red-100 text-red-800',
+        };
+        return {
+          id: o.id,
+          name: o.customerName,
+          date: o.orderDate,
+          type: o.orderType,
+          tracking: o.trackingId,
+          total: o.orderTotal,
+          action: o.action,
+          status: o.status,
+          statusColor: o.statusColor ? (colorMap[o.statusColor] || 'bg-gray-100 text-gray-800') : 'bg-gray-100 text-gray-800',
+        };
+      })
+    : OrderDataService.generateOrders(200).map(order => ({
+        id: order.id,
+        name: order.customer.name,
+        date: order.orderDate,
+        type: order.orderType,
+        tracking: order.trackingId,
+        total: OrderDataService.formatCurrency(order.totalAmount),
+        action: order.status,
+        status: order.status,
+        statusColor: order.statusColor
+      }))
+  );
   
   // Apply search filter
   const filteredOrders = sampleOrders.filter(order => {
@@ -126,36 +194,35 @@ export default function OrdersPage() {
     }
   });
 
-  const totalPages = Math.ceil(sortedOrders.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentOrders = sortedOrders.slice(startIndex, endIndex);
+  const totalPages = apiData ? Math.ceil((apiData.total || 0) / itemsPerPage) : Math.ceil(sortedOrders.length / itemsPerPage);
+  const startIndex = apiData ? 0 : (currentPage - 1) * itemsPerPage;
+  const endIndex = apiData ? (apiData.orders?.length ?? 0) : startIndex + itemsPerPage;
+  const currentOrders = apiData ? sampleOrders : sortedOrders.slice(startIndex, endIndex);
 
-  // Calculate real-time summary data using service
-  const fullOrders = OrderDataService.generateOrders(200);
-  const summaryData = OrderDataService.getOrderSummary(fullOrders);
-  
-  // Add additional calculated fields
-  const enhancedSummaryData = {
-    ...summaryData,
-    totalRevenue: fullOrders.reduce((sum, order) => sum + order.totalAmount, 0),
-    uniqueCustomers: new Set(fullOrders.map(order => order.customer.name)).size,
-    abandonedCarts: Math.floor(fullOrders.length * 0.15) // Simulate 15% abandoned cart rate
-  };
-
-  // Calculate data based on selected time period using service
-  const getTimePeriodData = () => {
-    const timePeriodData = OrderDataService.getTimePeriodData(fullOrders, selectedTimePeriod);
-    
+  // Summary numbers from API (fallback to local if API unavailable)
+  const timePeriodData = apiData ? {
+    allOrders: apiData.summary.allOrders,
+    pendingOrders: apiData.summary.pending,
+    completedOrders: apiData.summary.completed,
+    canceledOrders: apiData.summary.canceled,
+    returnedOrders: apiData.summary.returned,
+    damagedOrders: apiData.summary.damaged,
+    abandonedCarts: apiData.summary.abandonedCart,
+    uniqueCustomers: apiData.summary.customers,
+  } : (() => {
+    const fullOrders = OrderDataService.generateOrders(200);
+    const summaryData = OrderDataService.getOrderSummary(fullOrders);
     return {
-      ...timePeriodData,
-      totalRevenue: enhancedSummaryData.totalRevenue * (selectedTimePeriod === "This Month" ? 4.3 : 1),
-      uniqueCustomers: Math.floor(enhancedSummaryData.uniqueCustomers * (selectedTimePeriod === "This Month" ? 4.3 : 1)),
-      abandonedCarts: Math.floor(enhancedSummaryData.abandonedCarts * (selectedTimePeriod === "This Month" ? 4.3 : 1))
+      allOrders: summaryData.allOrders,
+      pendingOrders: summaryData.pendingOrders,
+      completedOrders: summaryData.completedOrders,
+      canceledOrders: summaryData.canceledOrders,
+      returnedOrders: summaryData.returnedOrders,
+      damagedOrders: summaryData.damagedOrders,
+      abandonedCarts: Math.floor(fullOrders.length * 0.15),
+      uniqueCustomers: new Set(fullOrders.map(order => order.customer.name)).size,
     };
-  };
-
-  const timePeriodData = getTimePeriodData();
+  })();
 
   const handlePreviousPage = () => {
     if (currentPage > 1) {
