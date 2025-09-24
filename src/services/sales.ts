@@ -37,14 +37,50 @@ export async function fetchSalesDashboard(params: SalesDashboardQuery = {}): Pro
 }
 
 export async function fetchSaleById(id: string): Promise<SaleDetail> {
-  const url = `${API_ENDPOINTS.sales}/id/${encodeURIComponent(id)}`;
+  const url = `${API_ENDPOINTS.orders}/id/${encodeURIComponent(id)}`;
   const res = await authFetch(url, { next: { revalidate: 15 } });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(text || `Failed to fetch sale (${res.status})`);
+    throw new Error(text || `Failed to fetch order (${res.status})`);
   }
   const data = (await res.json()) as SaleDetail;
   return data;
+}
+
+export interface CreateSalePayload {
+  customerId: string;
+  items: Array<{ productId: string; quantity: number }>;
+  paymentMethod?: "CASH" | "CARD" | "BANK_TRANSFER" | "MOBILE_MONEY";
+  orderType?: string;
+  status?: "PENDING" | "COMPLETED" | "CANCELLED";
+  notes?: string;
+}
+
+export async function createSale(payload: CreateSalePayload): Promise<{ id: string }> {
+  const res = await authFetch(API_ENDPOINTS.orders, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `Failed to create order (${res.status})`);
+  }
+  return res.json();
+}
+
+export async function updateSaleStatus(id: string, status: "PENDING" | "COMPLETED" | "CANCELLED"): Promise<SaleDetail> {
+  const res = await authFetch(`${API_ENDPOINTS.orders}/id/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(text || `Failed to update order (${res.status})`);
+  }
+  return res.json();
 }
 
 

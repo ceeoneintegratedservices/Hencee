@@ -16,6 +16,9 @@ export async function authFetch(pathOrUrl: string, options: RequestInit = {}) {
   };
 
   const res = await fetch(url, { ...options, headers: mergedHeaders });
+  if (process.env.NODE_ENV !== "production") {
+    try { console.debug("authFetch complete:", { url, status: res.status }); } catch {}
+  }
 
   if (res.status === 401) {
     try { localStorage.removeItem("authToken"); } catch {}

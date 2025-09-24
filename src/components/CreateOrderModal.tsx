@@ -2,14 +2,17 @@
 
 import { useState, useEffect } from "react";
 
+import { CreateSalePayload } from "@/services/sales";
+
 interface CreateOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (orderData: OrderData) => void;
+  onCreate: (orderData: CreateSalePayload) => void;
 }
 
 interface OrderData {
   customer: string;
+  customerId?: string;
   paymentType: string;
   orderType: string;
   orderDate: string;
@@ -64,6 +67,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
   const [customerSearchQuery, setCustomerSearchQuery] = useState("");
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [showCustomerList, setShowCustomerList] = useState(false);
+  const [explicitCustomerId, setExplicitCustomerId] = useState<string>("");
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -147,7 +151,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
 
   // Select customer
   const selectCustomer = (customer: Customer) => {
-    setOrderData(prev => ({ ...prev, customer: customer.name }));
+    setOrderData(prev => ({ ...prev, customer: customer.name, customerId: customer.id }));
     setCustomerSearchQuery(customer.name);
     setShowCustomerList(false);
   };
@@ -208,8 +212,42 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
   };
 
   const handleCreate = () => {
-    onCreate(orderData);
+    // Map our UI state to the API payload format
+    const apiPayload = {
+      customerId: orderData.customerId || "",
+      items: orderData.items.map(item => ({
+        productId: item.id,
+        quantity: item.quantity
+      })),
+      paymentMethod: mapPaymentTypeToEnum(orderData.paymentType),
+      orderType: orderData.orderType,
+      status: mapOrderStatusToEnum(orderData.orderStatus),
+      notes: orderData.orderNote
+    };
+    
+    onCreate(apiPayload);
     onClose();
+  };
+  
+  // Helper function to map UI payment types to API enum values
+  const mapPaymentTypeToEnum = (paymentType: string): "CASH" | "CARD" | "BANK_TRANSFER" | "MOBILE_MONEY" => {
+    switch (paymentType) {
+      case "Cash": return "CASH";
+      case "Card": return "CARD";
+      case "Bank Transfer": return "BANK_TRANSFER";
+      case "Mobile Money": return "MOBILE_MONEY";
+      default: return "CASH"; // Default to cash
+    }
+  };
+  
+  // Helper function to map UI order status to API enum values
+  const mapOrderStatusToEnum = (status: string): "PENDING" | "COMPLETED" | "CANCELLED" => {
+    switch (status) {
+      case "Pending": return "PENDING";
+      case "Completed": return "COMPLETED";
+      case "Canceled": return "CANCELLED";
+      default: return "PENDING"; // Default to pending
+    }
   };
 
   const handleOverlayClick = (e: React.MouseEvent) => {

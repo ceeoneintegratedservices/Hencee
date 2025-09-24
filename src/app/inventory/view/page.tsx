@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { InventoryDataService, InventoryItem, Purchase } from '@/services/InventoryDataService';
+import { getProduct } from '@/services/products';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import FilterByDateModal from '@/components/FilterByDateModal';
 import EditProductModal from '@/components/EditProductModal';
@@ -49,37 +50,77 @@ function ViewInventoryContent() {
     setLoading(false);
   }, [router]);
 
-  // Load inventory item data
+  // Load inventory item data from API only once when the component mounts or ID changes
   useEffect(() => {
-    if (isAuthenticated) {
-      const itemId = searchParams.get('id') || 'item-1';
-      
-      // Try to load the actual item from localStorage first
-      const storedItems = localStorage.getItem('inventoryItems');
-      let item: InventoryItem | null = null;
-      
-      if (storedItems) {
-        try {
-          const items: InventoryItem[] = JSON.parse(storedItems);
-          item = items.find(i => i.id === itemId) || null;
-        } catch (error) {
-          console.error('Error parsing stored inventory items:', error);
+    // Don't fetch if not authenticated
+    if (!isAuthenticated) return;
+    
+    // Get product ID from URL
+    const itemId = searchParams.get('id');
+    if (!itemId) {
+      showError('Error', 'No product ID provided');
+      return;
+    }
+    
+    // Track if component is mounted
+    let mounted = true;
+    
+    async function fetchProductDetails() {
+      try {
+        const p = await getProduct(itemId);
+        
+        // Don't update state if component unmounted
+        if (!mounted) return;
+        
+        if (!p || !p.id) {
+          setInventoryItem(null);
+          showError('Error', 'Product not found');
+          return;
+        }
+        
+        // Map API response to UI model
+        const item: InventoryItem = {
+          id: p.id,
+          productName: p.name || 'Product',
+          category: p.category?.name || p.category || 'General',
+          unitPrice: p.sellingPrice ?? p.price ?? 0,
+          inStock: p.quantity ?? p.stock ?? 0,
+          discount: 0,
+          totalValue: (p.quantity ?? 0) * (p.sellingPrice ?? p.price ?? 0),
+          status: 'Published',
+          description: p.description || '',
+          dateAdded: p.createdAt || new Date().toISOString(),
+          // Required fields for InventoryItem
+          costPrice: p.purchasePrice ?? p.costPrice ?? 0,
+          image: '',
+          views: p.views || 0,
+          favorites: p.favorites || 0,
+          lastOrder: p.lastOrderDate || undefined,
+        } as any;
+        
+        setInventoryItem(item);
+        
+        // For now, we'll continue using mock purchase data
+        // In a real implementation, you'd fetch real purchase data from the API
+        const samplePurchases = InventoryDataService.generatePurchases(itemId, 20);
+        setPurchases(samplePurchases);
+        setFilteredPurchases(samplePurchases);
+        
+      } catch (error) {
+        if (mounted) {
+          setInventoryItem(null);
+          setPurchases([]);
+          setFilteredPurchases([]);
+          showError('Error', 'Failed to load product');
         }
       }
-      
-      // If not found in localStorage, generate a new one (fallback)
-      if (!item) {
-        item = InventoryDataService.generateInventoryItem(itemId);
-      }
-      
-      setInventoryItem(item);
-      
-      // Generate sample purchases
-      const samplePurchases = InventoryDataService.generatePurchases(itemId, 20);
-      setPurchases(samplePurchases);
-      setFilteredPurchases(samplePurchases);
     }
-  }, [isAuthenticated, searchParams]);
+    
+    fetchProductDetails();
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => { mounted = false; };
+  }, [isAuthenticated, searchParams, showError]); // Only re-run if authentication state or product ID changes
 
   // Filter purchases
   useEffect(() => {
@@ -118,86 +159,86 @@ function ViewInventoryContent() {
     setShowEditModal(true);
   };
 
-  const handleSaveProduct = (formData: any, mainImage: string | null, additionalImages: string[]) => {
+  const handleSaveProduct = async (formData: any, mainImage: string | null, additionalImages: string[]) => {
     if (inventoryItem) {
-      // Update the inventory item with new data
-      const updatedItem = {
-        ...inventoryItem,
-        productName: formData.productName,
-        category: formData.category,
-        unitPrice: parseFloat(formData.sellingPrice) || inventoryItem.unitPrice,
-        costPrice: parseFloat(formData.costPrice) || inventoryItem.costPrice,
-        inStock: parseInt(formData.quantityInStock) || inventoryItem.inStock,
-        brand: formData.productBrand,
-        description: formData.shortDescription,
-        longDescription: formData.longDescription,
-        image: mainImage || inventoryItem.image,
-        additionalImages: additionalImages.length > 0 ? additionalImages : inventoryItem.additionalImages
-      };
-      
-      setInventoryItem(updatedItem);
-      
-      // Update localStorage with the updated item
-      const storedItems = localStorage.getItem('inventoryItems');
-      if (storedItems) {
-        try {
-          const items: InventoryItem[] = JSON.parse(storedItems);
-          const updatedItems = items.map(item => 
-            item.id === updatedItem.id ? updatedItem : item
-          );
-          localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
-        } catch (error) {
-          console.error('Error updating stored inventory items:', error);
-        }
+      try {
+        // Prepare the API payload
+        const updatePayload = {
+          name: formData.productName,
+          category: formData.category,
+          sellingPrice: parseFloat(formData.sellingPrice) || inventoryItem.unitPrice,
+          purchasePrice: parseFloat(formData.costPrice) || inventoryItem.costPrice,
+          quantity: parseInt(formData.quantityInStock) || inventoryItem.inStock,
+          description: formData.shortDescription,
+          // Add any other fields your API expects
+        };
+        
+        // Call API to update the product
+        await updateProduct(inventoryItem.id, updatePayload);
+        
+        // Update local state with form data
+        const updatedItem = {
+          ...inventoryItem,
+          productName: formData.productName,
+          category: formData.category,
+          unitPrice: parseFloat(formData.sellingPrice) || inventoryItem.unitPrice,
+          costPrice: parseFloat(formData.costPrice) || inventoryItem.costPrice,
+          inStock: parseInt(formData.quantityInStock) || inventoryItem.inStock,
+          description: formData.shortDescription,
+          // We keep these UI-specific fields
+          image: mainImage || inventoryItem.image,
+          additionalImages: additionalImages.length > 0 ? additionalImages : inventoryItem.additionalImages
+        };
+        
+        setInventoryItem(updatedItem);
+        showSuccess('Success', 'Product updated successfully');
+      } catch (error) {
+        showError('Error', 'Failed to update product');
       }
-      
-      showSuccess('Success', 'Product updated successfully');
     }
   };
 
-  const handleUnpublishProduct = () => {
+  const handleUnpublishProduct = async () => {
     if (inventoryItem) {
-      const updatedItem = { ...inventoryItem, status: 'Unpublished' as const };
-      setInventoryItem(updatedItem);
-      
-      // Update localStorage
-      const storedItems = localStorage.getItem('inventoryItems');
-      if (storedItems) {
-        try {
-          const items: InventoryItem[] = JSON.parse(storedItems);
-          const updatedItems = items.map(item => 
-            item.id === updatedItem.id ? updatedItem : item
-          );
-          localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
-        } catch (error) {
-          console.error('Error updating stored inventory items:', error);
-        }
+      try {
+        // Optimistically update UI first for better UX
+        const updatedItem = { ...inventoryItem, status: 'Unpublished' as const };
+        setInventoryItem(updatedItem);
+        
+        // Call API to update product status
+        const updatePayload = {
+          status: 'INACTIVE' // Assuming the backend expects INACTIVE for unpublished
+        };
+        
+        await updateProduct(inventoryItem.id, updatePayload);
+        showSuccess('Success', 'Product unpublished successfully');
+      } catch (error) {
+        // Revert optimistic update on error
+        setInventoryItem(inventoryItem);
+        showError('Error', 'Failed to unpublish product');
       }
-      
-      showSuccess('Success', 'Product unpublished successfully');
     }
   };
 
-  const handlePublishProduct = () => {
+  const handlePublishProduct = async () => {
     if (inventoryItem) {
-      const updatedItem = { ...inventoryItem, status: 'Published' as const };
-      setInventoryItem(updatedItem);
-      
-      // Update localStorage
-      const storedItems = localStorage.getItem('inventoryItems');
-      if (storedItems) {
-        try {
-          const items: InventoryItem[] = JSON.parse(storedItems);
-          const updatedItems = items.map(item => 
-            item.id === updatedItem.id ? updatedItem : item
-          );
-          localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
-        } catch (error) {
-          console.error('Error updating stored inventory items:', error);
-        }
+      try {
+        // Optimistically update UI first for better UX
+        const updatedItem = { ...inventoryItem, status: 'Published' as const };
+        setInventoryItem(updatedItem);
+        
+        // Call API to update product status
+        const updatePayload = {
+          status: 'ACTIVE' // Assuming the backend expects ACTIVE for published
+        };
+        
+        await updateProduct(inventoryItem.id, updatePayload);
+        showSuccess('Success', 'Product published successfully');
+      } catch (error) {
+        // Revert optimistic update on error
+        setInventoryItem(inventoryItem);
+        showError('Error', 'Failed to publish product');
       }
-      
-      showSuccess('Success', 'Product published successfully');
     }
   };
 

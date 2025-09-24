@@ -12,8 +12,9 @@ import Breadcrumb from "../../components/Breadcrumb";
 import TimePeriodSelector from "../../components/TimePeriodSelector";
 import { OrderDataService, Order } from "../../services/OrderDataService";
 import { NotificationContainer, useNotifications } from "../../components/Notification";
-import { fetchSalesDashboard } from "../../services/sales";
+import { fetchSalesDashboard, updateSaleStatus, createSale } from "../../services/sales";
 import type { SalesDashboardResponse } from "../../types/sales";
+import { CreateSalePayload } from "../../services/sales";
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -53,8 +54,47 @@ export default function OrdersPage() {
     setCurrentPage(1); // Reset to first page when filtering
   };
 
-  const handleCreateOrder = (orderData: any) => {
-    // Implement order creation logic here
+  const handleCreateOrder = async (orderData: CreateSalePayload) => {
+    try {
+      if (!orderData?.customerId || !orderData?.items?.length) {
+        console.error("Missing required fields for order creation");
+        return;
+      }
+      // Use the properly formatted API payload from CreateOrderModal
+      await createSale(orderData);
+      showSuccess("Order Created", "The order has been created successfully.");
+      setShowCreateModal(false);
+      
+      // Refresh the orders list after creating a new order
+      const statusParam = appliedFilters?.status && appliedFilters.status !== "All" ? String(appliedFilters.status) : undefined;
+      const df = appliedFilters?.dateFilter?.from || appliedFilters?.dateFilter?.start || undefined;
+      const dt = appliedFilters?.dateFilter?.to || appliedFilters?.dateFilter?.end || undefined;
+      
+      // Need to define sortByMap before using it
+      const sortByMap: Record<string, string> = {
+        "Customer Name": "customerName",
+        "Order Date": "orderDate",
+        "Order Type": "orderType",
+        "Tracking ID": "trackingId",
+        "Order Total": "orderTotal",
+        "Status": "status",
+      };
+      
+      const res = await fetchSalesDashboard({
+        page: currentPage,
+        limit: itemsPerPage,
+        search: searchTerm || undefined,
+        status: statusParam,
+        dateFrom: df,
+        dateTo: dt,
+        sortBy: sortColumn ? sortByMap[sortColumn] : undefined,
+        sortDir: (sortDirection as "asc" | "desc") || undefined,
+      });
+      
+      setApiData(res);
+    } catch (e) {
+      console.error("Error creating order:", e);
+    }
   };
 
   // Handle time period selection
@@ -283,40 +323,23 @@ export default function OrdersPage() {
   };
 
   const handleStatusChange = (orderIndex: number, newStatus: string) => {
-    // Update the order status in the sample data
     const updatedOrders = [...sampleOrders];
     const globalOrderIndex = startIndex + orderIndex;
-    if (updatedOrders[globalOrderIndex]) {
-      const orderId = updatedOrders[globalOrderIndex].id;
-      updatedOrders[globalOrderIndex].status = newStatus as any;
-      
-      // Update status color based on new status
-      const statusColors = {
-        'Completed': 'bg-green-100 text-green-800',
-        'In-Progress': 'bg-blue-100 text-blue-800', 
-        'Pending': 'bg-orange-100 text-orange-800',
-        'Canceled': 'bg-red-100 text-red-800',
-        'Returned': 'bg-yellow-100 text-yellow-800',
-        'Damaged': 'bg-purple-100 text-purple-800'
-      };
-      updatedOrders[globalOrderIndex].statusColor = statusColors[newStatus as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
-      
-      // Persist the status change to localStorage
-      const statusChanges = JSON.parse(localStorage.getItem('orderStatusChanges') || '{}');
-      statusChanges[orderId] = newStatus;
-      localStorage.setItem('orderStatusChanges', JSON.stringify(statusChanges));
-      
-      // Show success notification
-      showSuccess(
-        "Status Updated",
-        `Order status changed to ${newStatus} successfully!`
-      );
-    }
-    
-    // In a real app, you would update the orders state here
-    // setOrders(updatedOrders);
-    
+    if (!updatedOrders[globalOrderIndex]) return;
+    const orderId = updatedOrders[globalOrderIndex].id;
+    // Optimistic UI update
+    const prevStatus = updatedOrders[globalOrderIndex].status;
+    updatedOrders[globalOrderIndex].status = newStatus as any;
     setShowActionDropdown(null);
+    updateSaleStatus(orderId, newStatus.toUpperCase() as any)
+      .then(() => {
+        showSuccess("Status Updated", `Order status changed to ${newStatus} successfully!`);
+      })
+      .catch((e) => {
+        console.error(e);
+        // Revert on failure
+        updatedOrders[globalOrderIndex].status = prevStatus as any;
+      });
   };
 
   // Close dropdowns when clicking outside

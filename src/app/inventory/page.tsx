@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { InventoryDataService, InventoryItem, InventorySummary } from '@/services/InventoryDataService';
+import { listProducts } from '@/services/products';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import FilterByDateModal from '@/components/FilterByDateModal';
 import TimePeriodSelector from '@/components/TimePeriodSelector';
@@ -59,20 +60,83 @@ export default function InventoryPage() {
     setLoading(false);
   }, [router]);
 
-  // Load inventory data
+  // Load inventory data from backend only once when the component mounts
   useEffect(() => {
-    if (isAuthenticated) {
-      const items = InventoryDataService.generateInventoryItems(200);
-      setInventoryItems(items);
-      setFilteredItems(items);
-      
-      // Store items in localStorage so view page can access the same data
-      localStorage.setItem('inventoryItems', JSON.stringify(items));
-      
-      const summary = InventoryDataService.generateInventorySummary(items);
-      setSummaryData(summary);
+    // Track if the component is mounted
+    let mounted = true;
+    
+    async function fetchInventoryData() {
+      try {
+        // Fetch products from API
+        const res = await listProducts({ page: 1, limit: 100 });
+        
+        // Don't update state if component unmounted
+        if (!mounted) return;
+        
+        // Check if we have a valid response
+        if (!res || (!Array.isArray(res) && !Array.isArray(res.data))) {
+          setInventoryItems([]);
+          setFilteredItems([]);
+          showError('Error', 'Invalid response format from API');
+          return;
+        }
+        
+        // Handle both array response and { data: [] } response formats
+        const productsArray = Array.isArray(res) ? res : (res.data || []);
+        
+        if (productsArray.length === 0) {
+          setInventoryItems([]);
+          setFilteredItems([]);
+          setSummaryData({
+            allProducts: 0,
+            activeProducts: 0,
+            lowStockAlert: 0,
+            expired: 0,
+            oneStarRating: 0
+          });
+          return;
+        }
+        
+        // Map API response to UI model
+        const mapped: InventoryItem[] = productsArray.map((p: any, idx: number) => ({
+          id: p.id || String(idx + 1),
+          productName: p.name || 'Product',
+          category: p.category?.name || p.category || 'General',
+          unitPrice: p.sellingPrice ?? p.price ?? 0,
+          inStock: p.quantity ?? p.stock ?? 0,
+          discount: 0,
+          totalValue: (p.quantity ?? 0) * (p.sellingPrice ?? p.price ?? 0),
+          status: 'Published',
+          description: p.description || '',
+          // Add required fields for InventoryItem interface
+          costPrice: p.purchasePrice ?? p.costPrice ?? 0,
+          image: '',
+          dateAdded: p.createdAt || new Date().toISOString(),
+          views: 0,
+          favorites: 0
+        }));
+        
+        setInventoryItems(mapped);
+        setFilteredItems(mapped);
+        
+        // Generate summary statistics
+        const summary = InventoryDataService.generateInventorySummary(mapped);
+        setSummaryData(summary);
+      } catch (error) {
+        if (mounted) {
+          setInventoryItems([]);
+          setFilteredItems([]);
+          setSummaryData(null);
+          showError('Error', 'Failed to load products');
+        }
+      }
     }
-  }, [isAuthenticated]);
+    
+    fetchInventoryData();
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => { mounted = false; };
+  }, []); // Empty dependency array ensures this runs only once
 
   // Filter and search items
   useEffect(() => {

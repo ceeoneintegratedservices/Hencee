@@ -17,12 +17,27 @@ export const API_ENDPOINTS = {
   // Customer endpoints
   customers: `${API_BASE_URL}/customers`,
   
-  // Sales endpoints
-  sales: `${API_BASE_URL}/sales`,
+  // Orders endpoints
+  orders: `${API_BASE_URL}/orders`,
   salesDashboard: `${API_BASE_URL}/sales/dashboard`,
   
   // Payment endpoints
   payments: `${API_BASE_URL}/payments`,
+  
+  // Approvals endpoints
+  approvals: `${API_BASE_URL}/approvals`,
+  
+  // Users endpoints
+  users: `${API_BASE_URL}/users`,
+  
+  // Reports endpoints
+  reports: {
+    sales: `${API_BASE_URL}/reports/sales`,
+    finance: `${API_BASE_URL}/reports/finance`
+  },
+  
+  // Audit logs endpoint
+  auditLogs: `${API_BASE_URL}/audit-logs`,
   
   // API documentation
   apiDocs: `${API_BASE_URL}/api`,

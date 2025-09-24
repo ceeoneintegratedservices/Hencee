@@ -7,6 +7,18 @@ import Breadcrumb from "@/components/Breadcrumb";
 import CreateCustomerModal from "@/components/CreateCustomerModal";
 import { listCustomers, createCustomer } from "@/services/customers";
 import type { CustomerRecord } from "@/types/customers";
+import { API_ENDPOINTS } from "@/config/api";
+import { authFetch } from "@/services/authFetch";
+
+// Helper function to build query string
+function buildQuery(params: { page?: number; limit?: number; search?: string } = {}): string {
+  const qp = new URLSearchParams();
+  if (params.page != null) qp.set("page", String(params.page));
+  if (params.limit != null) qp.set("limit", String(params.limit));
+  if (params.search) qp.set("search", params.search);
+  const qs = qp.toString();
+  return qs ? `?${qs}` : "";
+}
 
 interface Customer extends CustomerRecord {
   orders: number;
@@ -33,12 +45,24 @@ export default function CustomersPage() {
       setLoading(true);
       setError(null);
       try {
-        const res = await listCustomers({ page, limit, search: searchQuery || undefined });
+        // Make the API call with pagination parameters
+        const response = await authFetch(`${API_ENDPOINTS.customers}${buildQuery({ page, limit, search: searchQuery || undefined })}`);
+        const fullResponse = await response.json();
+        
         if (aborted) return;
-        setAllCustomers(res);
-        const start = (page - 1) * limit;
-        const sliced = res.slice(start, start + limit);
-        const mapped: Customer[] = sliced.map((c) => ({
+        
+        // Extract data and pagination info
+        const { data: customersList, total: totalCustomers } = fullResponse;
+        
+        if (!Array.isArray(customersList)) {
+          throw new Error("Invalid response format");
+        }
+        
+        // Store all customers for summary calculations
+        setAllCustomers(customersList);
+        
+        // Map customers to the format needed for the UI
+        const mapped: Customer[] = customersList.map((c) => ({
           id: c.id,
           name: c.name,
           email: c.email || "",
@@ -49,9 +73,11 @@ export default function CustomersPage() {
           status: (c.status as any) || "Active",
           address: c.address,
         }));
+        
         setCustomers(mapped);
-        setTotal(res.length);
+        setTotal(totalCustomers);
       } catch (e: any) {
+        console.error("Error loading customers:", e);
         setError(e?.message || "Failed to load customers");
       } finally {
         if (!aborted) setLoading(false);
@@ -82,11 +108,15 @@ export default function CustomersPage() {
   }
 
   const summaryAll = total;
-  const summaryActive = allCustomers.filter(c => (c.sales?.length || 0) > 0).length;
+  
+  // Make sure allCustomers is an array before using filter
+  const customersArray = Array.isArray(allCustomers) ? allCustomers : [];
+  
+  const summaryActive = customersArray.filter(c => (c.sales?.length || 0) > 0).length;
   const summaryInactive = Math.max(0, total - summaryActive);
-  const summaryNew = allCustomers.filter(c => withinTimeframe(c.createdAt)).length;
-  const summaryPurchasing = allCustomers.filter(c => (c.sales || []).some(s => String(s.status).toUpperCase() === "PENDING")).length;
-  const summaryAbandoned = allCustomers.filter(c => (c.sales || []).some(s => {
+  const summaryNew = customersArray.filter(c => withinTimeframe(c.createdAt)).length;
+  const summaryPurchasing = customersArray.filter(c => (c.sales || []).some(s => String(s.status).toUpperCase() === "PENDING")).length;
+  const summaryAbandoned = customersArray.filter(c => (c.sales || []).some(s => {
     const isPending = String(s.status).toUpperCase() === "PENDING";
     const olderThan7 = s.createdAt ? (now.getTime() - new Date(s.createdAt).getTime()) > (7 * 24 * 60 * 60 * 1000) : false;
     return isPending && olderThan7;
@@ -121,24 +151,39 @@ export default function CustomersPage() {
         address: customerData.address || undefined,
       };
       await createCustomer(body);
-    setIsCreateModalOpen(false);
-      // refresh list
-      const res = await listCustomers({ page, limit, search: searchQuery || undefined });
-      const mapped: Customer[] = res.data.map((c) => ({
+      setIsCreateModalOpen(false);
+      
+      // Refresh list after creating a new customer
+      const response = await authFetch(`${API_ENDPOINTS.customers}${buildQuery({ page, limit, search: searchQuery || undefined })}`);
+      const fullResponse = await response.json();
+      
+      // Extract data and pagination info
+      const { data: customersList, total: totalCustomers } = fullResponse;
+      
+      if (!Array.isArray(customersList)) {
+        throw new Error("Invalid response format");
+      }
+      
+      // Store all customers for summary calculations
+      setAllCustomers(customersList);
+      
+      // Map customers to the format needed for the UI
+      const mapped: Customer[] = customersList.map((c) => ({
         id: c.id,
         name: c.name,
         email: c.email || "",
         phone: c.phone || "",
-        orders: c.orders ?? 0,
-        orderTotal: c.orderTotal ?? 0,
-        customerSince: c.customerSince || "",
+        orders: c.sales ? c.sales.length : (c.orders ?? 0),
+        orderTotal: (c.sales && c.sales.length) ? c.sales.reduce((sum, s) => sum + (s.totalAmount || 0), 0) : (c.orderTotal ?? 0),
+        customerSince: c.createdAt ? new Date(c.createdAt).toLocaleString() : (c.customerSince || ""),
         status: (c.status as any) || "Active",
         address: c.address,
       }));
+      
       setCustomers(mapped);
-      setTotal(res.total);
+      setTotal(totalCustomers);
     } catch (e) {
-      console.error(e);
+      console.error("Error creating customer:", e);
     }
   };
 

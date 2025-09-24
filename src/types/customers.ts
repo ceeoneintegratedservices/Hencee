@@ -30,6 +30,13 @@ export interface CustomersListQuery {
   search?: string;
 }
 
+export interface PaginatedCustomersResponse {
+  data: CustomerRecord[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export type CustomersListResponse = CustomerRecord[];
 
 export interface CreateCustomerBody {
