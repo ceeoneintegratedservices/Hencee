@@ -1,13 +1,11 @@
 "use client";
 
 import { useState } from "react";
-
 interface CreateCustomerModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreate: (customerData: CustomerData) => void;
 }
-
 interface CustomerData {
   firstName: string;
   lastName: string;
