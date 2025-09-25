@@ -125,7 +125,7 @@ export default function SettingsPage() {
   const handleUpdate = () => {
     // Save updated data to localStorage
     const userData = localStorage.getItem('userData');
-    let existingData = {};
+    let existingData: any = {};
     
     if (userData) {
       try {
