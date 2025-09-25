@@ -63,9 +63,9 @@ export default function FilterModal({ isOpen, onClose, onApply }: FilterModalPro
           </button>
         </div>
 
-        {/* Order Type Section */}
+        {/* Category Section */}
         <div className="mb-6">
-          <h3 className="text-[14px] font-medium text-[#45464e] mb-3">Order Type</h3>
+          <h3 className="text-[14px] font-medium text-[#45464e] mb-3">Category</h3>
           <div className="space-y-3">
             <label className="flex items-center gap-3 cursor-pointer">
               <input

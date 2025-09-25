@@ -358,6 +358,12 @@ function ViewInventoryContent() {
                       {inventoryItem.status}
                     </span>
                   </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-1">Warehouse</p>
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {inventoryItem.warehouseNumber || 'N/A'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -596,7 +602,7 @@ function ViewInventoryContent() {
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       <div className="flex items-center gap-1">
-                        Order Type
+                        Category
                         <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                         </svg>

@@ -424,7 +424,7 @@ function ViewOrderContent() {
               </div>
             </div>
 
-            {/* Payment & Order Type Card */}
+            {/* Payment & Category Card */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-start gap-4">
                 <div className="p-3 bg-gray-100 rounded-lg">
@@ -433,7 +433,7 @@ function ViewOrderContent() {
                   </svg>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment & Order Type</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment & Category</h3>
                   
                   <div className="space-y-3">
                     <div>
@@ -441,8 +441,15 @@ function ViewOrderContent() {
                       <p className="text-sm text-gray-900">{order.paymentMethod}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">Order Type</p>
-                      <p className="text-sm text-gray-900">{order.orderType}</p>
+                      <p className="text-xs text-gray-500 mb-1">Payment</p>
+                      <p className="text-sm text-gray-900">
+                        {order.payment}
+                        {order.payment === 'Part Payment' && order.paymentAmount && (
+                          <span className="ml-2 text-blue-600 font-medium">
+                            (₦{parseFloat(order.paymentAmount).toLocaleString()})
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
                 </div>

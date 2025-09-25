@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import Breadcrumb from "@/components/Breadcrumb";
@@ -10,15 +10,15 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("account");
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    firstName: "Usman",
-    lastName: "Ndako", 
-    email: "usmanndako@gmail.com",
+    firstName: "",
+    lastName: "", 
+    email: "",
     phoneCode: "+234",
-    phoneNumber: "08065650633",
-    address: "No. 93 Skyfield Apartments",
-    city: "Yaba",
+    phoneNumber: "",
+    address: "",
+    city: "",
     country: "Nigeria",
-    state: "Lagos"
+    state: ""
   });
 
   const [securityData, setSecurityData] = useState({
@@ -30,17 +30,63 @@ export default function SettingsPage() {
   });
 
   const [businessData, setBusinessData] = useState({
-    businessName: "Ceeone Wheels",
+    businessName: "",
     businessType: "Tyre Retailer",
-    registrationNumber: "RC123456789",
-    taxId: "TAX123456789",
-    businessAddress: "No. 15 Adekunle Street, Yaba, Lagos State",
-    businessPhone: "+2348065650633",
-    businessEmail: "info@ceeonewheels.com",
-    website: "www.ceeonewheels.com",
+    registrationNumber: "",
+    taxId: "",
+    businessAddress: "",
+    businessPhone: "",
+    businessEmail: "",
+    website: "",
     staffPosition: "Owner/Manager",
-    designation: "Chief Executive Officer"
+    designation: ""
   });
+
+  // Load user data from localStorage on component mount
+  useEffect(() => {
+    const userData = localStorage.getItem('userData');
+    if (userData) {
+      try {
+        const parsed = JSON.parse(userData);
+        
+        // Populate account form data
+        setFormData(prev => ({
+          ...prev,
+          firstName: parsed.firstName || "",
+          lastName: parsed.lastName || "",
+          email: parsed.email || "",
+          phoneCode: parsed.phoneCode || "+234",
+          phoneNumber: parsed.phoneNumber || "",
+          address: parsed.address || "",
+          city: parsed.city || "",
+          country: parsed.country || "Nigeria",
+          state: parsed.state || ""
+        }));
+
+        // Populate business form data
+        setBusinessData(prev => ({
+          ...prev,
+          businessName: parsed.businessName || "",
+          businessType: parsed.businessType || "Tyre Retailer",
+          registrationNumber: parsed.registrationNumber || "",
+          taxId: parsed.taxId || "",
+          businessAddress: parsed.businessAddress || "",
+          businessPhone: parsed.businessPhone || "",
+          businessEmail: parsed.businessEmail || "",
+          website: parsed.website || "",
+          staffPosition: parsed.staffPosition || "Owner/Manager",
+          designation: parsed.designation || ""
+        }));
+
+        // Set profile image if available
+        if (parsed.profileImage || parsed.avatar) {
+          setProfileImage(parsed.profileImage || parsed.avatar);
+        }
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+  }, []);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
@@ -77,8 +123,55 @@ export default function SettingsPage() {
   };
 
   const handleUpdate = () => {
-    // Handle form submission
-    console.log("Updating settings:", { formData, securityData, businessData, profileImage });
+    // Save updated data to localStorage
+    const userData = localStorage.getItem('userData');
+    let existingData = {};
+    
+    if (userData) {
+      try {
+        existingData = JSON.parse(userData);
+      } catch (error) {
+        console.error('Error parsing existing user data:', error);
+      }
+    }
+
+    const updatedData = {
+      ...existingData,
+      ...formData,
+      ...businessData,
+      profileImage: profileImage || existingData.profileImage || existingData.avatar
+    };
+
+    localStorage.setItem('userData', JSON.stringify(updatedData));
+    
+    // Show success message (you can implement a toast notification here)
+    alert('Settings updated successfully!');
+    
+    console.log("Updated settings:", updatedData);
+  };
+
+  const handleTabClick = (tabId: string) => {
+    setActiveTab(tabId);
+    
+    // Scroll to the respective section
+    setTimeout(() => {
+      if (tabId === "business") {
+        const businessSection = document.getElementById('business-section');
+        if (businessSection) {
+          businessSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      } else if (tabId === "security") {
+        const securitySection = document.getElementById('security-section');
+        if (securitySection) {
+          securitySection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      } else if (tabId === "account") {
+        const accountSection = document.getElementById('account-section');
+        if (accountSection) {
+          accountSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+    }, 100);
   };
 
   const tabs = [
@@ -107,7 +200,7 @@ export default function SettingsPage() {
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => handleTabClick(tab.id)}
                   className={`py-2 px-1 border-b-2 font-medium text-sm ${
                     activeTab === tab.id
                       ? 'border-blue-500 text-gray-900'
@@ -120,8 +213,8 @@ export default function SettingsPage() {
             </nav>
           </div>
 
-          {/* Main Content */}
-          <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+          {/* Account Section */}
+          <div id="account-section" className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 p-8">
             <div className="flex justify-between items-start mb-8">
               <h2 className="text-2xl font-semibold text-gray-900">Account Settings</h2>
               <button
@@ -308,7 +401,8 @@ export default function SettingsPage() {
                       ) : (
                         <div className="w-full h-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center">
                           <span className="text-white text-4xl font-bold">
-                            {formData.firstName.charAt(0)}{formData.lastName.charAt(0)}
+                            {formData.firstName ? formData.firstName.charAt(0) : 'U'}
+                            {formData.lastName ? formData.lastName.charAt(0) : 'S'}
                           </span>
                         </div>
                       )}
@@ -356,234 +450,230 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Security Tab Content */}
-          {activeTab === "security" && (
-            <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-              <h2 className="text-2xl font-semibold text-gray-900 mb-8">Security Settings</h2>
-              
-              <div className="space-y-6">
-                {/* Change Password */}
-                <div className="border-b border-gray-200 pb-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Change Password</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
-                      <input
-                        type="password"
-                        value={securityData.currentPassword}
-                        onChange={(e) => handleSecurityChange('currentPassword', e.target.value)}
-                        className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Enter current password"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
-                      <input
-                        type="password"
-                        value={securityData.newPassword}
-                        onChange={(e) => handleSecurityChange('newPassword', e.target.value)}
-                        className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Enter new password"
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
-                      <input
-                        type="password"
-                        value={securityData.confirmPassword}
-                        onChange={(e) => handleSecurityChange('confirmPassword', e.target.value)}
-                        className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Confirm new password"
-                      />
-                    </div>
-                  </div>
-                  <button className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors">
-                    Update Password
-                  </button>
-                </div>
-
-                {/* Two-Factor Authentication */}
-                <div className="border-b border-gray-200 pb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900">Two-Factor Authentication</h3>
-                      <p className="text-sm text-gray-600">Add an extra layer of security to your account</p>
-                    </div>
-                    <button
-                      onClick={() => handleSecurityChange('twoFactorEnabled', !securityData.twoFactorEnabled)}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        securityData.twoFactorEnabled ? 'bg-blue-600' : 'bg-gray-300'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          securityData.twoFactorEnabled ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                  {securityData.twoFactorEnabled && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <p className="text-sm text-blue-800 mb-2">Two-factor authentication is enabled</p>
-                      <p className="text-xs text-blue-600">You'll need to enter a verification code from your authenticator app when signing in.</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Login Sessions */}
+          {/* Business Section */}
+          <div id="business-section" className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-8">Business Information</h2>
+            
+            <div className="space-y-6">
+              {/* Business Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Active Sessions</h3>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">Current Session</p>
-                        <p className="text-xs text-gray-600">Chrome on Windows • Lagos, Nigeria</p>
-                      </div>
-                      <span className="text-xs text-green-600 font-medium">Active</span>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Business Name</label>
+                  <input
+                    type="text"
+                    value={businessData.businessName}
+                    onChange={(e) => handleBusinessChange('businessName', e.target.value)}
+                    className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Business Type</label>
+                  <select
+                    value={businessData.businessType}
+                    onChange={(e) => handleBusinessChange('businessType', e.target.value)}
+                    className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="Tyre Retailer">Tyre Retailer</option>
+                    <option value="Automotive Services">Automotive Services</option>
+                    <option value="Auto Parts Store">Auto Parts Store</option>
+                    <option value="Vehicle Maintenance">Vehicle Maintenance</option>
+                    <option value="Fleet Management">Fleet Management</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Registration Number</label>
+                  <input
+                    type="text"
+                    value={businessData.registrationNumber}
+                    onChange={(e) => handleBusinessChange('registrationNumber', e.target.value)}
+                    className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Tax ID</label>
+                  <input
+                    type="text"
+                    value={businessData.taxId}
+                    onChange={(e) => handleBusinessChange('taxId', e.target.value)}
+                    className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Contact Information */}
+              <div className="border-t border-gray-200 pt-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Contact Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Business Address</label>
+                    <textarea
+                      value={businessData.businessAddress}
+                      onChange={(e) => handleBusinessChange('businessAddress', e.target.value)}
+                      rows={3}
+                      className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    />
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Business Phone</label>
+                      <input
+                        type="tel"
+                        value={businessData.businessPhone}
+                        onChange={(e) => handleBusinessChange('businessPhone', e.target.value)}
+                        className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
                     </div>
-                    <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">Mobile App</p>
-                        <p className="text-xs text-gray-600">iOS App • Lagos, Nigeria</p>
-                      </div>
-                      <button className="text-xs text-red-600 font-medium hover:text-red-800">Revoke</button>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Business Email</label>
+                      <input
+                        type="email"
+                        value={businessData.businessEmail}
+                        onChange={(e) => handleBusinessChange('businessEmail', e.target.value)}
+                        className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Website</label>
+                      <input
+                        type="url"
+                        value={businessData.website}
+                        onChange={(e) => handleBusinessChange('website', e.target.value)}
+                        className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Business Tab Content */}
-          {activeTab === "business" && (
-            <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-              <h2 className="text-2xl font-semibold text-gray-900 mb-8">Business Information</h2>
-              
-              <div className="space-y-6">
-                {/* Business Details */}
+              {/* Staff Information */}
+              <div className="border-t border-gray-200 pt-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Staff Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Business Name</label>
-                    <input
-                      type="text"
-                      value={businessData.businessName}
-                      onChange={(e) => handleBusinessChange('businessName', e.target.value)}
-                      className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Business Type</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Position</label>
                     <select
-                      value={businessData.businessType}
-                      onChange={(e) => handleBusinessChange('businessType', e.target.value)}
+                      value={businessData.staffPosition}
+                      onChange={(e) => handleBusinessChange('staffPosition', e.target.value)}
                       className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
-                      <option value="Tyre Retailer">Tyre Retailer</option>
-                      <option value="Automotive Services">Automotive Services</option>
-                      <option value="Auto Parts Store">Auto Parts Store</option>
-                      <option value="Vehicle Maintenance">Vehicle Maintenance</option>
-                      <option value="Fleet Management">Fleet Management</option>
+                      <option value="Owner/Manager">Owner/Manager</option>
+                      <option value="Sales Manager">Sales Manager</option>
+                      <option value="Operations Manager">Operations Manager</option>
+                      <option value="Customer Service">Customer Service</option>
+                      <option value="Technician">Technician</option>
+                      <option value="Accountant">Accountant</option>
+                      <option value="Administrator">Administrator</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Registration Number</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Designation</label>
                     <input
                       type="text"
-                      value={businessData.registrationNumber}
-                      onChange={(e) => handleBusinessChange('registrationNumber', e.target.value)}
+                      value={businessData.designation}
+                      onChange={(e) => handleBusinessChange('designation', e.target.value)}
                       className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Tax ID</label>
-                    <input
-                      type="text"
-                      value={businessData.taxId}
-                      onChange={(e) => handleBusinessChange('taxId', e.target.value)}
-                      className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-
-                {/* Contact Information */}
-                <div className="border-t border-gray-200 pt-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Contact Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Business Address</label>
-                      <textarea
-                        value={businessData.businessAddress}
-                        onChange={(e) => handleBusinessChange('businessAddress', e.target.value)}
-                        rows={3}
-                        className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                      />
-                    </div>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Business Phone</label>
-                        <input
-                          type="tel"
-                          value={businessData.businessPhone}
-                          onChange={(e) => handleBusinessChange('businessPhone', e.target.value)}
-                          className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Business Email</label>
-                        <input
-                          type="email"
-                          value={businessData.businessEmail}
-                          onChange={(e) => handleBusinessChange('businessEmail', e.target.value)}
-                          className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Website</label>
-                        <input
-                          type="url"
-                          value={businessData.website}
-                          onChange={(e) => handleBusinessChange('website', e.target.value)}
-                          className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Staff Information */}
-                <div className="border-t border-gray-200 pt-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Staff Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Position</label>
-                      <select
-                        value={businessData.staffPosition}
-                        onChange={(e) => handleBusinessChange('staffPosition', e.target.value)}
-                        className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="Owner/Manager">Owner/Manager</option>
-                        <option value="Sales Manager">Sales Manager</option>
-                        <option value="Operations Manager">Operations Manager</option>
-                        <option value="Customer Service">Customer Service</option>
-                        <option value="Technician">Technician</option>
-                        <option value="Accountant">Accountant</option>
-                        <option value="Administrator">Administrator</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Designation</label>
-                      <input
-                        type="text"
-                        value={businessData.designation}
-                        onChange={(e) => handleBusinessChange('designation', e.target.value)}
-                        className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          )}
+          </div>
+
+          {/* Security Section */}
+          <div id="security-section" className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-8">Security Settings</h2>
+            
+            <div className="space-y-6">
+              {/* Change Password */}
+              <div className="border-b border-gray-200 pb-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Change Password</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
+                    <input
+                      type="password"
+                      value={securityData.currentPassword}
+                      onChange={(e) => handleSecurityChange('currentPassword', e.target.value)}
+                      className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter current password"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+                    <input
+                      type="password"
+                      value={securityData.newPassword}
+                      onChange={(e) => handleSecurityChange('newPassword', e.target.value)}
+                      className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter new password"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
+                    <input
+                      type="password"
+                      value={securityData.confirmPassword}
+                      onChange={(e) => handleSecurityChange('confirmPassword', e.target.value)}
+                      className="block w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Confirm new password"
+                    />
+                  </div>
+                </div>
+                <button className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+                  Update Password
+                </button>
+              </div>
+
+              {/* Two-Factor Authentication */}
+              <div className="border-b border-gray-200 pb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">Two-Factor Authentication</h3>
+                    <p className="text-sm text-gray-600">Add an extra layer of security to your account</p>
+                  </div>
+                  <button
+                    onClick={() => handleSecurityChange('twoFactorEnabled', !securityData.twoFactorEnabled)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      securityData.twoFactorEnabled ? 'bg-blue-600' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        securityData.twoFactorEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+                {securityData.twoFactorEnabled && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <p className="text-sm text-blue-800 mb-2">Two-factor authentication is enabled</p>
+                    <p className="text-xs text-blue-600">You'll need to enter a verification code from your authenticator app when signing in.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Login Sessions */}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Active Sessions</h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Current Session</p>
+                      <p className="text-xs text-gray-600">Chrome on Windows • Lagos, Nigeria</p>
+                    </div>
+                    <span className="text-xs text-green-600 font-medium">Active</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Mobile App</p>
+                      <p className="text-xs text-gray-600">iOS App • Lagos, Nigeria</p>
+                    </div>
+                    <button className="text-xs text-red-600 font-medium hover:text-red-800">Revoke</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </main>
       </div>
     </div>

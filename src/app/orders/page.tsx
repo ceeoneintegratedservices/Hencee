@@ -65,7 +65,8 @@ export default function OrdersPage() {
     total: OrderDataService.formatCurrency(order.totalAmount),
     action: order.status,
     status: order.status,
-    statusColor: order.statusColor
+    statusColor: order.statusColor,
+    warehouseNumber: order.items[0]?.warehouseNumber || 'N/A'
   }));
   
   // Apply search filter
@@ -103,9 +104,6 @@ export default function OrdersPage() {
     } else if (sortColumn === "Order Date") {
       aValue = a.date;
       bValue = b.date;
-    } else if (sortColumn === "Order Type") {
-      aValue = a.type;
-      bValue = b.type;
     } else if (sortColumn === "Tracking ID") {
       aValue = a.tracking;
       bValue = b.tracking;
@@ -666,14 +664,8 @@ export default function OrdersPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" stroke="currentColor" />
                     </svg>
                   </div>
-                  <div 
-                    className="flex items-center gap-1 cursor-pointer hover:text-[#02016a]"
-                    onClick={() => handleSort("Order Type")}
-                  >
-                    Order Type
-                    <svg className={`w-4 h-4 ${sortColumn === "Order Type" ? "text-[#02016a]" : "text-gray-400"}`} fill="none" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" stroke="currentColor" />
-                    </svg>
+                  <div className="flex items-center gap-1">
+                    Warehouse
                   </div>
                   <div 
                     className="flex items-center gap-1 cursor-pointer hover:text-[#02016a]"
@@ -766,7 +758,11 @@ export default function OrdersPage() {
                           </button>
                         </div>
                         <div>{order.date}</div>
-                        <div>{order.type}</div>
+                        <div>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {order.warehouseNumber || 'N/A'}
+                          </span>
+                        </div>
                         <div className="flex items-center gap-2 group">
                           <span>{order.tracking}</span>
                           <button
@@ -938,11 +934,7 @@ export default function OrdersPage() {
                         </div>
                         
                         {/* Details Row */}
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <div className="text-gray-500 text-xs">Order Type</div>
-                            <div className="font-medium">{order.type}</div>
-                          </div>
+                        <div className="grid grid-cols-1 gap-4 text-sm">
                           <div>
                             <div className="text-gray-500 text-xs">Total</div>
                             <div className="font-medium">{order.total}</div>

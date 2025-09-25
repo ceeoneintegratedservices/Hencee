@@ -8,7 +8,7 @@ import Breadcrumb from "@/components/Breadcrumb";
 interface Order {
   id: string;
   orderDate: string;
-  orderType: string;
+  category: string;
   trackingId: string;
   orderTotal: number;
   status: 'Completed' | 'In-Progress' | 'Pending';
@@ -46,7 +46,7 @@ export default function CustomerDetailsPage() {
     {
       id: "1",
       orderDate: "12 Aug 2022 - 12:25 am",
-      orderType: "Home Delivery",
+      category: "GL601",
       trackingId: "9348fjr73",
       orderTotal: 25000,
       status: "Completed"
@@ -54,7 +54,7 @@ export default function CustomerDetailsPage() {
     {
       id: "2",
       orderDate: "12 Aug 2022 - 12:25 am",
-      orderType: "Home Delivery",
+      category: "GL602",
       trackingId: "9348fjr73",
       orderTotal: 25000,
       status: "In-Progress"
@@ -62,7 +62,7 @@ export default function CustomerDetailsPage() {
     {
       id: "3",
       orderDate: "12 Aug 2022 - 12:25 am",
-      orderType: "Pick Up",
+      category: "GL908",
       trackingId: "9348fjr73",
       orderTotal: 25000,
       status: "Pending"
@@ -408,7 +408,7 @@ export default function CustomerDetailsPage() {
                       Order Date
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Order Type
+                      Category
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Tracking ID
@@ -439,7 +439,7 @@ export default function CustomerDetailsPage() {
                         {order.orderDate}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {order.orderType}
+                        {order.category}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
