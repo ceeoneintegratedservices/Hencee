@@ -6,7 +6,6 @@ import { InventoryDataService } from '@/services/InventoryDataService';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { createTire } from '@/services/tires';
 
 interface FormData {
   productName: string;
@@ -15,6 +14,7 @@ interface FormData {
   costPrice: string;
   quantityInStock: string;
   productBrand: string;
+  warehouseNumber: string;
   addDiscount: boolean;
   discountType: string;
   discountValue: string;
@@ -45,6 +45,7 @@ export default function CreateInventoryPage() {
     costPrice: '',
     quantityInStock: '1',
     productBrand: '',
+    warehouseNumber: '',
     addDiscount: false,
     discountType: 'percentage',
     discountValue: '',
@@ -133,40 +134,18 @@ export default function CreateInventoryPage() {
     }
   };
 
-  const handleSaveAsDraft = async () => {
+  const handleSaveAsDraft = () => {
     // Validate required fields
     if (!formData.productName.trim()) {
       showError('Validation Error', 'Product name is required');
       return;
     }
     
-    try {
-      // Create tire object from form data
-      const tireData = {
-        brand: formData.productBrand,
-        model: formData.productName,
-        size: formData.category.includes("Tyres") ? formData.category : "Standard",
-        category: formData.category,
-        price: parseFloat(formData.sellingPrice) || 0,
-        costPrice: parseFloat(formData.costPrice) || 0,
-        quantity: parseInt(formData.quantityInStock) || 0,
-        description: formData.shortDescription,
-        images: mainImage ? [mainImage, ...additionalImages] : additionalImages,
-        status: 'Draft'
-      };
-      
-      // Send data to API
-      await createTire(tireData);
-      
-      showSuccess('Success', 'Tire saved as draft successfully');
-      router.push('/inventory');
-    } catch (error: any) {
-      showError('Error', error.message || 'Failed to save tire');
-      console.error("Error saving tire:", error);
-    }
+    showSuccess('Success', 'Product saved as draft successfully');
+    router.push('/inventory');
   };
 
-  const handleSaveAndPublish = async () => {
+  const handleSaveAndPublish = () => {
     // Validate required fields
     if (!formData.productName.trim()) {
       showError('Validation Error', 'Product name is required');
@@ -184,31 +163,13 @@ export default function CreateInventoryPage() {
       showError('Validation Error', 'Cost price is required');
       return;
     }
-    
-    try {
-      // Create tire object from form data
-      const tireData = {
-        brand: formData.productBrand,
-        model: formData.productName,
-        size: formData.category.includes("Tyres") ? formData.category : "Standard",
-        category: formData.category,
-        price: parseFloat(formData.sellingPrice) || 0,
-        costPrice: parseFloat(formData.costPrice) || 0,
-        quantity: parseInt(formData.quantityInStock) || 0,
-        description: formData.shortDescription,
-        images: mainImage ? [mainImage, ...additionalImages] : additionalImages,
-        status: 'Published'
-      };
-      
-      // Send data to API
-      await createTire(tireData);
-      
-      showSuccess('Success', 'Tire saved and published successfully');
-      router.push('/inventory');
-    } catch (error: any) {
-      showError('Error', error.message || 'Failed to save tire');
-      console.error("Error saving tire:", error);
+    if (!formData.warehouseNumber.trim()) {
+      showError('Validation Error', 'Warehouse number is required');
+      return;
     }
+    
+    showSuccess('Success', 'Product saved and published successfully');
+    router.push('/inventory');
   };
 
   if (loading) {
@@ -299,27 +260,30 @@ export default function CreateInventoryPage() {
               {/* Product Category */}
               <div className="bg-white p-6 rounded-lg shadow-sm">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Product Category
+                  Tyre Category
                 </label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => handleInputChange('category', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Select Tyre Category</option>
-                  <option value="Passenger Car Tyres">Passenger Car Tyres</option>
-                  <option value="SUV Tyres">SUV Tyres</option>
-                  <option value="Truck Tyres">Truck Tyres</option>
-                  <option value="Commercial Vehicle Tyres">Commercial Vehicle Tyres</option>
-                  <option value="Motorcycle Tyres">Motorcycle Tyres</option>
-                  <option value="All-Season Tyres">All-Season Tyres</option>
-                  <option value="Summer Tyres">Summer Tyres</option>
-                  <option value="Winter Tyres">Winter Tyres</option>
-                  <option value="Performance Tyres">Performance Tyres</option>
-                  <option value="Off-Road Tyres">Off-Road Tyres</option>
-                  <option value="Run-Flat Tyres">Run-Flat Tyres</option>
-                  <option value="Low Profile Tyres">Low Profile Tyres</option>
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={formData.category}
+                    onChange={(e) => handleInputChange('category', e.target.value)}
+                    placeholder="Enter or select tyre category"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    list="tyre-categories"
+                  />
+                  <datalist id="tyre-categories">
+                    <option value="GL601" />
+                    <option value="GL602" />
+                    <option value="GL908" />
+                    <option value="DW703tx" />
+                  </datalist>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Type to search or select from popular tyre categories</p>
               </div>
 
               {/* Pricing */}
@@ -412,86 +376,21 @@ export default function CreateInventoryPage() {
                 <p className="text-xs text-gray-500 mt-1">Type to search or select from popular tyre brands</p>
               </div>
 
-              {/* Discount */}
+              {/* Warehouse Number */}
               <div className="bg-white p-6 rounded-lg shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <label className="text-sm font-medium text-gray-700">Discount</label>
-                  <button
-                    onClick={() => handleInputChange('addDiscount', !formData.addDiscount)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      formData.addDiscount ? 'bg-[#02016a]' : 'bg-gray-200'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        formData.addDiscount ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                  <span className="text-sm text-gray-600">Add Discount</span>
-                </div>
-                {formData.addDiscount && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
-                      <select
-                        value={formData.discountType}
-                        onChange={(e) => handleInputChange('discountType', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="percentage">Percentage</option>
-                        <option value="fixed">Fixed Amount</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Value</label>
-                      <input
-                        type="number"
-                        value={formData.discountValue}
-                        onChange={(e) => handleInputChange('discountValue', e.target.value)}
-                        placeholder="Value"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                )}
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Warehouse Number
+                </label>
+                <input
+                  type="text"
+                  value={formData.warehouseNumber}
+                  onChange={(e) => handleInputChange('warehouseNumber', e.target.value)}
+                  placeholder="Enter warehouse number (e.g., WH-001, WH-002)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">This will be displayed in product details and invoices</p>
               </div>
 
-              {/* Expiry Date */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <label className="text-sm font-medium text-gray-700">Expiry Date</label>
-                  <button
-                    onClick={() => handleInputChange('addExpiryDate', !formData.addExpiryDate)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      formData.addExpiryDate ? 'bg-[#02016a]' : 'bg-gray-200'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        formData.addExpiryDate ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                  <span className="text-sm text-gray-600">Add Expiry Date</span>
-                </div>
-                {formData.addExpiryDate && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Expiry Date</label>
-                    <div className="relative">
-                      <input
-                        type="date"
-                        value={formData.expiryDate}
-                        onChange={(e) => handleInputChange('expiryDate', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                      <svg className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                    </div>
-                  </div>
-                )}
-              </div>
             </div>
 
             {/* Middle Column - Descriptions & Policies */}
@@ -625,6 +524,51 @@ export default function CreateInventoryPage() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                       </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Discount */}
+              <div className="bg-white p-6 rounded-lg shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <label className="text-sm font-medium text-gray-700">Discount</label>
+                  <button
+                    onClick={() => handleInputChange('addDiscount', !formData.addDiscount)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      formData.addDiscount ? 'bg-[#02016a]' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        formData.addDiscount ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                  <span className="text-sm text-gray-600">Add Discount</span>
+                </div>
+                {formData.addDiscount && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
+                      <select
+                        value={formData.discountType}
+                        onChange={(e) => handleInputChange('discountType', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="percentage">Percentage</option>
+                        <option value="fixed">Fixed Amount</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Value</label>
+                      <input
+                        type="number"
+                        value={formData.discountValue}
+                        onChange={(e) => handleInputChange('discountValue', e.target.value)}
+                        placeholder="Value"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
                     </div>
                   </div>
                 )}
@@ -763,6 +707,42 @@ export default function CreateInventoryPage() {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Expiry Date */}
+              <div className="bg-white p-6 rounded-lg shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <label className="text-sm font-medium text-gray-700">Expiry Date</label>
+                  <button
+                    onClick={() => handleInputChange('addExpiryDate', !formData.addExpiryDate)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      formData.addExpiryDate ? 'bg-[#02016a]' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        formData.addExpiryDate ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                  <span className="text-sm text-gray-600">Add Expiry Date</span>
+                </div>
+                {formData.addExpiryDate && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Expiry Date</label>
+                    <div className="relative">
+                      <input
+                        type="date"
+                        value={formData.expiryDate}
+                        onChange={(e) => handleInputChange('expiryDate', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <svg className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

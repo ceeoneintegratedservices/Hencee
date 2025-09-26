@@ -8,6 +8,7 @@ export interface OrderItem {
   discount: number;
   orderTotal: number;
   status: "Pending" | "Processing" | "Shipped" | "Delivered" | "Cancelled" | "Completed" | "In-Progress" | "Returned" | "Damaged" | "Defective" | "Canceled";
+  warehouseNumber?: string;
 }
 
 export interface Customer {
@@ -28,7 +29,9 @@ export interface Order {
   homeAddress: string;
   billingAddress: string;
   paymentMethod: string;
-  orderType: string;
+  payment: string;
+  paymentAmount?: string;
+  orderType: string; // This is now actually a category (GL601, GL602, etc.)
   items: OrderItem[];
   totalAmount: number;
   status: "Pending" | "Processing" | "Shipped" | "Delivered" | "Cancelled" | "Completed" | "In-Progress" | "Returned" | "Damaged" | "Defective" | "Canceled";
@@ -82,7 +85,7 @@ export class OrderDataService {
   ];
 
   private static readonly PAYMENT_METHODS = ["Master Card", "Visa Card", "PayPal", "Bank Transfer"];
-  private static readonly ORDER_TYPES = ["Home Delivery", "Pick Up"];
+  private static readonly ORDER_TYPES = ["GL601", "GL602", "GL908", "DW703tx"];
 
   /**
    * Generate order data based on order index
@@ -105,6 +108,11 @@ export class OrderDataService {
     const itemCount = this.getItemCount(orderIndex);
     const items = this.generateOrderItems(orderTotal, itemCount, finalStatus, orderId);
     
+    const paymentMethods = ["Full Payment", "Part Payment"];
+    const selectedPayment = paymentMethods[orderIndex % paymentMethods.length];
+    const paymentAmount = selectedPayment === "Part Payment" ? 
+      (orderTotal * (0.3 + Math.random() * 0.4)).toFixed(0) : undefined;
+
     return {
       id: orderId,
       orderNumber: `#${743648 + orderIndex}`,
@@ -114,6 +122,8 @@ export class OrderDataService {
       homeAddress: "No. 15 Adekunle Street, Yaba, Lagos State",
       billingAddress: "No. 15 Adekunle Street, Yaba, Lagos State", 
       paymentMethod: this.PAYMENT_METHODS[orderIndex % this.PAYMENT_METHODS.length],
+      payment: selectedPayment,
+      paymentAmount: paymentAmount,
       orderType: this.ORDER_TYPES[orderIndex % this.ORDER_TYPES.length],
       items,
       totalAmount: orderTotal,
@@ -244,7 +254,8 @@ export class OrderDataService {
         quantity,
         discount,
         orderTotal: itemTotal,
-        status: itemStatus as any
+        status: itemStatus as any,
+        warehouseNumber: `WH-${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`
       });
     }
     

@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import { OrderDataService, Order } from "@/services/OrderDataService";
-import { fetchSaleById } from "@/services/sales";
 import { NotificationContainer, useNotifications } from "@/components/Notification";
 
 function ViewOrderContent() {
@@ -35,44 +34,21 @@ function ViewOrderContent() {
   const [showItemStatusDropdown, setShowItemStatusDropdown] = useState<number | null>(null);
 
 
-  // Load order data: try backend first, then fallback to mock
+  // Load order data using the service
   useEffect(() => {
-    let aborted = false;
-    async function run() {
-      if (!finalOrderId) {
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-      try {
-        const api = await fetchSaleById(finalOrderId);
-        if (aborted) return;
-        // Map API -> UI Order shape
-        const mapped: Order = OrderDataService.generateOrder(finalOrderId);
-        if (api.customerName) mapped.customer.name = api.customerName;
-        if (api.orderDate) mapped.orderDate = api.orderDate;
-        if (api.orderType) mapped.orderType = api.orderType;
-        if (api.trackingId) mapped.trackingId = api.trackingId;
-        if (api.orderTotal != null) mapped.totalAmount = typeof api.orderTotal === 'string' ? Number(String(api.orderTotal).replace(/[^0-9.-]/g, '')) : api.orderTotal;
-        if (api.status) mapped.status = api.status as any;
-        if (api.homeAddress) mapped.homeAddress = api.homeAddress;
-        if (api.billingAddress) mapped.billingAddress = api.billingAddress;
-        if (api.paymentMethod) mapped.paymentMethod = api.paymentMethod;
-        setOrder(mapped);
-        const previousOrdersData = OrderDataService.generatePreviousOrders(mapped.customer.id, finalOrderId);
-        setPreviousOrders(previousOrdersData);
-      } catch (e) {
-        // Fallback to mock
+    if (finalOrderId) {
+      // Simulate API call
+      setTimeout(() => {
         const orderData = OrderDataService.generateOrder(finalOrderId);
         const previousOrdersData = OrderDataService.generatePreviousOrders(orderData.customer.id, finalOrderId);
+        
         setOrder(orderData);
         setPreviousOrders(previousOrdersData);
-      } finally {
-        if (!aborted) setLoading(false);
-      }
+        setLoading(false);
+      }, 1000);
+    } else {
+      setLoading(false);
     }
-    run();
-    return () => { aborted = true; };
   }, [finalOrderId]);
 
   // Close sidebar on escape key
@@ -448,7 +424,7 @@ function ViewOrderContent() {
               </div>
             </div>
 
-            {/* Payment & Order Type Card */}
+            {/* Payment & Category Card */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-start gap-4">
                 <div className="p-3 bg-gray-100 rounded-lg">
@@ -457,7 +433,7 @@ function ViewOrderContent() {
                   </svg>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment & Order Type</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment & Category</h3>
                   
                   <div className="space-y-3">
                     <div>
@@ -465,8 +441,15 @@ function ViewOrderContent() {
                       <p className="text-sm text-gray-900">{order.paymentMethod}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 mb-1">Order Type</p>
-                      <p className="text-sm text-gray-900">{order.orderType}</p>
+                      <p className="text-xs text-gray-500 mb-1">Payment</p>
+                      <p className="text-sm text-gray-900">
+                        {order.payment}
+                        {order.payment === 'Part Payment' && order.paymentAmount && (
+                          <span className="ml-2 text-blue-600 font-medium">
+                            (₦{parseFloat(order.paymentAmount).toLocaleString()})
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
                 </div>

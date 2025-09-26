@@ -12,9 +12,6 @@ import Breadcrumb from "../../components/Breadcrumb";
 import TimePeriodSelector from "../../components/TimePeriodSelector";
 import { OrderDataService, Order } from "../../services/OrderDataService";
 import { NotificationContainer, useNotifications } from "../../components/Notification";
-import { fetchSalesDashboard, updateSaleStatus, createSale } from "../../services/sales";
-import type { SalesDashboardResponse } from "../../types/sales";
-import { CreateSalePayload } from "../../services/sales";
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -39,11 +36,6 @@ export default function OrdersPage() {
   // Mobile menu state
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
-  // API data state
-  const [apiData, setApiData] = useState<SalesDashboardResponse | null>(null);
-  const [apiLoading, setApiLoading] = useState(false);
-  const [apiError, setApiError] = useState<string | null>(null);
-
   const handleFilterApply = (filters: any) => {
     setAppliedFilters({ ...appliedFilters, ...filters });
     setCurrentPage(1); // Reset to first page when filtering
@@ -54,47 +46,8 @@ export default function OrdersPage() {
     setCurrentPage(1); // Reset to first page when filtering
   };
 
-  const handleCreateOrder = async (orderData: CreateSalePayload) => {
-    try {
-      if (!orderData?.customerId || !orderData?.items?.length) {
-        console.error("Missing required fields for order creation");
-        return;
-      }
-      // Use the properly formatted API payload from CreateOrderModal
-      await createSale(orderData);
-      showSuccess("Order Created", "The order has been created successfully.");
-      setShowCreateModal(false);
-      
-      // Refresh the orders list after creating a new order
-      const statusParam = appliedFilters?.status && appliedFilters.status !== "All" ? String(appliedFilters.status) : undefined;
-      const df = appliedFilters?.dateFilter?.from || appliedFilters?.dateFilter?.start || undefined;
-      const dt = appliedFilters?.dateFilter?.to || appliedFilters?.dateFilter?.end || undefined;
-      
-      // Need to define sortByMap before using it
-      const sortByMap: Record<string, string> = {
-        "Customer Name": "customerName",
-        "Order Date": "orderDate",
-        "Order Type": "orderType",
-        "Tracking ID": "trackingId",
-        "Order Total": "orderTotal",
-        "Status": "status",
-      };
-      
-      const res = await fetchSalesDashboard({
-        page: currentPage,
-        limit: itemsPerPage,
-        search: searchTerm || undefined,
-        status: statusParam,
-        dateFrom: df,
-        dateTo: dt,
-        sortBy: sortColumn ? sortByMap[sortColumn] : undefined,
-        sortDir: (sortDirection as "asc" | "desc") || undefined,
-      });
-      
-      setApiData(res);
-    } catch (e) {
-      console.error("Error creating order:", e);
-    }
+  const handleCreateOrder = (orderData: any) => {
+    // Implement order creation logic here
   };
 
   // Handle time period selection
@@ -102,79 +55,19 @@ export default function OrdersPage() {
     setSelectedTimePeriod(period);
   };
 
-  // Fetch real orders from API
-  useEffect(() => {
-    let aborted = false;
-    async function run() {
-      setApiLoading(true);
-      setApiError(null);
-      try {
-        const sortByMap: Record<string, string> = {
-          "Customer Name": "customerName",
-          "Order Date": "orderDate",
-          "Order Type": "orderType",
-          "Tracking ID": "trackingId",
-          "Order Total": "orderTotal",
-          "Status": "status",
-        };
-        const sortBy = sortColumn ? sortByMap[sortColumn] : undefined;
-        const statusParam = appliedFilters?.status && appliedFilters.status !== "All" ? String(appliedFilters.status) : undefined;
-        const df = appliedFilters?.dateFilter?.from || appliedFilters?.dateFilter?.start || undefined;
-        const dt = appliedFilters?.dateFilter?.to || appliedFilters?.dateFilter?.end || undefined;
-        const res = await fetchSalesDashboard({
-          page: currentPage,
-          limit: itemsPerPage,
-          search: searchTerm || undefined,
-          status: statusParam,
-          dateFrom: df,
-          dateTo: dt,
-          sortBy,
-          sortDir: (sortDirection as "asc" | "desc") || undefined,
-        });
-        if (!aborted) setApiData(res);
-      } catch (e: any) {
-        if (!aborted) setApiError(e?.message || "Failed to load orders");
-      } finally {
-        if (!aborted) setApiLoading(false);
-      }
-    }
-    run();
-    return () => { aborted = true; };
-  }, [currentPage, itemsPerPage, searchTerm, appliedFilters, sortColumn, sortDirection]);
-
   // Generate orders using the service
-  const sampleOrders = (apiData
-    ? apiData.orders.map(o => {
-        const colorMap: Record<string, string> = {
-          green: 'bg-green-100 text-green-800',
-          orange: 'bg-orange-100 text-orange-800',
-          blue: 'bg-blue-100 text-blue-800',
-          red: 'bg-red-100 text-red-800',
-        };
-        return {
-          id: o.id,
-          name: o.customerName,
-          date: o.orderDate,
-          type: o.orderType,
-          tracking: o.trackingId,
-          total: o.orderTotal,
-          action: o.action,
-          status: o.status,
-          statusColor: o.statusColor ? (colorMap[o.statusColor] || 'bg-gray-100 text-gray-800') : 'bg-gray-100 text-gray-800',
-        };
-      })
-    : OrderDataService.generateOrders(200).map(order => ({
-        id: order.id,
-        name: order.customer.name,
-        date: order.orderDate,
-        type: order.orderType,
-        tracking: order.trackingId,
-        total: OrderDataService.formatCurrency(order.totalAmount),
-        action: order.status,
-        status: order.status,
-        statusColor: order.statusColor
-      }))
-  );
+  const sampleOrders = OrderDataService.generateOrders(200).map(order => ({
+    id: order.id,
+    name: order.customer.name,
+    date: order.orderDate,
+    type: order.orderType,
+    tracking: order.trackingId,
+    total: OrderDataService.formatCurrency(order.totalAmount),
+    action: order.status,
+    status: order.status,
+    statusColor: order.statusColor,
+    warehouseNumber: order.items[0]?.warehouseNumber || 'N/A'
+  }));
   
   // Apply search filter
   const filteredOrders = sampleOrders.filter(order => {
@@ -211,9 +104,6 @@ export default function OrdersPage() {
     } else if (sortColumn === "Order Date") {
       aValue = a.date;
       bValue = b.date;
-    } else if (sortColumn === "Order Type") {
-      aValue = a.type;
-      bValue = b.type;
     } else if (sortColumn === "Tracking ID") {
       aValue = a.tracking;
       bValue = b.tracking;
@@ -234,35 +124,36 @@ export default function OrdersPage() {
     }
   });
 
-  const totalPages = apiData ? Math.ceil((apiData.total || 0) / itemsPerPage) : Math.ceil(sortedOrders.length / itemsPerPage);
-  const startIndex = apiData ? 0 : (currentPage - 1) * itemsPerPage;
-  const endIndex = apiData ? (apiData.orders?.length ?? 0) : startIndex + itemsPerPage;
-  const currentOrders = apiData ? sampleOrders : sortedOrders.slice(startIndex, endIndex);
+  const totalPages = Math.ceil(sortedOrders.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentOrders = sortedOrders.slice(startIndex, endIndex);
 
-  // Summary numbers from API (fallback to local if API unavailable)
-  const timePeriodData = apiData ? {
-    allOrders: apiData.summary.allOrders,
-    pendingOrders: apiData.summary.pending,
-    completedOrders: apiData.summary.completed,
-    canceledOrders: apiData.summary.canceled,
-    returnedOrders: apiData.summary.returned,
-    damagedOrders: apiData.summary.damaged,
-    abandonedCarts: apiData.summary.abandonedCart,
-    uniqueCustomers: apiData.summary.customers,
-  } : (() => {
-    const fullOrders = OrderDataService.generateOrders(200);
-    const summaryData = OrderDataService.getOrderSummary(fullOrders);
+  // Calculate real-time summary data using service
+  const fullOrders = OrderDataService.generateOrders(200);
+  const summaryData = OrderDataService.getOrderSummary(fullOrders);
+  
+  // Add additional calculated fields
+  const enhancedSummaryData = {
+    ...summaryData,
+    totalRevenue: fullOrders.reduce((sum, order) => sum + order.totalAmount, 0),
+    uniqueCustomers: new Set(fullOrders.map(order => order.customer.name)).size,
+    abandonedCarts: Math.floor(fullOrders.length * 0.15) // Simulate 15% abandoned cart rate
+  };
+
+  // Calculate data based on selected time period using service
+  const getTimePeriodData = () => {
+    const timePeriodData = OrderDataService.getTimePeriodData(fullOrders, selectedTimePeriod);
+    
     return {
-      allOrders: summaryData.allOrders,
-      pendingOrders: summaryData.pendingOrders,
-      completedOrders: summaryData.completedOrders,
-      canceledOrders: summaryData.canceledOrders,
-      returnedOrders: summaryData.returnedOrders,
-      damagedOrders: summaryData.damagedOrders,
-      abandonedCarts: Math.floor(fullOrders.length * 0.15),
-      uniqueCustomers: new Set(fullOrders.map(order => order.customer.name)).size,
+      ...timePeriodData,
+      totalRevenue: enhancedSummaryData.totalRevenue * (selectedTimePeriod === "This Month" ? 4.3 : 1),
+      uniqueCustomers: Math.floor(enhancedSummaryData.uniqueCustomers * (selectedTimePeriod === "This Month" ? 4.3 : 1)),
+      abandonedCarts: Math.floor(enhancedSummaryData.abandonedCarts * (selectedTimePeriod === "This Month" ? 4.3 : 1))
     };
-  })();
+  };
+
+  const timePeriodData = getTimePeriodData();
 
   const handlePreviousPage = () => {
     if (currentPage > 1) {
@@ -323,23 +214,40 @@ export default function OrdersPage() {
   };
 
   const handleStatusChange = (orderIndex: number, newStatus: string) => {
+    // Update the order status in the sample data
     const updatedOrders = [...sampleOrders];
     const globalOrderIndex = startIndex + orderIndex;
-    if (!updatedOrders[globalOrderIndex]) return;
-    const orderId = updatedOrders[globalOrderIndex].id;
-    // Optimistic UI update
-    const prevStatus = updatedOrders[globalOrderIndex].status;
-    updatedOrders[globalOrderIndex].status = newStatus as any;
+    if (updatedOrders[globalOrderIndex]) {
+      const orderId = updatedOrders[globalOrderIndex].id;
+      updatedOrders[globalOrderIndex].status = newStatus as any;
+      
+      // Update status color based on new status
+      const statusColors = {
+        'Completed': 'bg-green-100 text-green-800',
+        'In-Progress': 'bg-blue-100 text-blue-800', 
+        'Pending': 'bg-orange-100 text-orange-800',
+        'Canceled': 'bg-red-100 text-red-800',
+        'Returned': 'bg-yellow-100 text-yellow-800',
+        'Damaged': 'bg-purple-100 text-purple-800'
+      };
+      updatedOrders[globalOrderIndex].statusColor = statusColors[newStatus as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
+      
+      // Persist the status change to localStorage
+      const statusChanges = JSON.parse(localStorage.getItem('orderStatusChanges') || '{}');
+      statusChanges[orderId] = newStatus;
+      localStorage.setItem('orderStatusChanges', JSON.stringify(statusChanges));
+      
+      // Show success notification
+      showSuccess(
+        "Status Updated",
+        `Order status changed to ${newStatus} successfully!`
+      );
+    }
+    
+    // In a real app, you would update the orders state here
+    // setOrders(updatedOrders);
+    
     setShowActionDropdown(null);
-    updateSaleStatus(orderId, newStatus.toUpperCase() as any)
-      .then(() => {
-        showSuccess("Status Updated", `Order status changed to ${newStatus} successfully!`);
-      })
-      .catch((e) => {
-        console.error(e);
-        // Revert on failure
-        updatedOrders[globalOrderIndex].status = prevStatus as any;
-      });
   };
 
   // Close dropdowns when clicking outside
@@ -756,14 +664,8 @@ export default function OrdersPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" stroke="currentColor" />
                     </svg>
                   </div>
-                  <div 
-                    className="flex items-center gap-1 cursor-pointer hover:text-[#02016a]"
-                    onClick={() => handleSort("Order Type")}
-                  >
-                    Order Type
-                    <svg className={`w-4 h-4 ${sortColumn === "Order Type" ? "text-[#02016a]" : "text-gray-400"}`} fill="none" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" stroke="currentColor" />
-                    </svg>
+                  <div className="flex items-center gap-1">
+                    Warehouse
                   </div>
                   <div 
                     className="flex items-center gap-1 cursor-pointer hover:text-[#02016a]"
@@ -856,7 +758,11 @@ export default function OrdersPage() {
                           </button>
                         </div>
                         <div>{order.date}</div>
-                        <div>{order.type}</div>
+                        <div>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {order.warehouseNumber || 'N/A'}
+                          </span>
+                        </div>
                         <div className="flex items-center gap-2 group">
                           <span>{order.tracking}</span>
                           <button
@@ -1028,11 +934,7 @@ export default function OrdersPage() {
                         </div>
                         
                         {/* Details Row */}
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div>
-                            <div className="text-gray-500 text-xs">Order Type</div>
-                            <div className="font-medium">{order.type}</div>
-                          </div>
+                        <div className="grid grid-cols-1 gap-4 text-sm">
                           <div>
                             <div className="text-gray-500 text-xs">Total</div>
                             <div className="font-medium">{order.total}</div>

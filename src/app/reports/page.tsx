@@ -43,21 +43,17 @@ const generateSampleData = (timeframe: string) => {
 
   const multiplier = getTimeframeMultiplier(timeframe);
   const categories = [
-    { name: "Passenger Car Tyres", turnover: Math.round(26000 * multiplier), increase: 3.2, brand: "Michelin", quantitySold: Math.round(450 * multiplier) },
-    { name: "SUV Tyres", turnover: Math.round(22000 * multiplier), increase: 2.0, brand: "Bridgestone", quantitySold: Math.round(320 * multiplier) },
-    { name: "Commercial Vehicle Tyres", turnover: Math.round(22000 * multiplier), increase: 1.5, brand: "Goodyear", quantitySold: Math.round(280 * multiplier) },
-    { name: "Motorcycle Tyres", turnover: Math.round(18000 * multiplier), increase: 2.8, brand: "Continental", quantitySold: Math.round(520 * multiplier) },
-    { name: "Truck Tyres", turnover: Math.round(15000 * multiplier), increase: 1.2, brand: "Pirelli", quantitySold: Math.round(180 * multiplier) },
-    { name: "All-Terrain Tyres", turnover: Math.round(12000 * multiplier), increase: 0.8, brand: "Yokohama", quantitySold: Math.round(150 * multiplier) },
-    { name: "Performance Tyres", turnover: Math.round(10000 * multiplier), increase: 1.5, brand: "Dunlop", quantitySold: Math.round(95 * multiplier) },
-    { name: "Winter Tyres", turnover: Math.round(8000 * multiplier), increase: 0.5, brand: "Hankook", quantitySold: Math.round(75 * multiplier) }
+    { name: "GL601 Tyres", turnover: Math.round(26000 * multiplier), increase: 3.2, brand: "Michelin", quantitySold: Math.round(450 * multiplier) },
+    { name: "GL602 Tyres", turnover: Math.round(22000 * multiplier), increase: 2.0, brand: "Bridgestone", quantitySold: Math.round(320 * multiplier) },
+    { name: "GL908 Tyres", turnover: Math.round(22000 * multiplier), increase: 1.5, brand: "Goodyear", quantitySold: Math.round(280 * multiplier) },
+    { name: "DW703tx Tyres", turnover: Math.round(18000 * multiplier), increase: 2.8, brand: "Continental", quantitySold: Math.round(520 * multiplier) }
   ];
 
   const products = [
-    { name: "Michelin Primacy 4", id: "23567", category: "Passenger Car", quantity: `${Math.round(225 * multiplier)} units`, turnover: Math.round(17000 * multiplier), increase: 2.3 },
-    { name: "Bridgestone Ecopia", id: "25831", category: "Passenger Car", quantity: `${Math.round(200 * multiplier)} units`, turnover: Math.round(12000 * multiplier), increase: 1.3 },
-    { name: "Goodyear Wrangler", id: "56841", category: "SUV", quantity: `${Math.round(200 * multiplier)} units`, turnover: Math.round(10000 * multiplier), increase: 1.3 },
-    { name: "Continental ContiTrac", id: "23567", category: "Commercial", quantity: `${Math.round(125 * multiplier)} units`, turnover: Math.round(9000 * multiplier), increase: 1.0 }
+    { name: "Michelin GL601", id: "23567", category: "GL601", quantity: `${Math.round(225 * multiplier)} units`, turnover: Math.round(17000 * multiplier), increase: 2.3 },
+    { name: "Bridgestone GL602", id: "25831", category: "GL602", quantity: `${Math.round(200 * multiplier)} units`, turnover: Math.round(12000 * multiplier), increase: 1.3 },
+    { name: "Goodyear GL908", id: "56841", category: "GL908", quantity: `${Math.round(200 * multiplier)} units`, turnover: Math.round(10000 * multiplier), increase: 1.3 },
+    { name: "Continental DW703tx", id: "23567", category: "DW703tx", quantity: `${Math.round(125 * multiplier)} units`, turnover: Math.round(9000 * multiplier), increase: 1.0 }
   ];
 
   const customers = [
