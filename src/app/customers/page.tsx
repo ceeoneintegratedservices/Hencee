@@ -6,7 +6,7 @@ import Sidebar from "@/components/Sidebar";
 import Breadcrumb from "@/components/Breadcrumb";
 import CreateCustomerModal from "@/components/CreateCustomerModal";
 import { listCustomers, createCustomer } from "@/services/customers";
-import type { CustomerRecord } from "@/types/customers";
+import type { CustomerRecord, CreateCustomerBody } from "@/types/customers";
 import { API_ENDPOINTS } from "@/config/api";
 import { authFetch } from "@/services/authFetch";
 
@@ -68,7 +68,7 @@ export default function CustomersPage() {
           email: c.email || "",
           phone: c.phone || "",
           orders: c.sales ? c.sales.length : (c.orders ?? 0),
-          orderTotal: (c.sales && c.sales.length) ? c.sales.reduce((sum, s) => sum + (s.totalAmount || 0), 0) : (c.orderTotal ?? 0),
+          orderTotal: (c.sales && c.sales.length) ? c.sales.reduce((sum: number, s: any) => sum + (s.totalAmount || 0), 0) : (c.orderTotal ?? 0),
           customerSince: c.createdAt ? new Date(c.createdAt).toLocaleString() : (c.customerSince || ""),
           status: (c.status as any) || "Active",
           address: c.address,
@@ -142,15 +142,9 @@ export default function CustomersPage() {
     console.log(`Bulk action: ${action} for customers:`, selectedCustomers);
   };
 
-  const handleCreateCustomer = async (customerData: any) => {
+  const handleCreateCustomer = async (customerData: CreateCustomerBody) => {
     try {
-      const body = {
-        name: `${customerData.firstName} ${customerData.lastName}`.trim(),
-        email: customerData.email || undefined,
-        phone: customerData.phone || undefined,
-        address: customerData.address || undefined,
-      };
-      await createCustomer(body);
+      await createCustomer(customerData);
       setIsCreateModalOpen(false);
       
       // Refresh list after creating a new customer
@@ -174,7 +168,7 @@ export default function CustomersPage() {
         email: c.email || "",
         phone: c.phone || "",
         orders: c.sales ? c.sales.length : (c.orders ?? 0),
-        orderTotal: (c.sales && c.sales.length) ? c.sales.reduce((sum, s) => sum + (s.totalAmount || 0), 0) : (c.orderTotal ?? 0),
+        orderTotal: (c.sales && c.sales.length) ? c.sales.reduce((sum: number, s: any) => sum + (s.totalAmount || 0), 0) : (c.orderTotal ?? 0),
         customerSince: c.createdAt ? new Date(c.createdAt).toLocaleString() : (c.customerSince || ""),
         status: (c.status as any) || "Active",
         address: c.address,
@@ -441,8 +435,9 @@ export default function CustomersPage() {
                         <div className="flex items-center gap-2">
                           <span className="text-sm text-gray-900">{customer.email}</span>
                           <button
-                            onClick={() => copyToClipboard(customer.email)}
+                            onClick={() => customer.email && copyToClipboard(customer.email)}
                             className="p-1 hover:bg-gray-100 rounded transition-colors"
+                            disabled={!customer.email}
                           >
                             <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
@@ -454,8 +449,9 @@ export default function CustomersPage() {
                         <div className="flex items-center gap-2">
                           <span className="text-sm text-gray-900">{customer.phone}</span>
                           <button
-                            onClick={() => copyToClipboard(customer.phone)}
+                            onClick={() => customer.phone && copyToClipboard(customer.phone)}
                             className="p-1 hover:bg-gray-100 rounded transition-colors"
+                            disabled={!customer.phone}
                           >
                             <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />

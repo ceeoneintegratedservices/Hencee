@@ -41,9 +41,10 @@ export type CustomersListResponse = CustomerRecord[];
 
 export interface CreateCustomerBody {
   name: string;
-  email?: string;
-  phone?: string;
-  address?: string;
+  email: string;
+  phone: string; // International format with + prefix
+  address: string;
+  creditLimit?: number;
 }
 
 export interface UpdateCustomerBody {

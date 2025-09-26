@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { CreateCustomerBody } from "@/types/customers";
+
 interface CreateCustomerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (customerData: CustomerData) => void;
+  onCreate: (customerData: CreateCustomerBody) => void;
 }
 interface CustomerData {
   firstName: string;
@@ -16,6 +18,7 @@ interface CustomerData {
   state: string;
   country: string;
   status: string;
+  creditLimit?: number;
 }
 
 export default function CreateCustomerModal({ isOpen, onClose, onCreate }: CreateCustomerModalProps) {
@@ -30,6 +33,8 @@ export default function CreateCustomerModal({ isOpen, onClose, onCreate }: Creat
     country: "Nigeria",
     status: "Active"
   });
+  
+  const [countryCode, setCountryCode] = useState("+234");
 
   const handleInputChange = (field: keyof CustomerData, value: string) => {
     setCustomerData(prev => ({
@@ -39,7 +44,27 @@ export default function CreateCustomerModal({ isOpen, onClose, onCreate }: Creat
   };
 
   const handleCreate = () => {
-    onCreate(customerData);
+    // Clean the phone number to just digits (keeping the country code with + prefix)
+    const cleanPhoneNumber = customerData.phone.replace(/\D/g, '');
+    
+    // Format phone with international format (keeping the + sign in country code)
+    // If phone is empty, just use the country code
+    const formattedPhone = cleanPhoneNumber 
+      ? `${countryCode}${cleanPhoneNumber}` 
+      : countryCode;
+    
+    // Transform customerData to match the API expectations
+    const apiCustomerData = {
+      name: `${customerData.firstName} ${customerData.lastName}`,
+      email: customerData.email,
+      // Send full phone number as string with country code including + sign
+      phone: formattedPhone,
+      address: `${customerData.address}, ${customerData.city}, ${customerData.state}, ${customerData.country}`,
+      creditLimit: customerData.creditLimit || 0
+    };
+    
+    onCreate(apiCustomerData);
+    
     // Reset form
     setCustomerData({
       firstName: "",
@@ -144,7 +169,8 @@ export default function CreateCustomerModal({ isOpen, onClose, onCreate }: Creat
               <div className="flex gap-3">
                 <div className="relative">
                   <select
-                    value="+234"
+                    value={countryCode}
+                    onChange={(e) => setCountryCode(e.target.value)}
                     className="block w-24 pl-3 pr-8 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
                   >
                     <option value="+234">🇳🇬 +234</option>

@@ -12,6 +12,7 @@ export const API_ENDPOINTS = {
   
   // Product endpoints
   products: `${API_BASE_URL}/products`,
+  tires: `${API_BASE_URL}/tires`,
   
   // Customer endpoints
   customers: `${API_BASE_URL}/customers`,

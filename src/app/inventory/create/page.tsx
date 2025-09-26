@@ -6,6 +6,7 @@ import { InventoryDataService } from '@/services/InventoryDataService';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import { createTire } from '@/services/tires';
 
 interface FormData {
   productName: string;
@@ -132,18 +133,40 @@ export default function CreateInventoryPage() {
     }
   };
 
-  const handleSaveAsDraft = () => {
+  const handleSaveAsDraft = async () => {
     // Validate required fields
     if (!formData.productName.trim()) {
       showError('Validation Error', 'Product name is required');
       return;
     }
     
-    showSuccess('Success', 'Product saved as draft successfully');
-    router.push('/inventory');
+    try {
+      // Create tire object from form data
+      const tireData = {
+        brand: formData.productBrand,
+        model: formData.productName,
+        size: formData.category.includes("Tyres") ? formData.category : "Standard",
+        category: formData.category,
+        price: parseFloat(formData.sellingPrice) || 0,
+        costPrice: parseFloat(formData.costPrice) || 0,
+        quantity: parseInt(formData.quantityInStock) || 0,
+        description: formData.shortDescription,
+        images: mainImage ? [mainImage, ...additionalImages] : additionalImages,
+        status: 'Draft'
+      };
+      
+      // Send data to API
+      await createTire(tireData);
+      
+      showSuccess('Success', 'Tire saved as draft successfully');
+      router.push('/inventory');
+    } catch (error: any) {
+      showError('Error', error.message || 'Failed to save tire');
+      console.error("Error saving tire:", error);
+    }
   };
 
-  const handleSaveAndPublish = () => {
+  const handleSaveAndPublish = async () => {
     // Validate required fields
     if (!formData.productName.trim()) {
       showError('Validation Error', 'Product name is required');
@@ -162,8 +185,30 @@ export default function CreateInventoryPage() {
       return;
     }
     
-    showSuccess('Success', 'Product saved and published successfully');
-    router.push('/inventory');
+    try {
+      // Create tire object from form data
+      const tireData = {
+        brand: formData.productBrand,
+        model: formData.productName,
+        size: formData.category.includes("Tyres") ? formData.category : "Standard",
+        category: formData.category,
+        price: parseFloat(formData.sellingPrice) || 0,
+        costPrice: parseFloat(formData.costPrice) || 0,
+        quantity: parseInt(formData.quantityInStock) || 0,
+        description: formData.shortDescription,
+        images: mainImage ? [mainImage, ...additionalImages] : additionalImages,
+        status: 'Published'
+      };
+      
+      // Send data to API
+      await createTire(tireData);
+      
+      showSuccess('Success', 'Tire saved and published successfully');
+      router.push('/inventory');
+    } catch (error: any) {
+      showError('Error', error.message || 'Failed to save tire');
+      console.error("Error saving tire:", error);
+    }
   };
 
   if (loading) {
