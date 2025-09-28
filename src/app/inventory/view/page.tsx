@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { InventoryDataService, InventoryItem, Purchase } from '@/services/InventoryDataService';
+import { getProduct, updateProduct } from '@/services/products';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import FilterByDateModal from '@/components/FilterByDateModal';
 import EditProductModal from '@/components/EditProductModal';
@@ -51,7 +52,79 @@ function ViewInventoryContent() {
 
   // Load inventory item data
   useEffect(() => {
-    if (isAuthenticated) {
+    // Don't fetch if not authenticated
+    if (!isAuthenticated) return;
+    
+    // Get product ID from URL
+    const itemId = searchParams.get('id');
+    if (!itemId) {
+      showError('Error', 'No product ID provided');
+      return;
+    }
+    
+    // Track if component is mounted
+    let mounted = true;
+    
+    async function fetchProductDetails() {
+      try {
+        const p = await getProduct(itemId as string);
+        
+        // Don't update state if component unmounted
+        if (!mounted) return;
+        
+        if (!p || !p.id) {
+          setInventoryItem(null);
+          showError('Error', 'Product not found');
+          return;
+        }
+        
+        // Map API response to UI model
+        const item: InventoryItem = {
+          id: p.id,
+          productName: p.name || 'Product',
+          category: p.category?.name || p.category || 'General',
+          unitPrice: p.sellingPrice ?? p.price ?? 0,
+          inStock: p.quantity ?? p.stock ?? 0,
+          discount: 0,
+          totalValue: (p.quantity ?? 0) * (p.sellingPrice ?? p.price ?? 0),
+          status: 'Published',
+          description: p.description || '',
+          dateAdded: p.createdAt || new Date().toISOString(),
+          // Required fields for InventoryItem
+          costPrice: p.purchasePrice ?? p.costPrice ?? 0,
+          image: '',
+          views: p.views || 0,
+          favorites: p.favorites || 0,
+          lastOrder: p.lastOrderDate || undefined,
+        } as any;
+        
+        setInventoryItem(item);
+        
+        // For now, we'll continue using mock purchase data
+        // In a real implementation, you'd fetch real purchase data from the API
+        const samplePurchases = InventoryDataService.generatePurchases(itemId as string, 20);
+        setPurchases(samplePurchases);
+        setFilteredPurchases(samplePurchases);
+        
+      } catch (error) {
+        if (mounted) {
+          setInventoryItem(null);
+          setPurchases([]);
+          setFilteredPurchases([]);
+          showError('Error', 'Failed to load product');
+        }
+      }
+    }
+    
+    fetchProductDetails();
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => { mounted = false; };
+  }, [isAuthenticated, searchParams, showError]);
+
+  // Fallback: Load from localStorage if API fails
+  useEffect(() => {
+    if (isAuthenticated && !inventoryItem) {
       const itemId = searchParams.get('id') || 'item-1';
       
       // Try to load the actual item from localStorage first
@@ -79,7 +152,7 @@ function ViewInventoryContent() {
       setPurchases(samplePurchases);
       setFilteredPurchases(samplePurchases);
     }
-  }, [isAuthenticated, searchParams]);
+  }, [isAuthenticated, searchParams, inventoryItem]);
 
   // Filter purchases
   useEffect(() => {
@@ -318,7 +391,7 @@ function ViewInventoryContent() {
                       }
                     }}
                   />
-                  <div className="w-full h-full bg-gray-200 flex items-center justify-center hidden">
+                  <div className="w-full h-full bg-gray-200 items-center justify-center hidden">
                     <span className="text-4xl font-bold text-gray-600">
                       {InventoryDataService.getTireBrandInitials(inventoryItem.productName)}
                     </span>
