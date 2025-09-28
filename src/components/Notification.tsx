@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-
 export interface Notification {
   id: string;
   type: "success" | "error" | "warning" | "info";
