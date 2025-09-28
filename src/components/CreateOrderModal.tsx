@@ -2,19 +2,17 @@
 
 import { useState, useEffect } from "react";
 
-import { CreateSalePayload } from "@/services/sales";
-
 interface CreateOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (orderData: CreateSalePayload) => void;
+  onCreate: (orderData: OrderData) => void;
 }
 
 interface OrderData {
   customer: string;
-  customerId?: string;
   paymentType: string;
-  orderType: string;
+  payment: string;
+  paymentAmount: string;
   orderDate: string;
   orderTime: string;
   orderStatus: string;
@@ -28,6 +26,7 @@ interface OrderItem {
   price: number;
   quantity: number;
   total: number;
+  warehouseNumber?: string;
 }
 
 interface Product {
@@ -36,6 +35,7 @@ interface Product {
   price: number;
   category: string;
   stock: number;
+  warehouseNumber?: string;
 }
 
 interface Customer {
@@ -52,7 +52,8 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
   const [orderData, setOrderData] = useState<OrderData>({
     customer: "",
     paymentType: "",
-    orderType: "",
+    payment: "",
+    paymentAmount: "",
     orderDate: "12/12/2020",
     orderTime: "12:00 PM",
     orderStatus: "Pending",
@@ -67,7 +68,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
   const [customerSearchQuery, setCustomerSearchQuery] = useState("");
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [showCustomerList, setShowCustomerList] = useState(false);
-  const [explicitCustomerId, setExplicitCustomerId] = useState<string>("");
+  const [showInvoicePreview, setShowInvoicePreview] = useState(false);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -151,9 +152,115 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
 
   // Select customer
   const selectCustomer = (customer: Customer) => {
-    setOrderData(prev => ({ ...prev, customer: customer.name, customerId: customer.id }));
+    setOrderData(prev => ({ ...prev, customer: customer.name }));
     setCustomerSearchQuery(customer.name);
     setShowCustomerList(false);
+  };
+
+  // Print invoice
+  const printInvoice = () => {
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      const invoiceContent = generateInvoiceHTML();
+      printWindow.document.write(invoiceContent);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
+
+  // Generate invoice HTML for printing
+  const generateInvoiceHTML = () => {
+    const currentDate = new Date().toLocaleDateString();
+    const currentTime = new Date().toLocaleTimeString();
+    const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Invoice ${invoiceNumber}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+          .invoice-header { text-align: center; margin-bottom: 30px; }
+          .invoice-title { font-size: 28px; font-weight: bold; color: #02016a; margin-bottom: 10px; }
+          .invoice-number { font-size: 16px; color: #666; }
+          .invoice-details { display: flex; justify-content: space-between; margin-bottom: 30px; }
+          .company-info, .customer-info { flex: 1; }
+          .company-info h3, .customer-info h3 { margin: 0 0 10px 0; color: #333; }
+          .company-info p, .customer-info p { margin: 5px 0; color: #666; }
+          .items-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+          .items-table th, .items-table td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+          .items-table th { background-color: #f8f9fa; font-weight: bold; }
+          .total-section { text-align: right; margin-top: 20px; }
+          .total-amount { font-size: 20px; font-weight: bold; color: #02016a; }
+          .footer { margin-top: 40px; text-align: center; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="invoice-header">
+          <div class="invoice-title">INVOICE</div>
+          <div class="invoice-number">Invoice #${invoiceNumber}</div>
+        </div>
+        
+        <div class="invoice-details">
+          <div class="company-info">
+            <h3>Ceeone Wheels</h3>
+            <p>123 Business Street</p>
+            <p>Lagos, Nigeria</p>
+            <p>Phone: +234 800 123 4567</p>
+            <p>Email: info@ceeonewheels.com</p>
+          </div>
+          <div class="customer-info">
+            <h3>Bill To:</h3>
+            <p><strong>${orderData.customer || 'Customer Name'}</strong></p>
+            <p>Date: ${orderData.orderDate}</p>
+            <p>Time: ${orderData.orderTime}</p>
+            <p>Payment Type: ${orderData.paymentType}</p>
+            <p>Payment Method: ${orderData.payment}${orderData.payment === 'Part Payment' && orderData.paymentAmount ? ` (₦${parseFloat(orderData.paymentAmount).toLocaleString()})` : ''}</p>
+          </div>
+        </div>
+        
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Warehouse</th>
+              <th>Quantity</th>
+              <th>Price</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${orderData.items.map(item => `
+              <tr>
+                <td>${item.name}</td>
+                <td>${item.warehouseNumber || 'N/A'}</td>
+                <td>${item.quantity}</td>
+                <td>₦${item.price.toLocaleString()}</td>
+                <td>₦${item.total.toLocaleString()}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        
+        <div class="total-section">
+          <div class="total-amount">Total: ₦${calculateTotal().toLocaleString()}</div>
+        </div>
+        
+        ${orderData.orderNote ? `
+          <div style="margin-top: 30px;">
+            <h3>Notes:</h3>
+            <p>${orderData.orderNote}</p>
+          </div>
+        ` : ''}
+        
+        <div class="footer">
+          <p>Thank you for your business!</p>
+          <p>Generated on ${currentDate} at ${currentTime}</p>
+        </div>
+      </body>
+      </html>
+    `;
   };
 
   // Add product to order
@@ -175,7 +282,8 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
         name: product.name,
         price: product.price,
         quantity: 1,
-        total: product.price
+        total: product.price,
+        warehouseNumber: product.warehouseNumber || `WH-${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`
       };
       setOrderData(prev => ({ ...prev, items: [...prev.items, newItem] }));
     }
@@ -212,42 +320,8 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
   };
 
   const handleCreate = () => {
-    // Map our UI state to the API payload format
-    const apiPayload = {
-      customerId: orderData.customerId || "",
-      items: orderData.items.map(item => ({
-        productId: item.id,
-        quantity: item.quantity
-      })),
-      paymentMethod: mapPaymentTypeToEnum(orderData.paymentType),
-      orderType: orderData.orderType,
-      status: mapOrderStatusToEnum(orderData.orderStatus),
-      notes: orderData.orderNote
-    };
-    
-    onCreate(apiPayload);
+    onCreate(orderData);
     onClose();
-  };
-  
-  // Helper function to map UI payment types to API enum values
-  const mapPaymentTypeToEnum = (paymentType: string): "CASH" | "CARD" | "BANK_TRANSFER" | "MOBILE_MONEY" => {
-    switch (paymentType) {
-      case "Cash": return "CASH";
-      case "Card": return "CARD";
-      case "Bank Transfer": return "BANK_TRANSFER";
-      case "Mobile Money": return "MOBILE_MONEY";
-      default: return "CASH"; // Default to cash
-    }
-  };
-  
-  // Helper function to map UI order status to API enum values
-  const mapOrderStatusToEnum = (status: string): "PENDING" | "COMPLETED" | "CANCELLED" => {
-    switch (status) {
-      case "Pending": return "PENDING";
-      case "Completed": return "COMPLETED";
-      case "Canceled": return "CANCELLED";
-      default: return "PENDING"; // Default to pending
-    }
   };
 
   const handleOverlayClick = (e: React.MouseEvent) => {
@@ -259,6 +333,120 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
   if (!isOpen) return null;
 
   return (
+    <>
+      {/* Invoice Preview Modal */}
+      {showInvoicePreview && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            {/* Invoice Preview Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Invoice Preview</h2>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={printInvoice}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  Print Invoice
+                </button>
+                <button
+                  onClick={() => setShowInvoicePreview(false)}
+                  className="text-red-500 hover:text-red-700 p-2"
+                >
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            
+            {/* Invoice Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <div className="bg-white p-8 rounded-lg border border-gray-200">
+                {/* Invoice Header */}
+                <div className="text-center mb-8">
+                  <h1 className="text-3xl font-bold text-[#02016a] mb-2">INVOICE</h1>
+                  <p className="text-gray-600">Invoice #{`INV-${Date.now().toString().slice(-6)}`}</p>
+                </div>
+                
+                {/* Company and Customer Info */}
+                <div className="flex justify-between mb-8">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Ceeone Wheels</h3>
+                    <p className="text-gray-600">123 Business Street</p>
+                    <p className="text-gray-600">Lagos, Nigeria</p>
+                    <p className="text-gray-600">Phone: +234 800 123 4567</p>
+                    <p className="text-gray-600">Email: info@ceeonewheels.com</p>
+                  </div>
+                  <div className="flex-1 text-right">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Bill To:</h3>
+                    <p className="text-gray-600 font-medium">{orderData.customer || 'Customer Name'}</p>
+                    <p className="text-gray-600">Date: {orderData.orderDate}</p>
+                    <p className="text-gray-600">Time: {orderData.orderTime}</p>
+                    <p className="text-gray-600">Payment Type: {orderData.paymentType}</p>
+                    <p className="text-gray-600">Payment Method: {orderData.payment}{orderData.payment === 'Part Payment' && orderData.paymentAmount ? ` (₦${parseFloat(orderData.paymentAmount).toLocaleString()})` : ''}</p>
+                  </div>
+                </div>
+                
+                {/* Items Table */}
+                <div className="mb-8">
+                  <table className="w-full border-collapse border border-gray-300">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Item</th>
+                        <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Warehouse</th>
+                        <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Quantity</th>
+                        <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Price</th>
+                        <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orderData.items.map((item, index) => (
+                        <tr key={index}>
+                          <td className="border border-gray-300 px-4 py-3 text-gray-700">{item.name}</td>
+                          <td className="border border-gray-300 px-4 py-3 text-gray-700">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {item.warehouseNumber || 'N/A'}
+                            </span>
+                          </td>
+                          <td className="border border-gray-300 px-4 py-3 text-gray-700">{item.quantity}</td>
+                          <td className="border border-gray-300 px-4 py-3 text-gray-700">₦{item.price.toLocaleString()}</td>
+                          <td className="border border-gray-300 px-4 py-3 text-gray-700">₦{item.total.toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                
+                {/* Total */}
+                <div className="text-right mb-8">
+                  <div className="text-2xl font-bold text-[#02016a]">
+                    Total: ₦{calculateTotal().toLocaleString()}
+                  </div>
+                </div>
+                
+                {/* Notes */}
+                {orderData.orderNote && (
+                  <div className="mb-8">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Notes:</h3>
+                    <p className="text-gray-600">{orderData.orderNote}</p>
+                  </div>
+                )}
+                
+                {/* Footer */}
+                <div className="text-center text-gray-500 text-sm">
+                  <p>Thank you for your business!</p>
+                  <p>Generated on {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Modal */}
     <div className="absolute inset-0 flex items-start justify-center z-50 pt-20 px-4" onClick={handleOverlayClick}>
       <div className="bg-white rounded-xl w-full max-w-4xl max-h-[600px] overflow-y-auto shadow-[0_20px_50px_rgba(0,0,0,0.15)]">
         {/* Header */}
@@ -430,7 +618,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                       />
                     </div>
               </div>
-                  
+
                   <div>
                     <label className="block text-[14px] text-[#45464e] mb-2">Address</label>
                     <div className="relative">
@@ -450,7 +638,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                 </div>
               )}
 
-              {/* Payment Type & Order Type */}
+              {/* Payment Type & Payment */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[14px] text-[#45464e] mb-2">Payment Type</label>
@@ -466,18 +654,35 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[14px] text-[#45464e] mb-2">Order Type</label>
+                  <label className="block text-[14px] text-[#45464e] mb-2">Payment</label>
                   <select
-                    value={orderData.orderType}
-                    onChange={(e) => setOrderData(prev => ({ ...prev, orderType: e.target.value }))}
+                    value={orderData.payment}
+                    onChange={(e) => setOrderData(prev => ({ ...prev, payment: e.target.value, paymentAmount: e.target.value === 'Full Payment' ? '' : prev.paymentAmount }))}
                     className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
                   >
-                    <option value="">Order Type</option>
-                    <option value="Home Delivery">Home Delivery</option>
-                    <option value="Pick Up">Pick Up</option>
+                    <option value="">Select Payment</option>
+                    <option value="Full Payment">Full Payment</option>
+                    <option value="Part Payment">Part Payment</option>
                   </select>
                 </div>
               </div>
+
+              {/* Payment Amount - Only show when Part Payment is selected */}
+              {orderData.payment === 'Part Payment' && (
+                <div>
+                  <label className="block text-[14px] text-[#45464e] mb-2">Payment Amount</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={orderData.paymentAmount}
+                      onChange={(e) => setOrderData(prev => ({ ...prev, paymentAmount: e.target.value }))}
+                      placeholder="Enter payment amount"
+                      className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent pl-10"
+                    />
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-[14px]">₦</span>
+                  </div>
+                </div>
+              )}
 
               {/* Order Time & Date */}
               <div className="grid grid-cols-2 gap-4">
@@ -503,11 +708,29 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                       type="text"
                       value={orderData.orderTime}
                       onChange={(e) => setOrderData(prev => ({ ...prev, orderTime: e.target.value }))}
-                      className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent pl-10"
+                      className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent pl-10 pr-10"
                     />
                     <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const now = new Date();
+                        const timeString = now.toLocaleTimeString('en-US', {
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          hour12: true
+                        });
+                        setOrderData(prev => ({ ...prev, orderTime: timeString }));
+                      }}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded transition-colors"
+                      title="Set current time"
+                    >
+                      <svg className="w-4 h-4 text-gray-500 hover:text-[#02016a]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -671,7 +894,31 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
         </div>
 
         {/* Footer Buttons */}
-        <div className="flex items-center justify-end gap-4 p-6 border-t border-gray-200">
+        <div className="flex items-center justify-between p-6 border-t border-gray-200">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowInvoicePreview(true)}
+              disabled={orderData.items.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium text-[14px] hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              Preview Invoice
+            </button>
+            <button
+              onClick={printInvoice}
+              disabled={orderData.items.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium text-[14px] hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              Print Invoice
+            </button>
+          </div>
+          <div className="flex items-center gap-4">
           <button
             onClick={onClose}
             className="px-6 py-2 border border-[#02016a] text-[#02016a] rounded-lg font-medium text-[14px] hover:bg-[#f4f5fa] transition-colors"
@@ -687,5 +934,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
         </div>
       </div>
     </div>
+    </div>
+    </>
   );
 }

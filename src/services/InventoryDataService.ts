@@ -20,6 +20,7 @@ export interface InventoryItem {
   favorites: number;
   brand?: string;
   description?: string;
+  warehouseNumber?: string;
 }
 
 export interface InventorySummary {
@@ -55,8 +56,7 @@ export class InventoryDataService {
   };
 
   private static readonly TIRE_CATEGORIES = [
-    "Passenger Car", "SUV/Truck", "Performance", "Winter", 
-    "All-Season", "Summer", "Commercial", "Motorcycle", "Smart Homes"
+    "GL601", "GL602", "GL908", "DW703tx"
   ];
 
   private static readonly TIRE_BRANDS = [
@@ -100,45 +100,30 @@ export class InventoryDataService {
     let inStock: number;
     let shortDescription: string;
     let longDescription: string;
+    let warehouseNumber: string;
     
-    if (category === "Smart Homes") {
-      // Generate smart lock products
-      const smartLockBrands = this.SMART_LOCK_BRANDS;
-      const smartLockModels = this.SMART_LOCK_MODELS;
-      const brand = smartLockBrands[Math.floor(Math.random() * smartLockBrands.length)];
-      const model = smartLockModels[Math.floor(Math.random() * smartLockModels.length)];
-      
-      productName = `${brand} ${model}`;
-      image = `/images/${brand.toLowerCase()}.png`;
-      
-      // Smart lock pricing (lower range than tyres)
-      unitPrice = Math.floor(Math.random() * 150000) + 25000; // ₦25,000 - ₦175,000
-      costPrice = Math.floor(unitPrice * 0.6);
-      inStock = Math.floor(Math.random() * 30) + 1; // Lower stock for smart locks
-      
-      shortDescription = `Advanced ${brand} ${model.toLowerCase()} with smart home integration and security features.`;
-      longDescription = `This ${brand} ${model.toLowerCase()} provides secure keyless entry with smartphone control, fingerprint recognition, and voice commands. Features include WiFi connectivity, battery backup, and tamper alerts for enhanced home security.`;
-    } else {
-      // Generate tyre products
-      const tireBrands = this.TIRE_BRANDS;
-      const tireSizes = this.TIRE_SIZES;
-      const brand = tireBrands[Math.floor(Math.random() * tireBrands.length)];
-      const size = tireSizes[Math.floor(Math.random() * tireSizes.length)];
-      
-      productName = `${brand} ${category} Tire ${size}`;
-      image = `/images/${brand.toLowerCase()}.png`;
-      
-      // Tyre-specific pricing (higher range for premium tyres)
-      unitPrice = brand === "Michelin" || brand === "Bridgestone" || brand === "Continental" ? 
-        Math.floor(Math.random() * 200000) + 150000 : // Premium brands: ₦150,000 - ₦350,000
-        Math.floor(Math.random() * 150000) + 80000;   // Standard brands: ₦80,000 - ₦230,000
-      
-      costPrice = Math.floor(unitPrice * 0.65);
-      inStock = Math.floor(Math.random() * 50) + 1;
-      
-      shortDescription = `Premium ${brand} ${category.toLowerCase()} tyre in ${size} size. High performance and durability.`;
-      longDescription = `This ${brand} ${category.toLowerCase()} tyre offers excellent traction, fuel efficiency, and long-lasting performance. Designed for ${category.toLowerCase()} applications with advanced rubber compound and tread pattern for optimal grip in various driving conditions.`;
-    }
+    // Generate warehouse number
+    warehouseNumber = `WH-${String(Math.floor(Math.random() * 999) + 1).padStart(3, '0')}`;
+    
+    // Generate tyre products
+    const tireBrands = this.TIRE_BRANDS;
+    const tireSizes = this.TIRE_SIZES;
+    const brand = tireBrands[Math.floor(Math.random() * tireBrands.length)];
+    const size = tireSizes[Math.floor(Math.random() * tireSizes.length)];
+    
+    productName = `${brand} ${category} ${size}`;
+    image = `/images/${brand.toLowerCase()}.png`;
+    
+    // Tyre-specific pricing (higher range for premium tyres)
+    unitPrice = brand === "Michelin" || brand === "Bridgestone" || brand === "Continental" ? 
+      Math.floor(Math.random() * 200000) + 150000 : // Premium brands: ₦150,000 - ₦350,000
+      Math.floor(Math.random() * 150000) + 80000;   // Standard brands: ₦80,000 - ₦230,000
+    
+    costPrice = Math.floor(unitPrice * 0.65);
+    inStock = Math.floor(Math.random() * 50) + 1;
+    
+    shortDescription = `Premium ${brand} ${category} tyre in ${size} size. High performance and durability.`;
+    longDescription = `This ${brand} ${category} tyre offers excellent traction, fuel efficiency, and long-lasting performance. Designed for optimal performance with advanced rubber compound and tread pattern for superior grip in various driving conditions.`;
     
     const discount = Math.random() > 0.8 ? Math.floor(Math.random() * 15000) : 0;
     const totalValue = (unitPrice - discount) * inStock;
@@ -169,7 +154,8 @@ export class InventoryDataService {
       dateAdded: dateAdded.toISOString(),
       lastOrder: lastOrder?.toISOString(),
       views: Math.floor(Math.random() * 2000) + 50,
-      favorites: Math.floor(Math.random() * 50) + 1
+      favorites: Math.floor(Math.random() * 50) + 1,
+      warehouseNumber
     };
   }
 

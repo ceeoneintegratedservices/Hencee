@@ -283,7 +283,12 @@ export default function AdminDashboard() {
           {/* Top Section: 2 rows of summary cards with responsive layout */}
           <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-10 gap-3 sm:gap-4 lg:gap-5 mb-5 items-stretch">
             {/* Row 1 - Sales Card (27%) */}
-            <div className="bg-white rounded-xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 h-[145px] shadow min-w-0 justify-between items-start col-span-1 sm:col-span-1 lg:col-span-3 overflow-hidden">
+            <div
+              className="bg-white rounded-xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 h-[145px] shadow min-w-0 justify-between items-start col-span-1 sm:col-span-1 lg:col-span-3 overflow-hidden cursor-pointer hover:ring-1 hover:ring-[#5570f1]/30"
+              onClick={() => router.push('/orders')}
+              role="button"
+              tabIndex={0}
+            >
               <div className="flex items-center justify-between w-full">
                 <span className="w-9 h-9 flex items-center justify-center bg-[rgba(85,112,241,0.12)] rounded-lg">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 18 19">
@@ -313,7 +318,12 @@ export default function AdminDashboard() {
               </div>
             </div>
             {/* Row 1 - Customers Card (27%) */}
-            <div className="bg-white rounded-xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 h-[145px] shadow min-w-0 justify-between items-start col-span-1 sm:col-span-1 lg:col-span-3 overflow-hidden">
+            <div
+              className="bg-white rounded-xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 h-[145px] shadow min-w-0 justify-between items-start col-span-1 sm:col-span-1 lg:col-span-3 overflow-hidden cursor-pointer hover:ring-1 hover:ring-[#1C1D22]/20"
+              onClick={() => router.push('/customers')}
+              role="button"
+              tabIndex={0}
+            >
               <div className="flex items-center justify-between w-full">
                 <span className="w-9 h-9 flex items-center justify-center bg-[rgba(255,204,145,0.16)] rounded-lg">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 18 17">
@@ -348,7 +358,12 @@ export default function AdminDashboard() {
               </div>
             </div>
             {/* Row 1 - All Orders Card (46%) */}
-            <div className="bg-white rounded-xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 h-[145px] shadow min-w-0 justify-between items-start col-span-1 sm:col-span-2 lg:col-span-4 overflow-hidden">
+            <div
+              className="bg-white rounded-xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 h-[145px] shadow min-w-0 justify-between items-start col-span-1 sm:col-span-2 lg:col-span-4 overflow-hidden cursor-pointer hover:ring-1 hover:ring-[#ffcc91]/30"
+              onClick={() => router.push('/orders')}
+              role="button"
+              tabIndex={0}
+            >
               <div className="flex items-center justify-between w-full">
                 <span className="w-9 h-9 flex items-center justify-center bg-[rgba(255,204,145,0.16)] rounded-lg">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 20 21">
@@ -448,7 +463,12 @@ export default function AdminDashboard() {
               </div>
             </div>
             {/* Row 2 - All Users Card (46%) */}
-            <div className="bg-white rounded-xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 h-[145px] shadow min-w-0 justify-between items-start col-span-1 sm:col-span-2 lg:col-span-4 overflow-hidden">
+            <div
+              className="bg-white rounded-xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 h-[145px] shadow min-w-0 justify-between items-start col-span-1 sm:col-span-2 lg:col-span-4 overflow-hidden cursor-pointer hover:ring-1 hover:ring-[#101828]/20"
+              onClick={() => router.push('/users-roles')}
+              role="button"
+              tabIndex={0}
+            >
               <div className="flex items-center justify-between w-full">
                 <span className="w-9 h-9 flex items-center justify-center bg-[rgba(255,204,145,0.16)] rounded-lg">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 20 20">
@@ -541,7 +561,12 @@ export default function AdminDashboard() {
             {/* Middle Column: All Products + Abandoned Cart stacked */}
             <div className="flex flex-col gap-5">
               {/* All Products Card - Top of stack */}
-              <div className="bg-[#11518c] rounded-xl p-4 text-white flex flex-col gap-2.5 min-w-0 h-[190px]">
+              <div
+                className="bg-[#11518c] rounded-xl p-4 text-white flex flex-col gap-2.5 min-w-0 h-[190px] cursor-pointer hover:ring-1 hover:ring-white/30"
+                onClick={() => router.push('/inventory')}
+                role="button"
+                tabIndex={0}
+              >
               <div className="flex items-center justify-between">
                 <span className="w-9 h-9 flex items-center justify-center bg-[rgba(255,255,255,0.16)] rounded-lg">
                   <svg className="w-5 h-5" fill="none" viewBox="0 0 18 18">
