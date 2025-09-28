@@ -152,7 +152,7 @@ export default function CreateInventoryPage() {
         quantity: parseInt(formData.quantityInStock) || 0,
         description: formData.shortDescription,
         images: mainImage ? [mainImage, ...additionalImages] : additionalImages,
-        status: 'Draft'
+        status: 'Draft' as const
       };
       
       // Send data to API
@@ -197,7 +197,7 @@ export default function CreateInventoryPage() {
         quantity: parseInt(formData.quantityInStock) || 0,
         description: formData.shortDescription,
         images: mainImage ? [mainImage, ...additionalImages] : additionalImages,
-        status: 'Published'
+        status: 'Published' as const
       };
       
       // Send data to API

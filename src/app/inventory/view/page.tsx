@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { InventoryDataService, InventoryItem, Purchase } from '@/services/InventoryDataService';
-import { getProduct } from '@/services/products';
+import { getProduct, updateProduct } from '@/services/products';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import FilterByDateModal from '@/components/FilterByDateModal';
 import EditProductModal from '@/components/EditProductModal';
@@ -67,7 +67,7 @@ function ViewInventoryContent() {
     
     async function fetchProductDetails() {
       try {
-        const p = await getProduct(itemId);
+        const p = await getProduct(itemId as string);
         
         // Don't update state if component unmounted
         if (!mounted) return;
@@ -102,7 +102,7 @@ function ViewInventoryContent() {
         
         // For now, we'll continue using mock purchase data
         // In a real implementation, you'd fetch real purchase data from the API
-        const samplePurchases = InventoryDataService.generatePurchases(itemId, 20);
+        const samplePurchases = InventoryDataService.generatePurchases(itemId as string, 20);
         setPurchases(samplePurchases);
         setFilteredPurchases(samplePurchases);
         
@@ -359,7 +359,7 @@ function ViewInventoryContent() {
                       }
                     }}
                   />
-                  <div className="w-full h-full bg-gray-200 flex items-center justify-center hidden">
+                  <div className="w-full h-full bg-gray-200 items-center justify-center hidden">
                     <span className="text-4xl font-bold text-gray-600">
                       {InventoryDataService.getTireBrandInitials(inventoryItem.productName)}
                     </span>
