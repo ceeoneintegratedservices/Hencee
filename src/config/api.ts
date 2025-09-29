@@ -23,6 +23,30 @@ export const API_ENDPOINTS = {
   // Payment endpoints
   payments: `${API_BASE_URL}/payments`,
   
+  // Approval endpoints
+  approvals: `${API_BASE_URL}/approvals`,
+  
+  // Audit logs endpoints
+  auditLogs: `${API_BASE_URL}/audit-logs`,
+  
+  // Tires endpoints
+  tires: `${API_BASE_URL}/tires`,
+  
+  // Users endpoints
+  users: `${API_BASE_URL}/users`,
+  
+  // Orders endpoints
+  orders: `${API_BASE_URL}/orders`,
+  
+  // Sales dashboard endpoints
+  salesDashboard: `${API_BASE_URL}/sales/dashboard`,
+  
+  // Reports endpoints
+  reports: {
+    sales: `${API_BASE_URL}/reports/sales`,
+    finance: `${API_BASE_URL}/reports/finance`,
+  },
+  
   // API documentation
   apiDocs: `${API_BASE_URL}/api`,
 }; 
