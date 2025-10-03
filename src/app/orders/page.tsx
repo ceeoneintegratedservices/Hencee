@@ -56,49 +56,6 @@ export default function OrdersPage() {
   };
 
   // Generate orders using the service
-<<<<<<< HEAD
-  const sampleOrders = (apiData
-    ? apiData.orders.map(o => {
-        const colorMap: Record<string, string> = {
-          green: 'bg-green-100 text-green-800',
-          orange: 'bg-orange-100 text-orange-800',
-          blue: 'bg-blue-100 text-blue-800',
-          red: 'bg-red-100 text-red-800',
-        };
-        
-        // Handle different API response structures
-        // Debug: Log the actual structure of the API response
-        if (process.env.NODE_ENV === 'development') {
-          console.log('API Order Object:', o);
-        }
-        
-        const orderData = {
-          id: String(o.id || ''),
-          name: String(o.customerName || 'Unknown Customer'),
-          date: String(o.orderDate || new Date().toISOString()),
-          type: String(o.orderType || 'Pick Up'),
-          tracking: String(o.trackingId || o.id || 'N/A'),
-          total: String(o.orderTotal || '₦0'),
-          action: String(o.action || o.status || 'Pending'),
-          status: String(o.status || 'Pending'),
-          statusColor: o.statusColor ? (colorMap[o.statusColor] || 'bg-gray-100 text-gray-800') : 'bg-gray-100 text-gray-800',
-        };
-        
-        return orderData;
-      })
-    : OrderDataService.generateOrders(200).map(order => ({
-        id: order.id,
-        name: order.customer.name,
-        date: order.orderDate,
-        type: order.orderType,
-        tracking: order.trackingId,
-        total: OrderDataService.formatCurrency(order.totalAmount),
-        action: order.status,
-        status: order.status,
-        statusColor: order.statusColor
-      }))
-  );
-=======
   const sampleOrders = OrderDataService.generateOrders(200).map(order => ({
     id: order.id,
     name: order.customer.name,
@@ -111,7 +68,6 @@ export default function OrdersPage() {
     statusColor: order.statusColor,
     warehouseNumber: order.items[0]?.warehouseNumber || 'N/A'
   }));
->>>>>>> 642ba754e8be82d9fce6416a19923ff7dadc1c2f
   
   // Apply search filter
   const filteredOrders = sampleOrders.filter(order => {
