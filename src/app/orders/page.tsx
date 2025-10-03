@@ -151,17 +151,26 @@ export default function OrdersPage() {
           blue: 'bg-blue-100 text-blue-800',
           red: 'bg-red-100 text-red-800',
         };
-        return {
-          id: o.id,
-          name: o.customerName,
-          date: o.orderDate,
-          type: o.orderType,
-          tracking: o.trackingId,
-          total: o.orderTotal,
-          action: o.action,
-          status: o.status,
+        
+        // Handle different API response structures
+        // Debug: Log the actual structure of the API response
+        if (process.env.NODE_ENV === 'development') {
+          console.log('API Order Object:', o);
+        }
+        
+        const orderData = {
+          id: String(o.id || o.id || ''),
+          name: String(o.customerName || o.name || 'Unknown Customer'),
+          date: String(o.orderDate || o.createdAt || new Date().toISOString()),
+          type: String(o.orderType || 'Pick Up'),
+          tracking: String(o.trackingId || o.id || 'N/A'),
+          total: String(o.orderTotal || '₦0'),
+          action: String(o.action || o.status || 'Pending'),
+          status: String(o.status || 'Pending'),
           statusColor: o.statusColor ? (colorMap[o.statusColor] || 'bg-gray-100 text-gray-800') : 'bg-gray-100 text-gray-800',
         };
+        
+        return orderData;
       })
     : OrderDataService.generateOrders(200).map(order => ({
         id: order.id,

@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 
 import { CreateSalePayload } from "@/services/sales";
+import { listCustomers } from "@/services/customers";
+import { listProducts } from "@/services/products";
 
 interface CreateOrderModalProps {
   isOpen: boolean;
@@ -33,19 +35,24 @@ interface OrderItem {
 interface Product {
   id: string;
   name: string;
-  price: number;
-  category: string;
-  stock: number;
+  price?: number;
+  sellingPrice?: number;
+  category?: string;
+  stock?: number;
+  quantity?: number;
+  description?: string;
 }
 
 interface Customer {
   id: string;
   name: string;
-  email: string;
-  phone: string;
-  isFavorite: boolean;
-  totalOrders: number;
-  lastOrderDate: string;
+  email?: string;
+  phone?: string;
+  isFavorite?: boolean;
+  totalOrders?: number;
+  lastOrderDate?: string;
+  address?: string;
+  status?: string;
 }
 
 export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOrderModalProps) {
@@ -62,12 +69,18 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
 
   const [isNewCustomer, setIsNewCustomer] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [showProductList, setShowProductList] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState("");
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [filteredCustomers, setFilteredCustomers] = useState<Customer[]>([]);
   const [showCustomerList, setShowCustomerList] = useState(false);
   const [explicitCustomerId, setExplicitCustomerId] = useState<string>("");
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [customersError, setCustomersError] = useState<string | null>(null);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [productsError, setProductsError] = useState<string | null>(null);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -84,70 +97,110 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
     }
   }, [showCustomerList]);
 
-  // Sample product data
-  const products: Product[] = [
-    { id: "1", name: "Michelin Pilot Sport 4", price: 25000, category: "Tires", stock: 15 },
-    { id: "2", name: "Bridgestone Potenza RE-71R", price: 22000, category: "Tires", stock: 8 },
-    { id: "3", name: "Continental ContiSportContact 5", price: 28000, category: "Tires", stock: 12 },
-    { id: "4", name: "Pirelli P Zero", price: 30000, category: "Tires", stock: 6 },
-    { id: "5", name: "Goodyear Eagle F1", price: 24000, category: "Tires", stock: 10 },
-    { id: "6", name: "Dunlop Sport Maxx RT", price: 21000, category: "Tires", stock: 14 },
-    { id: "7", name: "Hankook Ventus V12 evo2", price: 19000, category: "Tires", stock: 20 },
-    { id: "8", name: "Yokohama Advan Sport V105", price: 26000, category: "Tires", stock: 7 },
-    { id: "9", name: "Maxxis Victra Sport 5", price: 18000, category: "Tires", stock: 18 },
-    { id: "10", name: "Firestone Firehawk Indy 500", price: 20000, category: "Tires", stock: 9 }
-  ];
+  // Fetch products from API
+  useEffect(() => {
+    const fetchProducts = async () => {
+      if (!isOpen) return;
+      
+      setProductsLoading(true);
+      setProductsError(null);
+      
+      try {
+        const data = await listProducts({ limit: 100 });
+        // Handle both array response and { data: [] } response formats
+        const productsArray = Array.isArray(data) ? data : (data.data || []);
+        
+        // Debug: Log the actual structure of the API response
+        if (process.env.NODE_ENV === 'development') {
+          console.log('API Products Response:', productsArray);
+        }
+        
+        // Map API response to expected structure
+        const mappedProducts = productsArray.map((product: any) => ({
+          id: String(product.id || ''),
+          name: String(product.name || 'Unknown Product'),
+          price: Number(product.price || product.sellingPrice || 0),
+          sellingPrice: Number(product.sellingPrice || product.price || 0),
+          category: String(product.category || product.category?.name || 'General'),
+          stock: Number(product.stock || product.quantity || 0),
+          quantity: Number(product.quantity || product.stock || 0),
+          description: String(product.description || ''),
+        }));
+        
+        setProducts(mappedProducts);
+      } catch (error) {
+        console.error("Error fetching products:", error);
+        setProductsError("Failed to load products");
+        // Fallback to empty array
+        setProducts([]);
+      } finally {
+        setProductsLoading(false);
+      }
+    };
 
-  // Sample customer data
-  const customers: Customer[] = [
-    { id: "1", name: "Janet Adebayo", email: "janet@example.com", phone: "+234 801 234 5678", isFavorite: true, totalOrders: 15, lastOrderDate: "2024-01-10" },
-    { id: "2", name: "Samuel Johnson", email: "samuel@example.com", phone: "+234 802 345 6789", isFavorite: true, totalOrders: 8, lastOrderDate: "2024-01-08" },
-    { id: "3", name: "Francis Doe", email: "francis@example.com", phone: "+234 803 456 7890", isFavorite: false, totalOrders: 3, lastOrderDate: "2024-01-05" },
-    { id: "4", name: "Christian Dior", email: "christian@example.com", phone: "+234 804 567 8901", isFavorite: true, totalOrders: 12, lastOrderDate: "2024-01-12" },
-    { id: "5", name: "Mary Okafor", email: "mary@example.com", phone: "+234 805 678 9012", isFavorite: false, totalOrders: 5, lastOrderDate: "2024-01-03" },
-    { id: "6", name: "David Okonkwo", email: "david@example.com", phone: "+234 806 789 0123", isFavorite: true, totalOrders: 20, lastOrderDate: "2024-01-14" },
-    { id: "7", name: "Grace Adebisi", email: "grace@example.com", phone: "+234 807 890 1234", isFavorite: false, totalOrders: 2, lastOrderDate: "2024-01-01" },
-    { id: "8", name: "Michael Ogun", email: "michael@example.com", phone: "+234 808 901 2345", isFavorite: true, totalOrders: 18, lastOrderDate: "2024-01-13" }
-  ];
+    fetchProducts();
+  }, [isOpen]);
+
+  // Fetch customers from API
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      if (!isOpen) return;
+      
+      setCustomersLoading(true);
+      setCustomersError(null);
+      
+      try {
+        const data = await listCustomers();
+        setCustomers(data);
+      } catch (error) {
+        console.error("Error fetching customers:", error);
+        setCustomersError("Failed to load customers");
+        // Fallback to empty array
+        setCustomers([]);
+      } finally {
+        setCustomersLoading(false);
+      }
+    };
+
+    fetchCustomers();
+  }, [isOpen]);
 
   // Handle product search
   useEffect(() => {
     if (searchQuery.trim()) {
-      const filtered = products.filter(product =>
-        product.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      const filtered = products.filter(product => {
+        // Ensure product has the expected structure
+        if (!product || typeof product !== 'object') return false;
+        if (!product.name || typeof product.name !== 'string') return false;
+        
+        return product.name.toLowerCase().includes(searchQuery.toLowerCase());
+      });
       setFilteredProducts(filtered);
       setShowProductList(true);
     } else {
       setFilteredProducts([]);
       setShowProductList(false);
     }
-  }, [searchQuery]);
+  }, [searchQuery, products]);
 
   // Handle customer search
   useEffect(() => {
     if (customerSearchQuery.trim()) {
       const filtered = customers.filter(customer =>
         customer.name.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
-        customer.email.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
-        customer.phone.includes(customerSearchQuery)
+        (customer.email && customer.email.toLowerCase().includes(customerSearchQuery.toLowerCase())) ||
+        (customer.phone && customer.phone.includes(customerSearchQuery))
       );
-      // Sort favorites first, then by name
-      const sortedFiltered = filtered.sort((a, b) => {
-        if (a.isFavorite && !b.isFavorite) return -1;
-        if (!a.isFavorite && b.isFavorite) return 1;
-        return a.name.localeCompare(b.name);
-      });
+      // Sort by name since we don't have favorites from API
+      const sortedFiltered = filtered.sort((a, b) => a.name.localeCompare(b.name));
       setFilteredCustomers(sortedFiltered);
       setShowCustomerList(true);
     } else {
-      // Show favorites first when no search query
-      const favorites = customers.filter(customer => customer.isFavorite);
-      const others = customers.filter(customer => !customer.isFavorite);
-      setFilteredCustomers([...favorites, ...others]);
+      // Show all customers when no search query
+      setFilteredCustomers(customers);
       setShowCustomerList(true);
     }
-  }, [customerSearchQuery]);
+  }, [customerSearchQuery, customers]);
 
   // Select customer
   const selectCustomer = (customer: Customer) => {
@@ -159,12 +212,13 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
   // Add product to order
   const addProductToOrder = (product: Product) => {
     const existingItem = orderData.items.find(item => item.id === product.id);
+    const productPrice = product.sellingPrice || product.price || 0;
     
     if (existingItem) {
       // Update quantity if product already exists
       const updatedItems = orderData.items.map(item =>
         item.id === product.id
-          ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.price }
+          ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * productPrice }
           : item
       );
       setOrderData(prev => ({ ...prev, items: updatedItems }));
@@ -173,9 +227,9 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
       const newItem: OrderItem = {
         id: product.id,
         name: product.name,
-        price: product.price,
+        price: productPrice,
         quantity: 1,
-        total: product.price
+        total: productPrice
       };
       setOrderData(prev => ({ ...prev, items: [...prev.items, newItem] }));
     }
@@ -321,7 +375,15 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                   {/* Customer Dropdown */}
                   {showCustomerList && (
                     <div className="customer-dropdown absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {filteredCustomers.length > 0 ? (
+                      {customersLoading ? (
+                        <div className="p-3 text-sm text-gray-500 text-center">
+                          Loading customers...
+                        </div>
+                      ) : customersError ? (
+                        <div className="p-3 text-sm text-red-500 text-center">
+                          {customersError}
+                        </div>
+                      ) : filteredCustomers.length > 0 ? (
                         filteredCustomers.map((customer) => (
                           <div
                             key={customer.id}
@@ -332,18 +394,17 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                               <div className="flex-1">
                                 <div className="flex items-center gap-2">
                                   <p className="text-sm font-medium text-gray-900">{customer.name}</p>
-                                  {customer.isFavorite && (
-                                    <svg className="w-4 h-4 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                    </svg>
-                                  )}
                                 </div>
-                                <p className="text-xs text-gray-500">{customer.email}</p>
-                                <p className="text-xs text-gray-500">{customer.phone}</p>
-                                <div className="flex items-center gap-4 mt-1">
-                                  <span className="text-xs text-gray-400">{customer.totalOrders} orders</span>
-                                  <span className="text-xs text-gray-400">Last: {customer.lastOrderDate}</span>
-                                </div>
+                                {customer.email && <p className="text-xs text-gray-500">{customer.email}</p>}
+                                {customer.phone && <p className="text-xs text-gray-500">{customer.phone}</p>}
+                                {customer.totalOrders && (
+                                  <div className="flex items-center gap-4 mt-1">
+                                    <span className="text-xs text-gray-400">{customer.totalOrders} orders</span>
+                                    {customer.lastOrderDate && (
+                                      <span className="text-xs text-gray-400">Last: {customer.lastOrderDate}</span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -559,33 +620,54 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
               </svg>
               
               {/* Product Search Results */}
-              {showProductList && filteredProducts.length > 0 && (
+              {showProductList && (
                 <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
-                  {filteredProducts.map((product) => (
-                    <div
-                      key={product.id}
-                      onClick={() => addProductToOrder(product)}
-                      className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                    >
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h4 className="text-[14px] font-medium text-[#45464e]">{product.name}</h4>
-                          <p className="text-[12px] text-[#8b8d97]">{product.category}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-[14px] font-medium text-[#45464e]">₦{product.price.toLocaleString()}</p>
-                          <p className="text-[12px] text-[#8b8d97]">Stock: {product.stock}</p>
-                        </div>
-                      </div>
+                  {productsLoading ? (
+                    <div className="p-3 text-sm text-gray-500 text-center">
+                      Loading products...
                     </div>
-                  ))}
-                </div>
-              )}
-              
-              {/* No Results */}
-              {showProductList && filteredProducts.length === 0 && searchQuery.trim() && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 p-4">
-                  <p className="text-[14px] text-[#8b8d97] text-center">No products found</p>
+                  ) : productsError ? (
+                    <div className="p-3 text-sm text-red-500 text-center">
+                      {productsError}
+                    </div>
+                  ) : filteredProducts.length > 0 ? (
+                    filteredProducts.map((product) => {
+                      // Safety checks to ensure we have valid data
+                      if (!product || typeof product !== 'object') return null;
+                      
+                      const productPrice = Number(product.sellingPrice || product.price || 0);
+                      const productStock = Number(product.stock || product.quantity || 0);
+                      const productName = String(product.name || 'Unknown Product');
+                      const productCategory = String(product.category || '');
+                      
+                      return (
+                        <div
+                          key={String(product.id || '')}
+                          onClick={() => addProductToOrder(product)}
+                          className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                        >
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <h4 className="text-[14px] font-medium text-[#45464e]">{productName}</h4>
+                              {productCategory && <p className="text-[12px] text-[#8b8d97]">{productCategory}</p>}
+                            </div>
+                            <div className="text-right">
+                              <p className="text-[14px] font-medium text-[#45464e]">₦{productPrice.toLocaleString()}</p>
+                              <p className="text-[12px] text-[#8b8d97]">Stock: {productStock}</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }).filter(Boolean)
+                  ) : searchQuery.trim() ? (
+                    <div className="p-3 text-sm text-gray-500 text-center">
+                      No products found
+                    </div>
+                  ) : (
+                    <div className="p-3 text-sm text-gray-500 text-center">
+                      Start typing to search products
+                    </div>
+                  )}
                 </div>
               )}
             </div>
