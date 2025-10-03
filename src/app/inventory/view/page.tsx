@@ -67,7 +67,11 @@ function ViewInventoryContent() {
     
     async function fetchProductDetails() {
       try {
-        const p = await getProduct(itemId as string);
+        if (!itemId) {
+          showError('Error', 'No product ID provided');
+          return;
+        }
+        const p = await getProduct(itemId);
         
         // Don't update state if component unmounted
         if (!mounted) return;
