@@ -10,6 +10,7 @@ interface FormData {
   costPrice: string;
   quantityInStock: string;
   productBrand: string;
+  warehouseNumber: string;
   addDiscount: boolean;
   discountType: string;
   discountValue: string;
@@ -37,6 +38,7 @@ export default function EditProductModal({ isOpen, onClose, onSave, inventoryIte
     costPrice: '',
     quantityInStock: '1',
     productBrand: '',
+    warehouseNumber: '',
     addDiscount: false,
     discountType: 'percentage',
     discountValue: '',
@@ -87,6 +89,7 @@ export default function EditProductModal({ isOpen, onClose, onSave, inventoryIte
         costPrice: inventoryItem.costPrice?.toString() || '',
         quantityInStock: inventoryItem.inStock?.toString() || '1',
         productBrand: inventoryItem.brand || '',
+        warehouseNumber: inventoryItem.warehouseNumber || '',
         addDiscount: false,
         discountType: 'percentage',
         discountValue: '',
@@ -200,27 +203,30 @@ export default function EditProductModal({ isOpen, onClose, onSave, inventoryIte
               {/* Product Category */}
               <div className="bg-gray-50 p-4 rounded-lg">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Select Product Category
+                  Tyre Category
                 </label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => handleInputChange('category', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Select Tyre Category</option>
-                  <option value="Passenger Car Tyres">Passenger Car Tyres</option>
-                  <option value="SUV Tyres">SUV Tyres</option>
-                  <option value="Truck Tyres">Truck Tyres</option>
-                  <option value="Commercial Vehicle Tyres">Commercial Vehicle Tyres</option>
-                  <option value="Motorcycle Tyres">Motorcycle Tyres</option>
-                  <option value="All-Season Tyres">All-Season Tyres</option>
-                  <option value="Summer Tyres">Summer Tyres</option>
-                  <option value="Winter Tyres">Winter Tyres</option>
-                  <option value="Performance Tyres">Performance Tyres</option>
-                  <option value="Off-Road Tyres">Off-Road Tyres</option>
-                  <option value="Run-Flat Tyres">Run-Flat Tyres</option>
-                  <option value="Low Profile Tyres">Low Profile Tyres</option>
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={formData.category}
+                    onChange={(e) => handleInputChange('category', e.target.value)}
+                    placeholder="Enter or select tyre category"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    list="tyre-categories-edit"
+                  />
+                  <datalist id="tyre-categories-edit">
+                    <option value="GL601" />
+                    <option value="GL602" />
+                    <option value="GL908" />
+                    <option value="DW703tx" />
+                  </datalist>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Type to search or select from popular tyre categories</p>
               </div>
 
               {/* Pricing */}
@@ -311,6 +317,21 @@ export default function EditProductModal({ isOpen, onClose, onSave, inventoryIte
                   </div>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">Type to search or select from popular tyre brands</p>
+              </div>
+
+              {/* Warehouse Number */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Warehouse Number
+                </label>
+                <input
+                  type="text"
+                  value={formData.warehouseNumber}
+                  onChange={(e) => handleInputChange('warehouseNumber', e.target.value)}
+                  placeholder="Enter warehouse number (e.g., WH-001, WH-002)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">This will be displayed in product details and invoices</p>
               </div>
 
               {/* Discount */}

@@ -1,17 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import Breadcrumb from "@/components/Breadcrumb";
-import { useSearchParams } from "next/navigation";
-import { getCustomer } from "@/services/customers";
-import type { CustomerRecord } from "@/types/customers";
 
 interface Order {
   id: string;
   orderDate: string;
-  orderType: string;
+  category: string;
   trackingId: string;
   orderTotal: number;
   status: 'Completed' | 'In-Progress' | 'Pending';
@@ -21,57 +18,35 @@ export default function CustomerDetailsPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [customer, setCustomer] = useState<any | null>(null);
-  const params = useSearchParams();
-  const id = params.get("id");
 
-  useEffect(() => {
-    let aborted = false;
-    async function run() {
-      if (!id) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await getCustomer(id);
-        if (aborted) return;
-        setCustomer({
-          id: data.id,
-          name: data.name,
-          email: data.email,
-          phone: data.phone,
-          customerSince: data.customerSince || "",
-          trackingId: (data as any).trackingId || "",
-          status: (data as any).status || "Active",
-          lastOrder: (data as any).lastOrder || "",
-          homeAddress: data.address || "",
-          billingAddress: data.address || "",
-          totalOrdersValue: (data as any).totalOrdersValue || 0,
-          totalOrders: (data as any).totalOrders || 0,
-          pendingOrders: (data as any).pendingOrders || 0,
-          completedOrders: (data as any).completedOrders || 0,
-          canceledOrders: (data as any).canceledOrders || 0,
-          returnedOrders: (data as any).returnedOrders || 0,
-          damagedOrders: (data as any).damagedOrders || 0,
-          abandonedCarts: (data as any).abandonedCarts || 0,
-        });
-      } catch (e: any) {
-        setError(e?.message || "Failed to load customer");
-      } finally {
-        if (!aborted) setLoading(false);
-      }
-    }
-    run();
-    return () => { aborted = true; };
-  }, [id]);
+  // Sample customer data
+  const customer = {
+    id: "743648",
+    name: "Janet Adebayo",
+    email: "janet.adebayo@gmail.com",
+    phone: "+2348065650633",
+    customerSince: "12 Sept 2022 - 12:55 pm",
+    trackingId: "9348fjr73",
+    status: "Active",
+    lastOrder: "12 Sept 2022",
+    homeAddress: "No. 15 Adekunle Street, Yaba, Lagos State",
+    billingAddress: "No. 15 Adekunle Street, Yaba, Lagos State",
+    totalOrdersValue: 250000,
+    totalOrders: 10,
+    pendingOrders: 2,
+    completedOrders: 8,
+    canceledOrders: 0,
+    returnedOrders: 0,
+    damagedOrders: 0,
+    abandonedCarts: 2
+  };
 
   // Sample orders data
   const orders: Order[] = [
     {
       id: "1",
       orderDate: "12 Aug 2022 - 12:25 am",
-      orderType: "Home Delivery",
+      category: "GL601",
       trackingId: "9348fjr73",
       orderTotal: 25000,
       status: "Completed"
@@ -79,7 +54,7 @@ export default function CustomerDetailsPage() {
     {
       id: "2",
       orderDate: "12 Aug 2022 - 12:25 am",
-      orderType: "Home Delivery",
+      category: "GL602",
       trackingId: "9348fjr73",
       orderTotal: 25000,
       status: "In-Progress"
@@ -87,7 +62,7 @@ export default function CustomerDetailsPage() {
     {
       id: "3",
       orderDate: "12 Aug 2022 - 12:25 am",
-      orderType: "Pick Up",
+      category: "GL908",
       trackingId: "9348fjr73",
       orderTotal: 25000,
       status: "Pending"
@@ -433,7 +408,7 @@ export default function CustomerDetailsPage() {
                       Order Date
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Order Type
+                      Category
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Tracking ID
@@ -464,7 +439,7 @@ export default function CustomerDetailsPage() {
                         {order.orderDate}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {order.orderType}
+                        {order.category}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">

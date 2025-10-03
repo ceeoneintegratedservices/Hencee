@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { InventoryDataService, InventoryItem, InventorySummary } from '@/services/InventoryDataService';
-import { listProducts } from '@/services/products';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import FilterByDateModal from '@/components/FilterByDateModal';
 import TimePeriodSelector from '@/components/TimePeriodSelector';
@@ -60,83 +59,20 @@ export default function InventoryPage() {
     setLoading(false);
   }, [router]);
 
-  // Load inventory data from backend only once when the component mounts
+  // Load inventory data
   useEffect(() => {
-    // Track if the component is mounted
-    let mounted = true;
-    
-    async function fetchInventoryData() {
-      try {
-        // Fetch products from API
-        const res = await listProducts({ page: 1, limit: 100 });
-        
-        // Don't update state if component unmounted
-        if (!mounted) return;
-        
-        // Check if we have a valid response
-        if (!res || (!Array.isArray(res) && !Array.isArray(res.data))) {
-          setInventoryItems([]);
-          setFilteredItems([]);
-          showError('Error', 'Invalid response format from API');
-          return;
-        }
-        
-        // Handle both array response and { data: [] } response formats
-        const productsArray = Array.isArray(res) ? res : (res.data || []);
-        
-        if (productsArray.length === 0) {
-          setInventoryItems([]);
-          setFilteredItems([]);
-          setSummaryData({
-            allProducts: 0,
-            activeProducts: 0,
-            lowStockAlert: 0,
-            expired: 0,
-            oneStarRating: 0
-          });
-          return;
-        }
-        
-        // Map API response to UI model
-        const mapped: InventoryItem[] = productsArray.map((p: any, idx: number) => ({
-          id: p.id || String(idx + 1),
-          productName: p.name || 'Product',
-          category: p.category?.name || p.category || 'General',
-          unitPrice: p.sellingPrice ?? p.price ?? 0,
-          inStock: p.quantity ?? p.stock ?? 0,
-          discount: 0,
-          totalValue: (p.quantity ?? 0) * (p.sellingPrice ?? p.price ?? 0),
-          status: 'Published',
-          description: p.description || '',
-          // Add required fields for InventoryItem interface
-          costPrice: p.purchasePrice ?? p.costPrice ?? 0,
-          image: '',
-          dateAdded: p.createdAt || new Date().toISOString(),
-          views: 0,
-          favorites: 0
-        }));
-        
-        setInventoryItems(mapped);
-        setFilteredItems(mapped);
-        
-        // Generate summary statistics
-        const summary = InventoryDataService.generateInventorySummary(mapped);
-        setSummaryData(summary);
-      } catch (error) {
-        if (mounted) {
-          setInventoryItems([]);
-          setFilteredItems([]);
-          setSummaryData(null);
-          showError('Error', 'Failed to load products');
-        }
-      }
+    if (isAuthenticated) {
+      const items = InventoryDataService.generateInventoryItems(200);
+      setInventoryItems(items);
+      setFilteredItems(items);
+      
+      // Store items in localStorage so view page can access the same data
+      localStorage.setItem('inventoryItems', JSON.stringify(items));
+      
+      const summary = InventoryDataService.generateInventorySummary(items);
+      setSummaryData(summary);
     }
-    
-    fetchInventoryData();
-    
-    // Cleanup function to prevent state updates after unmount
-    return () => { mounted = false; };
-  }, []); // Empty dependency array ensures this runs only once
+  }, [isAuthenticated]);
 
   // Filter and search items
   useEffect(() => {
@@ -297,7 +233,7 @@ export default function InventoryPage() {
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
-                  Add New Tyre
+                    Add new inventory
                 </button>
                 <TimePeriodSelector
                   selectedTimePeriod={selectedTimePeriod}
@@ -461,87 +397,18 @@ export default function InventoryPage() {
                               >
                                 All Categories
                               </button>
-                              <button
-                                onClick={() => {
-                                  setCategoryFilter('Passenger Car');
-                                  setShowFilterDropdown(false);
-                                }}
-                                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${categoryFilter === 'Passenger Car' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-[#45464e]'}`}
-                              >
-                                Passenger Car
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setCategoryFilter('SUV/Truck');
-                                  setShowFilterDropdown(false);
-                                }}
-                                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${categoryFilter === 'SUV/Truck' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-[#45464e]'}`}
-                              >
-                                SUV/Truck
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setCategoryFilter('Performance');
-                                  setShowFilterDropdown(false);
-                                }}
-                                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${categoryFilter === 'Performance' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-[#45464e]'}`}
-                              >
-                                Performance
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setCategoryFilter('Winter');
-                                  setShowFilterDropdown(false);
-                                }}
-                                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${categoryFilter === 'Winter' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-[#45464e]'}`}
-                              >
-                                Winter
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setCategoryFilter('All-Season');
-                                  setShowFilterDropdown(false);
-                                }}
-                                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${categoryFilter === 'All-Season' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-[#45464e]'}`}
-                              >
-                                All-Season
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setCategoryFilter('Summer');
-                                  setShowFilterDropdown(false);
-                                }}
-                                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${categoryFilter === 'Summer' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-[#45464e]'}`}
-                              >
-                                Summer
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setCategoryFilter('Commercial');
-                                  setShowFilterDropdown(false);
-                                }}
-                                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${categoryFilter === 'Commercial' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-[#45464e]'}`}
-                              >
-                                Commercial
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setCategoryFilter('Motorcycle');
-                                  setShowFilterDropdown(false);
-                                }}
-                                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${categoryFilter === 'Motorcycle' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-[#45464e]'}`}
-                              >
-                                Motorcycle
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setCategoryFilter('Smart Homes');
-                                  setShowFilterDropdown(false);
-                                }}
-                                className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${categoryFilter === 'Smart Homes' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-[#45464e]'}`}
-                              >
-                                Smart Homes
-                              </button>
+                              {Array.from(new Set(inventoryItems.map(item => item.category))).sort().map(category => (
+                                <button
+                                  key={category}
+                                  onClick={() => {
+                                    setCategoryFilter(category);
+                                    setShowFilterDropdown(false);
+                                  }}
+                                  className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${categoryFilter === category ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-[#45464e]'}`}
+                                >
+                                  {category}
+                                </button>
+                              ))}
 
                               {/* Alphabetical Filters */}
                               <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100 mt-2">
@@ -731,6 +598,9 @@ export default function InventoryPage() {
                         </svg>
                       </div>
                     </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Warehouse
+                    </th>
                     <th 
                       className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                       onClick={() => handleSort('unitPrice')}
@@ -810,6 +680,11 @@ export default function InventoryPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {item.category}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {item.warehouseNumber || 'N/A'}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {InventoryDataService.formatCurrency(item.unitPrice)}
@@ -921,6 +796,11 @@ export default function InventoryPage() {
                         <div className="flex-1 min-w-0">
                           <h3 className="text-sm font-medium text-gray-900 truncate">{item.productName}</h3>
                           <p className="text-xs text-gray-500 mt-1">{item.category}</p>
+                          <div className="mt-1">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {item.warehouseNumber || 'N/A'}
+                            </span>
+                          </div>
                           <div className="mt-2 space-y-1">
                             <div className="flex justify-between text-xs">
                               <span className="text-gray-500">Price:</span>
