@@ -159,9 +159,9 @@ export default function OrdersPage() {
         }
         
         const orderData = {
-          id: String(o.id || o.id || ''),
-          name: String(o.customerName || o.name || 'Unknown Customer'),
-          date: String(o.orderDate || o.createdAt || new Date().toISOString()),
+          id: String(o.id || ''),
+          name: String(o.customerName || 'Unknown Customer'),
+          date: String(o.orderDate || new Date().toISOString()),
           type: String(o.orderType || 'Pick Up'),
           tracking: String(o.trackingId || o.id || 'N/A'),
           total: String(o.orderTotal || '₦0'),

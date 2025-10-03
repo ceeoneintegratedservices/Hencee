@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { InventoryDataService, InventoryItem, Purchase } from '@/services/InventoryDataService';
-import { getProduct } from '@/services/products';
+import { getProduct, updateProduct } from '@/services/products';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import FilterByDateModal from '@/components/FilterByDateModal';
 import EditProductModal from '@/components/EditProductModal';
@@ -67,6 +67,10 @@ function ViewInventoryContent() {
     
     async function fetchProductDetails() {
       try {
+        if (!itemId) {
+          showError('Error', 'No product ID provided');
+          return;
+        }
         const p = await getProduct(itemId);
         
         // Don't update state if component unmounted
@@ -359,7 +363,7 @@ function ViewInventoryContent() {
                       }
                     }}
                   />
-                  <div className="w-full h-full bg-gray-200 flex items-center justify-center hidden">
+                  <div className="w-full h-full bg-gray-200 items-center justify-center hidden">
                     <span className="text-4xl font-bold text-gray-600">
                       {InventoryDataService.getTireBrandInitials(inventoryItem.productName)}
                     </span>
