@@ -1,6 +1,6 @@
 # API Configuration
 
-This project uses environment variables to configure the API base URL for the CeeOne ERP system.
+This project uses environment variables to configure the API base URL for the CeeOne ERP system..
 
 ## Setup
 
@@ -76,4 +76,5 @@ The CeeOne ERP API is currently:
 - The `NEXT_PUBLIC_` prefix is required for client-side access in Next.js
 - The default API URL is now set to the production CeeOne ERP API
 - Restart your development server after changing environment variables
+
 - Visit [https://ceeone-api.onrender.com/api](https://ceeone-api.onrender.com/api) for detailed API documentation 
