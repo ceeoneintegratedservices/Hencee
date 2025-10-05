@@ -7,19 +7,27 @@ import FilterByDateModal from '@/components/FilterByDateModal';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import Breadcrumb from '@/components/Breadcrumb';
+import { getApprovals, getPendingApprovals, approveRequest, rejectRequest, markRequestAsPaid } from '@/services/approvals';
 
 interface ApprovalItem {
   id: string;
-  type: 'Order' | 'Product' | 'Customer' | 'Inventory' | 'Payment';
+  type: string;
   title: string;
   description: string;
-  requestedBy: string;
-  requestedAt: string;
-  priority: 'Low' | 'Medium' | 'High' | 'Urgent';
-  status: 'Pending' | 'Approved' | 'Rejected' | 'Under Review';
-  amount?: number;
-  quantity?: number;
-  dueDate?: string;
+  amount: number;
+  currency: string;
+  status: string;
+  requesterId: string;
+  requesterName: string;
+  approverId?: string;
+  approverName?: string;
+  createdAt: string;
+  updatedAt: string;
+  approvedAt?: string;
+  rejectedAt?: string;
+  paidAt?: string;
+  rejectionReason?: string;
+  attachments?: string[];
 }
 
 export default function ApprovalsPage() {
@@ -35,11 +43,14 @@ export default function ApprovalsPage() {
   const [approvalItems, setApprovalItems] = useState<ApprovalItem[]>([]);
   const [filteredItems, setFilteredItems] = useState<ApprovalItem[]>([]);
   
+  // API state management
+  const [apiLoading, setApiLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  
   // UI states
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [typeFilter, setTypeFilter] = useState('All');
-  const [priorityFilter, setPriorityFilter] = useState('All');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showBulkActionDropdown, setShowBulkActionDropdown] = useState(false);
   const [showDateFilterModal, setShowDateFilterModal] = useState(false);
@@ -59,107 +70,111 @@ export default function ApprovalsPage() {
     setLoading(false);
   }, [router]);
 
-  // Generate sample approval items
+  // Fetch approvals from API
+  const fetchApprovalsData = async () => {
+    setApiLoading(true);
+    setApiError(null);
+    try {
+      const data = await getApprovals({ limit: 100 });
+      // Handle both array response and { data: [] } response formats
+      const approvalsArray = Array.isArray(data) ? data : ((data as any).data || []);
+      
+      // Debug: Log the actual structure of the API response
+      if (process.env.NODE_ENV === 'development') {
+        console.log('API Approvals Response:', data);
+        console.log('Approvals Array:', approvalsArray);
+      }
+      
+      // Map API response to ApprovalItem format
+      const mappedItems = approvalsArray.map((item: any) => ({
+        id: String(item.id || ''),
+        type: String(item.category || item.type || 'expense'),
+        title: String(item.description || item.title || 'Unknown Request'),
+        description: String(item.description || ''),
+        amount: Number(item.amount || 0),
+        currency: String(item.currency || 'NGN'),
+        status: String(item.status || 'pending'),
+        requesterId: String(item.userId || item.requesterId || ''),
+        requesterName: String(item.userName || item.requesterName || 'Unknown Requester'),
+        approverId: item.approvedById ? String(item.approvedById) : undefined,
+        approverName: item.approverName ? String(item.approverName) : undefined,
+        createdAt: String(item.createdAt || new Date().toISOString()),
+        updatedAt: String(item.updatedAt || new Date().toISOString()),
+        approvedAt: item.approvedAt ? String(item.approvedAt) : undefined,
+        rejectedAt: item.rejectedAt ? String(item.rejectedAt) : undefined,
+        paidAt: item.paidAt ? String(item.paidAt) : undefined,
+        rejectionReason: item.rejectionReason ? String(item.rejectionReason) : undefined,
+        attachments: item.receiptUrl ? [item.receiptUrl] : (Array.isArray(item.attachments) ? item.attachments : []),
+      }));
+      
+      setApprovalItems(mappedItems);
+      setFilteredItems(mappedItems);
+    } catch (err: any) {
+      console.error('Error fetching approvals:', err);
+      setApiError(err.message || 'Failed to load approvals');
+      showError('Error', err.message || 'Failed to load approvals');
+      
+      // Keep existing data if API fails, don't clear it
+      // setApprovalItems([]);
+      // setFilteredItems([]);
+    } finally {
+      setApiLoading(false);
+    }
+  };
+
+  // Load approvals data
   useEffect(() => {
     if (isAuthenticated) {
-      const sampleItems: ApprovalItem[] = [
-        {
-          id: 'approval-1',
-          type: 'Order',
-          title: 'Large Order Approval',
-          description: 'Customer requesting bulk order of 50 Michelin tyres with special discount',
-          requestedBy: 'sales@ceeonewheels.com',
-          requestedAt: '2024-01-15 09:30:00',
-          priority: 'High',
-          status: 'Pending',
-          amount: 2500000,
-          quantity: 50,
-          dueDate: '2024-01-20'
-        },
-        {
-          id: 'approval-2',
-          type: 'Product',
-          title: 'New Product Addition',
-          description: 'Request to add new tyre brand: Continental PremiumContact 6',
-          requestedBy: 'manager@ceeonewheels.com',
-          requestedAt: '2024-01-15 08:45:00',
-          priority: 'Medium',
-          status: 'Under Review',
-          amount: 150000,
-          quantity: 20
-        },
-        {
-          id: 'approval-3',
-          type: 'Customer',
-          title: 'Customer Credit Limit',
-          description: 'Increase credit limit for corporate customer: ABC Logistics',
-          requestedBy: 'admin@ceeonewheels.com',
-          requestedAt: '2024-01-15 07:20:00',
-          priority: 'Urgent',
-          status: 'Pending',
-          amount: 5000000
-        },
-        {
-          id: 'approval-4',
-          type: 'Inventory',
-          title: 'Stock Adjustment',
-          description: 'Correct inventory count for Bridgestone Potenza - discrepancy found',
-          requestedBy: 'warehouse@ceeonewheels.com',
-          requestedAt: '2024-01-14 16:30:00',
-          priority: 'Medium',
-          status: 'Approved',
-          quantity: 15
-        },
-        {
-          id: 'approval-5',
-          type: 'Payment',
-          title: 'Payment Method Change',
-          description: 'Customer requesting to change payment method from cash to credit',
-          requestedBy: 'finance@ceeonewheels.com',
-          requestedAt: '2024-01-14 14:15:00',
-          priority: 'Low',
-          status: 'Rejected',
-          amount: 75000
-        },
-        {
-          id: 'approval-6',
-          type: 'Order',
-          title: 'Rush Order Request',
-          description: 'Emergency order for customer requiring immediate delivery',
-          requestedBy: 'sales@ceeonewheels.com',
-          requestedAt: '2024-01-14 11:00:00',
-          priority: 'Urgent',
-          status: 'Approved',
-          amount: 180000,
-          quantity: 4
-        },
-        {
-          id: 'approval-7',
-          type: 'Product',
-          title: 'Product Discontinuation',
-          description: 'Request to discontinue old tyre model: Goodyear Eagle F1',
-          requestedBy: 'manager@ceeonewheels.com',
-          requestedAt: '2024-01-14 10:30:00',
-          priority: 'Medium',
-          status: 'Under Review',
-          quantity: 25
-        },
-        {
-          id: 'approval-8',
-          type: 'Customer',
-          title: 'New Customer Registration',
-          description: 'Corporate customer registration: XYZ Transport Company',
-          requestedBy: 'sales@ceeonewheels.com',
-          requestedAt: '2024-01-14 09:45:00',
-          priority: 'Low',
-          status: 'Pending'
-        }
-      ];
-      
-      setApprovalItems(sampleItems);
-      setFilteredItems(sampleItems);
+      fetchApprovalsData();
     }
   }, [isAuthenticated]);
+
+
+  // Handle approval actions
+  const handleApproveRequest = async (id: string, notes?: string) => {
+    try {
+      await approveRequest(id, { action: 'approve', notes });
+      showSuccess('Success', 'Request approved successfully');
+      await fetchApprovalsData();
+    } catch (err: any) {
+      console.error('Error approving request:', err);
+      showError('Error', err.message || 'Failed to approve request');
+    }
+  };
+
+  const handleRejectRequest = async (id: string, reason: string, notes?: string) => {
+    try {
+      await rejectRequest(id, { action: 'reject', rejectionReason: reason, notes });
+      showSuccess('Success', 'Request rejected successfully');
+      await fetchApprovalsData();
+    } catch (err: any) {
+      console.error('Error rejecting request:', err);
+      showError('Error', err.message || 'Failed to reject request');
+    }
+  };
+
+  const handleMarkAsPaid = async (id: string, notes?: string) => {
+    try {
+      await markRequestAsPaid(id, { action: 'mark-paid', notes });
+      showSuccess('Success', 'Request marked as paid successfully');
+      await fetchApprovalsData();
+    } catch (err: any) {
+      console.error('Error marking request as paid:', err);
+      showError('Error', err.message || 'Failed to mark request as paid');
+    }
+  };
+
+  // Simple action handlers for the UI buttons
+  const handleApprove = (id: string) => {
+    handleApproveRequest(id);
+  };
+
+  const handleReject = (id: string) => {
+    const reason = prompt('Please provide a reason for rejection:');
+    if (reason) {
+      handleRejectRequest(id, reason);
+    }
+  };
 
   // Filter items
   useEffect(() => {
@@ -170,7 +185,7 @@ export default function ApprovalsPage() {
       filtered = filtered.filter(item => 
         item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.requestedBy.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.requesterName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.type.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
@@ -185,13 +200,10 @@ export default function ApprovalsPage() {
       filtered = filtered.filter(item => item.type === typeFilter);
     }
     
-    // Apply priority filter
-    if (priorityFilter !== 'All') {
-      filtered = filtered.filter(item => item.priority === priorityFilter);
-    }
+    // Priority filter removed - not available in API
     
     setFilteredItems(filtered);
-  }, [searchQuery, statusFilter, typeFilter, priorityFilter, approvalItems]);
+  }, [searchQuery, statusFilter, typeFilter, approvalItems]);
 
   // Click outside handlers
   useEffect(() => {
@@ -223,36 +235,7 @@ export default function ApprovalsPage() {
     }
   };
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'Urgent':
-        return 'bg-red-100 text-red-800';
-      case 'High':
-        return 'bg-orange-100 text-orange-800';
-      case 'Medium':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Low':
-        return 'bg-green-100 text-green-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
 
-  const handleApprove = (id: string) => {
-    const updatedItems = approvalItems.map(item => 
-      item.id === id ? { ...item, status: 'Approved' as const } : item
-    );
-    setApprovalItems(updatedItems);
-    showSuccess('Success', 'Item approved successfully');
-  };
-
-  const handleReject = (id: string) => {
-    const updatedItems = approvalItems.map(item => 
-      item.id === id ? { ...item, status: 'Rejected' as const } : item
-    );
-    setApprovalItems(updatedItems);
-    showSuccess('Success', 'Item rejected successfully');
-  };
 
   const handleDateFilter = (dateFilter: any) => {
     console.log('Date filter applied:', dateFilter);
@@ -523,7 +506,41 @@ export default function ApprovalsPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredItems.slice(0, 10).map((item) => (
+                  {apiLoading ? (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-8 text-center">
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#02016a]"></div>
+                          <span className="ml-2 text-gray-600">Loading approvals...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : apiError ? (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-8 text-center">
+                        <div className="text-red-600">
+                          <p className="font-medium">Error loading approvals</p>
+                          <p className="text-sm mt-1">{apiError}</p>
+                          <button 
+                            onClick={fetchApprovalsData}
+                            className="mt-2 px-4 py-2 bg-[#02016a] text-white rounded-lg hover:bg-[#03024a] transition-colors"
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-8 text-center">
+                        <div className="text-gray-500">
+                          <p className="font-medium">No approval requests found</p>
+                          <p className="text-sm mt-1">Create your first approval request to get started</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredItems.slice(0, 10).map((item) => (
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <input type="checkbox" className="rounded border-gray-300" />
@@ -538,16 +555,15 @@ export default function ApprovalsPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.requestedBy}
+                        {item.requesterName}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs rounded-full font-medium ${getPriorityColor(item.priority)}`}>
-                          {item.priority}
+                        <span className={`px-2 py-1 text-xs rounded-full font-medium ${getPriorityColor('Medium')}`}>
+                          Medium
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {item.amount && `₦${item.amount.toLocaleString()}`}
-                        {item.quantity && ` ${item.quantity} units`}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs rounded-full font-medium ${getStatusColor(item.status)}`}>
@@ -576,14 +592,43 @@ export default function ApprovalsPage() {
                         )}
                       </td>
                     </tr>
-                  ))}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
 
             {/* Mobile Cards */}
             <div className="lg:hidden">
-              {filteredItems.slice(0, 10).map((item) => (
+              {apiLoading ? (
+                <div className="p-8 text-center">
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#02016a]"></div>
+                    <span className="ml-2 text-gray-600">Loading approvals...</span>
+                  </div>
+                </div>
+              ) : apiError ? (
+                <div className="p-8 text-center">
+                  <div className="text-red-600">
+                    <p className="font-medium">Error loading approvals</p>
+                    <p className="text-sm mt-1">{apiError}</p>
+                    <button 
+                      onClick={fetchApprovalsData}
+                      className="mt-2 px-4 py-2 bg-[#02016a] text-white rounded-lg hover:bg-[#03024a] transition-colors"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                </div>
+              ) : filteredItems.length === 0 ? (
+                <div className="p-8 text-center">
+                  <div className="text-gray-500">
+                    <p className="font-medium">No approval requests found</p>
+                    <p className="text-sm mt-1">Create your first approval request to get started</p>
+                  </div>
+                </div>
+              ) : (
+                filteredItems.slice(0, 10).map((item) => (
                 <div key={item.id} className="p-4 border-b border-gray-200">
                   <div className="flex items-start gap-3">
                     <input type="checkbox" className="mt-1 rounded border-gray-300" />
@@ -591,14 +636,8 @@ export default function ApprovalsPage() {
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900">{item.title}</p>
-                          <p className="text-xs text-gray-500 mt-1">{item.type} • {item.requestedBy}</p>
+                          <p className="text-xs text-gray-500 mt-1">{item.type} • {item.requesterName}</p>
                           <div className="mt-2 space-y-1">
-                            <div className="flex justify-between text-xs">
-                              <span className="text-gray-500">Priority:</span>
-                              <span className={`px-2 py-1 text-xs rounded-full font-medium ${getPriorityColor(item.priority)}`}>
-                                {item.priority}
-                              </span>
-                            </div>
                             <div className="flex justify-between text-xs">
                               <span className="text-gray-500">Amount:</span>
                               <span className="text-gray-900">
@@ -633,7 +672,8 @@ export default function ApprovalsPage() {
                     </div>
                   </div>
                 </div>
-              ))}
+                ))
+              )}
             </div>
 
             {/* Pagination */}

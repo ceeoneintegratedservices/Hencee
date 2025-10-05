@@ -1,86 +1,226 @@
 import { API_ENDPOINTS } from "../config/api";
-import type { SalesDashboardQuery, SalesDashboardResponse, SaleDetail } from "../types/sales";
 import { authFetch } from "./authFetch";
 
-const cache = new Map<string, { t: number; data: SalesDashboardResponse }>();
-const CACHE_TTL_MS = 15_000;
-
-function buildQuery(params: SalesDashboardQuery): string {
-  const qp = new URLSearchParams();
-  if (params.page != null) qp.set("page", String(params.page));
-  if (params.limit != null) qp.set("limit", String(params.limit));
-  if (params.search) qp.set("search", params.search);
-  if (params.status) qp.set("status", params.status);
-  if (params.dateFrom) qp.set("dateFrom", params.dateFrom);
-  if (params.dateTo) qp.set("dateTo", params.dateTo);
-  if (params.sortBy) qp.set("sortBy", params.sortBy);
-  if (params.sortDir) qp.set("sortDir", params.sortDir);
-  const qs = qp.toString();
-  return qs ? `?${qs}` : "";
-}
-
-export async function fetchSalesDashboard(params: SalesDashboardQuery = {}): Promise<SalesDashboardResponse> {
-  const url = `${API_ENDPOINTS.salesDashboard}${buildQuery(params)}`;
-  const now = Date.now();
-  const cached = cache.get(url);
-  if (cached && now - cached.t < CACHE_TTL_MS) {
-    return cached.data;
-  }
-  const res = await authFetch(url, { next: { revalidate: 30 } });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(text || `Failed to fetch sales dashboard (${res.status})`);
-  }
-  const data = (await res.json()) as SalesDashboardResponse;
-  cache.set(url, { t: now, data });
-  return data;
-}
-
-export async function fetchSaleById(id: string): Promise<SaleDetail> {
-  const url = `${API_ENDPOINTS.orders}/id/${encodeURIComponent(id)}`;
-  const res = await authFetch(url, { next: { revalidate: 15 } });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(text || `Failed to fetch order (${res.status})`);
-  }
-  const data = (await res.json()) as SaleDetail;
-  return data;
+// Types for Sales API
+export interface SalesDashboardResponse {
+  summary: {
+    allOrders: number;
+    pending: number;
+    completed: number;
+    canceled: number;
+    returned: number;
+    damaged: number;
+    abandonedCart: number;
+    customers: number;
+  };
+  orders: Array<{
+    id: string;
+    customerName: string;
+    orderDate: string;
+    orderType: string;
+    trackingId: string;
+    orderTotal: string;
+    status: string;
+    statusColor?: string;
+    action?: string;
+  }>;
+  total: number;
+  page: number;
+  limit: number;
 }
 
 export interface CreateSalePayload {
   customerId: string;
-  items: Array<{ productId: string; quantity: number }>;
-  paymentMethod?: "CASH" | "CARD" | "BANK_TRANSFER" | "MOBILE_MONEY";
-  orderType?: string;
-  status?: "PENDING" | "COMPLETED" | "CANCELLED";
+  items: Array<{
+    productId: string;
+    quantity: number;
+    price: number;
+  }>;
+  paymentMethod: string;
+  paymentStatus: string;
   notes?: string;
 }
 
-export async function createSale(payload: CreateSalePayload): Promise<{ id: string }> {
-  const res = await authFetch(API_ENDPOINTS.orders, {
-    method: "POST",
+export interface Sale {
+  id: string;
+  customerId: string;
+  customerName: string;
+  items: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    price: number;
+    total: number;
+  }>;
+  totalAmount: number;
+  paymentMethod: string;
+  paymentStatus: string;
+  status: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SalesListParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  sortBy?: string;
+  sortDir?: 'asc' | 'desc';
+}
+
+// Sales API Functions
+export async function fetchSalesDashboard(params: SalesListParams = {}): Promise<SalesDashboardResponse> {
+  const queryParams = new URLSearchParams();
+  
+  if (params.page) queryParams.set('page', params.page.toString());
+  if (params.limit) queryParams.set('limit', params.limit.toString());
+  if (params.search) queryParams.set('search', params.search);
+  if (params.status) queryParams.set('status', params.status);
+  if (params.dateFrom) queryParams.set('dateFrom', params.dateFrom);
+  if (params.dateTo) queryParams.set('dateTo', params.dateTo);
+  if (params.sortBy) queryParams.set('sortBy', params.sortBy);
+  if (params.sortDir) queryParams.set('sortDir', params.sortDir);
+
+  const url = `${API_ENDPOINTS.salesDashboard}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+  
+  try {
+    const response = await authFetch(url);
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching sales dashboard:', error);
+    throw error;
+  }
+}
+
+export async function createSale(payload: CreateSalePayload): Promise<Sale> {
+  try {
+    const response = await authFetch(API_ENDPOINTS.sales, {
+      method: 'POST',
     headers: {
-      "Content-Type": "application/json"
+        'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(text || `Failed to create order (${res.status})`);
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to create sale');
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error creating sale:', error);
+    throw error;
   }
-  return res.json();
 }
 
-export async function updateSaleStatus(id: string, status: "PENDING" | "COMPLETED" | "CANCELLED"): Promise<SaleDetail> {
-  const res = await authFetch(`${API_ENDPOINTS.orders}/id/${encodeURIComponent(id)}`, {
-    method: "PATCH",
+export async function getSaleById(id: string): Promise<Sale> {
+  try {
+    const response = await authFetch(API_ENDPOINTS.saleById(id));
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching sale:', error);
+    throw error;
+  }
+}
+
+export async function updateSaleStatus(id: string, status: string): Promise<void> {
+  try {
+    const response = await authFetch(API_ENDPOINTS.saleStatus(id), {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
     body: JSON.stringify({ status }),
   });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(text || `Failed to update order (${res.status})`);
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to update sale status');
+    }
+  } catch (error) {
+    console.error('Error updating sale status:', error);
+    throw error;
   }
-  return res.json();
 }
 
+export async function getSalesByCustomer(customerId: string): Promise<Sale[]> {
+  try {
+    const response = await authFetch(API_ENDPOINTS.salesByCustomer(customerId));
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching customer sales:', error);
+    throw error;
+  }
+}
 
+export async function getSalesByDateRange(dateFrom: string, dateTo: string): Promise<Sale[]> {
+  try {
+    const queryParams = new URLSearchParams({
+      dateFrom,
+      dateTo,
+    });
+    
+    const url = `${API_ENDPOINTS.salesDateRange}?${queryParams.toString()}`;
+    const response = await authFetch(url);
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching sales by date range:', error);
+    throw error;
+  }
+}
+
+export async function getPendingPayments(): Promise<Sale[]> {
+  try {
+    const response = await authFetch(API_ENDPOINTS.salesPendingPayments);
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching pending payments:', error);
+    throw error;
+  }
+}
+
+export async function searchSales(query: string): Promise<Sale[]> {
+  try {
+    const queryParams = new URLSearchParams({ search: query });
+    const url = `${API_ENDPOINTS.salesSearch}?${queryParams.toString()}`;
+    const response = await authFetch(url);
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error searching sales:', error);
+    throw error;
+  }
+}
+
+export async function getDailySales(date: string): Promise<Sale[]> {
+  try {
+    const response = await authFetch(API_ENDPOINTS.salesDaily(date));
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching daily sales:', error);
+    throw error;
+  }
+}
+
+export async function getMonthlySalesReport(): Promise<any> {
+  try {
+    const response = await authFetch(API_ENDPOINTS.salesMonthlyReport);
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching monthly sales report:', error);
+    throw error;
+  }
+}

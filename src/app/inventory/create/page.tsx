@@ -7,6 +7,8 @@ import { NotificationContainer, useNotifications } from '@/components/Notificati
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { createTire } from '@/services/tires';
+import { useCloudinaryUpload } from '@/hooks/useCloudinaryUpload';
+import { getCategories, getWarehouses, type Category, type Warehouse } from '@/services/categories';
 
 interface FormData {
   productName: string;
@@ -26,6 +28,7 @@ interface FormData {
   addReturnPolicy: boolean;
   returnPolicyDate: string;
   returnPolicyTime: string;
+  sku: string;
 }
 
 export default function CreateInventoryPage() {
@@ -56,12 +59,22 @@ export default function CreateInventoryPage() {
     longDescription: '',
     addReturnPolicy: false,
     returnPolicyDate: '',
-    returnPolicyTime: '12:00 PM'
+    returnPolicyTime: '12:00 PM',
+    sku: ''
   });
 
   // Image states
   const [mainImage, setMainImage] = useState<string | null>(null);
   const [additionalImages, setAdditionalImages] = useState<string[]>([]);
+  
+  // Cloudinary upload hook
+  const { uploadImage, uploadProgress, resetUpload } = useCloudinaryUpload();
+  
+  // Categories and warehouses state
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
 
   // Tyre brands list
   const tyreBrands = [
@@ -98,6 +111,43 @@ export default function CreateInventoryPage() {
     setLoading(false);
   }, [router]);
 
+  // Fetch categories and warehouses
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [categoriesData, warehousesData] = await Promise.all([
+          getCategories(),
+          getWarehouses()
+        ]);
+        setCategories(categoriesData);
+        setWarehouses(warehousesData);
+        
+        // Debug logging
+        console.log('Fetched Categories:', categoriesData);
+        console.log('Fetched Warehouses:', warehousesData);
+        
+        // Set default selections if available
+        if (categoriesData.length > 0) {
+          setSelectedCategoryId(categoriesData[0].id);
+          console.log('Auto-selected category:', categoriesData[0].name, 'ID:', categoriesData[0].id);
+        }
+        if (warehousesData.length > 0) {
+          setSelectedWarehouseId(warehousesData[0].id);
+          console.log('Auto-selected warehouse:', warehousesData[0].name, 'ID:', warehousesData[0].id);
+        }
+      } catch (error) {
+        console.error('Error fetching categories and warehouses:', error);
+        // Set fallback values
+        setSelectedCategoryId('default-category-id');
+        setSelectedWarehouseId('default-warehouse-id');
+      }
+    };
+    
+    if (isAuthenticated) {
+      fetchData();
+    }
+  }, [isAuthenticated]);
+
   const handleInputChange = (field: keyof FormData, value: string | boolean) => {
     setFormData(prev => ({
       ...prev,
@@ -114,17 +164,32 @@ export default function CreateInventoryPage() {
     }));
   };
 
-  const handleImageUpload = (file: File, isMain: boolean = false) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
+  const handleImageUpload = async (file: File, isMain: boolean = false) => {
+    try {
+      // Upload to Cloudinary
+      const result = await uploadImage(file, {
+        folder: 'inventory',
+        transformation: {
+          width: 800,
+          height: 600,
+          crop: 'fill',
+          gravity: 'auto',
+          quality: 'auto',
+          format: 'auto'
+        }
+      });
+
       if (isMain) {
-        setMainImage(result);
+        setMainImage(result.secure_url);
+        showSuccess('Success', 'Main image uploaded successfully');
       } else {
-        setAdditionalImages(prev => [...prev, result]);
+        setAdditionalImages(prev => [...prev, result.secure_url]);
+        showSuccess('Success', 'Additional image uploaded successfully');
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (error: any) {
+      console.error('Image upload error:', error);
+      showError('Upload Error', error.message || 'Failed to upload image');
+    }
   };
 
   const removeImage = (index: number, isMain: boolean = false) => {
@@ -143,19 +208,26 @@ export default function CreateInventoryPage() {
     }
     
     try {
-      // Create tire object from form data
+      // Create tire object from form data - matching backend expectations
       const tireData = {
-        brand: formData.productBrand,
-        model: formData.productName,
-        size: formData.category.includes("Tyres") ? formData.category : "Standard",
-        category: formData.category,
-        price: parseFloat(formData.sellingPrice) || 0,
-        costPrice: parseFloat(formData.costPrice) || 0,
-        quantity: parseInt(formData.quantityInStock) || 0,
+        name: formData.productName, // Required field
         description: formData.shortDescription,
-        images: mainImage ? [mainImage, ...additionalImages] : additionalImages,
-        status: 'Draft' as const
+        sku: formData.sku || `TIRE-${Date.now()}`, // Generate unique SKU if not provided
+        categoryId: selectedCategoryId || "default-category-id",
+        warehouseId: selectedWarehouseId || "default-warehouse-id",
+        purchasePrice: parseFloat(formData.costPrice) || 0, // Backend expects purchasePrice
+        sellingPrice: parseFloat(formData.sellingPrice) || 0, // Backend expects sellingPrice
+        quantity: parseInt(formData.quantityInStock) || 0,
+        brand: formData.productBrand,
+        coverImage: mainImage || "", // Backend expects coverImage (single URL)
+        additionalImages: additionalImages.map(url => ({ url })), // Backend expects array of objects with url property
+        status: 'DRAFT' as const // Backend expects uppercase
       };
+      
+      // Debug logging
+      console.log('Selected Category ID:', selectedCategoryId);
+      console.log('Selected Warehouse ID:', selectedWarehouseId);
+      console.log('Tire Data being sent:', tireData);
       
       // Send data to API
       await createTire(tireData);
@@ -174,7 +246,7 @@ export default function CreateInventoryPage() {
       showError('Validation Error', 'Product name is required');
       return;
     }
-    if (!formData.category) {
+    if (!selectedCategoryId) {
       showError('Validation Error', 'Product category is required');
       return;
     }
@@ -188,19 +260,26 @@ export default function CreateInventoryPage() {
     }
     
     try {
-      // Create tire object from form data
+      // Create tire object from form data - matching backend expectations
       const tireData = {
-        brand: formData.productBrand,
-        model: formData.productName,
-        size: formData.category.includes("Tyres") ? formData.category : "Standard",
-        category: formData.category,
-        price: parseFloat(formData.sellingPrice) || 0,
-        costPrice: parseFloat(formData.costPrice) || 0,
-        quantity: parseInt(formData.quantityInStock) || 0,
+        name: formData.productName, // Required field
         description: formData.shortDescription,
-        images: mainImage ? [mainImage, ...additionalImages] : additionalImages,
-        status: 'Published' as const
+        sku: formData.sku || `TIRE-${Date.now()}`, // Generate unique SKU if not provided
+        categoryId: selectedCategoryId || "default-category-id",
+        warehouseId: selectedWarehouseId || "default-warehouse-id",
+        purchasePrice: parseFloat(formData.costPrice) || 0, // Backend expects purchasePrice
+        sellingPrice: parseFloat(formData.sellingPrice) || 0, // Backend expects sellingPrice
+        quantity: parseInt(formData.quantityInStock) || 0,
+        brand: formData.productBrand,
+        coverImage: mainImage || "", // Backend expects coverImage (single URL)
+        additionalImages: additionalImages.map(url => ({ url })), // Backend expects array of objects with url property
+        status: 'PUBLISHED' as const // Backend expects uppercase
       };
+      
+      // Debug logging
+      console.log('Selected Category ID:', selectedCategoryId);
+      console.log('Selected Warehouse ID:', selectedWarehouseId);
+      console.log('Tire Data being sent:', tireData);
       
       // Send data to API
       await createTire(tireData);
@@ -298,26 +377,42 @@ export default function CreateInventoryPage() {
                 />
               </div>
 
+              {/* SKU */}
+              <div className="bg-white p-6 rounded-lg shadow-sm">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  SKU (Stock Keeping Unit)
+                </label>
+                <input
+                  type="text"
+                  value={formData.sku}
+                  onChange={(e) => handleInputChange('sku', e.target.value)}
+                  placeholder="Enter SKU (e.g., TIRE-001, MIC-205-55R16)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">Leave empty to auto-generate SKU</p>
+              </div>
+
               {/* Product Category */}
               <div className="bg-white p-6 rounded-lg shadow-sm">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Tyre Category
                 </label>
                 <div className="relative">
-                  <input
-                    type="text"
-                    value={formData.category}
-                    onChange={(e) => handleInputChange('category', e.target.value)}
-                    placeholder="Enter or select tyre category"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    list="tyre-categories"
-                  />
-                  <datalist id="tyre-categories">
-                    <option value="GL601" />
-                    <option value="GL602" />
-                    <option value="GL908" />
-                    <option value="DW703tx" />
-                  </datalist>
+                  <select
+                    value={selectedCategoryId}
+                    onChange={(e) => setSelectedCategoryId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+                  >
+                    {categories.length > 0 ? (
+                      categories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">Loading categories...</option>
+                    )}
+                  </select>
                   <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                     <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -417,19 +512,34 @@ export default function CreateInventoryPage() {
                 <p className="text-xs text-gray-500 mt-1">Type to search or select from popular tyre brands</p>
               </div>
 
-              {/* Warehouse Number */}
+              {/* Warehouse Selection */}
               <div className="bg-white p-6 rounded-lg shadow-sm">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Warehouse Number
+                  Warehouse
                 </label>
-                <input
-                  type="text"
-                  value={formData.warehouseNumber}
-                  onChange={(e) => handleInputChange('warehouseNumber', e.target.value)}
-                  placeholder="Enter warehouse number (e.g., WH-001, WH-002)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <p className="text-xs text-gray-500 mt-1">This will be displayed in product details and invoices</p>
+                <div className="relative">
+                  <select
+                    value={selectedWarehouseId}
+                    onChange={(e) => setSelectedWarehouseId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+                  >
+                    {warehouses.length > 0 ? (
+                      warehouses.map((warehouse) => (
+                        <option key={warehouse.id} value={warehouse.id}>
+                          {warehouse.name} - {warehouse.location}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">Loading warehouses...</option>
+                    )}
+                  </select>
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Select the warehouse where this product will be stored</p>
               </div>
 
             </div>
@@ -622,7 +732,19 @@ export default function CreateInventoryPage() {
               <div className="bg-white p-6 rounded-lg shadow-sm">
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Upload Image (Cover Image)</h3>
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                  {mainImage ? (
+                  {uploadProgress.isUploading ? (
+                    <div className="flex flex-col items-center justify-center h-48">
+                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#02016a] mb-4"></div>
+                      <p className="text-gray-600 mb-2">Uploading to Cloudinary...</p>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className="bg-[#02016a] h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${uploadProgress.progress}%` }}
+                        ></div>
+                      </div>
+                      <p className="text-sm text-gray-500 mt-2">{uploadProgress.progress}%</p>
+                    </div>
+                  ) : mainImage ? (
                     <div className="relative">
                       <img
                         src={mainImage}
@@ -633,6 +755,7 @@ export default function CreateInventoryPage() {
                         <button
                           onClick={() => document.getElementById('main-image-upload')?.click()}
                           className="p-2 bg-white rounded-full shadow-md hover:bg-gray-50"
+                          disabled={uploadProgress.isUploading}
                         >
                           <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -641,6 +764,7 @@ export default function CreateInventoryPage() {
                         <button
                           onClick={() => removeImage(0, true)}
                           className="p-2 bg-white rounded-full shadow-md hover:bg-gray-50"
+                          disabled={uploadProgress.isUploading}
                         >
                           <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -656,12 +780,13 @@ export default function CreateInventoryPage() {
                       <p className="text-gray-600 mb-2">Upload Image</p>
                       <p className="text-sm text-gray-500 mb-4">Upload a cover image for your product.</p>
                       <p className="text-xs text-gray-400 mb-4">
-                        File Format jpeg, png<br />
-                        Recommended Size 600x600 (1:1)
+                        File Format jpeg, png, webp<br />
+                        Max Size 10MB
                       </p>
                       <button
                         onClick={() => document.getElementById('main-image-upload')?.click()}
-                        className="px-4 py-2 bg-[#02016a] text-white rounded-lg hover:bg-[#03024a] transition-colors"
+                        className="px-4 py-2 bg-[#02016a] text-white rounded-lg hover:bg-[#03024a] transition-colors disabled:opacity-50"
+                        disabled={uploadProgress.isUploading}
                       >
                         Choose File
                       </button>

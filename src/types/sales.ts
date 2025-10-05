@@ -18,7 +18,7 @@ export interface SalesOrderItem {
   orderType: string; // e.g., "Home Delivery"
   trackingId: string;
   orderTotal: string; // already formatted with currency symbol
-  action: string; // e.g., "Completed"
+  action?: string; // e.g., "Completed"
   status: string; // e.g., "Completed"
   statusColor?: string; // e.g., "green" from API
 }

@@ -1,82 +1,101 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import Breadcrumb from "@/components/Breadcrumb";
 import CreateCustomerModal from "@/components/CreateCustomerModal";
+import { listCustomers, createCustomer, updateCustomer, deleteCustomer } from "@/services/customers";
+import { NotificationContainer, useNotifications } from "@/components/Notification";
 
 interface Customer {
   id: string;
   name: string;
-  email: string;
-  phone: string;
-  orders: number;
-  orderTotal: number;
-  customerSince: string;
-  status: 'Active' | 'Inactive';
+  email?: string;
+  phone?: string;
+  orders?: number;
+  orderTotal?: number;
+  customerSince?: string;
+  status?: string;
+  address?: string;
+  creditLimit?: number;
+  balance?: number;
 }
 
 export default function CustomersPage() {
+  const { notifications, removeNotification, showSuccess, showError } = useNotifications();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
   const [timeframe, setTimeframe] = useState("This Week");
+  
+  // API state management
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Sample customer data
-  const customers: Customer[] = [
-    {
-      id: "1",
-      name: "Janet Adebayo",
-      email: "janet.a@mail.com",
-      phone: "+2348065650633",
-      orders: 10,
-      orderTotal: 250000,
-      customerSince: "12 Aug 2022 - 12:25 am",
-      status: "Active"
-    },
-    {
-      id: "2",
-      name: "Samuel Johnson",
-      email: "samuel.j@mail.com",
-      phone: "+2348065650634",
-      orders: 8,
-      orderTotal: 180000,
-      customerSince: "15 Aug 2022 - 10:30 am",
-      status: "Active"
-    },
-    {
-      id: "3",
-      name: "Francis Doe",
-      email: "francis.d@mail.com",
-      phone: "+2348065650635",
-      orders: 5,
-      orderTotal: 120000,
-      customerSince: "20 Aug 2022 - 2:15 pm",
-      status: "Inactive"
-    },
-    {
-      id: "4",
-      name: "Christian Dior",
-      email: "christian.d@mail.com",
-      phone: "+2348065650636",
-      orders: 12,
-      orderTotal: 300000,
-      customerSince: "25 Aug 2022 - 4:45 pm",
-      status: "Active"
-    },
-    {
-      id: "5",
-      name: "Mary Williams",
-      email: "mary.w@mail.com",
-      phone: "+2348065650637",
-      orders: 6,
-      orderTotal: 150000,
-      customerSince: "28 Aug 2022 - 11:20 am",
-      status: "Active"
+  // Fetch customers from API
+  const fetchCustomers = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await listCustomers({ limit: 100 });
+      // Handle both array response and { data: [] } response formats
+      const customersArray = Array.isArray(response) ? response : ((response as any).data || []);
+      setCustomers(customersArray);
+    } catch (err: any) {
+      console.error('Error fetching customers:', err);
+      setError(err.message || 'Failed to load customers');
+      showError('Error', err.message || 'Failed to load customers');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  // Handle customer creation
+  const handleCreateCustomer = async (customerData: any) => {
+    try {
+      const newCustomer = await createCustomer(customerData);
+      setCustomers(prev => [newCustomer, ...prev]);
+      showSuccess('Success', 'Customer created successfully');
+      setIsCreateModalOpen(false);
+    } catch (err: any) {
+      console.error('Error creating customer:', err);
+      showError('Error', err.message || 'Failed to create customer');
+    }
+  };
+
+  // Handle customer update
+  const handleUpdateCustomer = async (id: string, customerData: any) => {
+    try {
+      const updatedCustomer = await updateCustomer(id, customerData);
+      setCustomers(prev => prev.map(customer => 
+        customer.id === id ? updatedCustomer : customer
+      ));
+      showSuccess('Success', 'Customer updated successfully');
+    } catch (err: any) {
+      console.error('Error updating customer:', err);
+      showError('Error', err.message || 'Failed to update customer');
+    }
+  };
+
+  // Handle customer deletion
+  const handleDeleteCustomer = async (id: string) => {
+    try {
+      await deleteCustomer(id);
+      setCustomers(prev => prev.filter(customer => customer.id !== id));
+      showSuccess('Success', 'Customer deleted successfully');
+    } catch (err: any) {
+      console.error('Error deleting customer:', err);
+      showError('Error', err.message || 'Failed to delete customer');
+    }
+  };
+
+  // Fetch customers on component mount
+  useEffect(() => {
+    fetchCustomers();
+  }, []);
 
   const handleSelectCustomer = (customerId: string) => {
     setSelectedCustomers(prev => 
@@ -98,13 +117,11 @@ export default function CustomersPage() {
     console.log(`Bulk action: ${action} for customers:`, selectedCustomers);
   };
 
-  const handleCreateCustomer = (customerData: any) => {
-    console.log("Creating customer:", customerData);
-    setIsCreateModalOpen(false);
-  };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const copyToClipboard = (text: string | undefined) => {
+    if (text) {
+      navigator.clipboard.writeText(text);
+    }
   };
 
   return (
@@ -126,6 +143,12 @@ export default function CustomersPage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-gray-900">Customers Summary</h2>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.open('/customers/summary', '_blank')}
+                  className="px-4 py-2 bg-[#02016a] text-white rounded-lg hover:bg-[#03024a] transition-colors text-sm font-medium"
+                >
+                  View Detailed Summary
+                </button>
                 <select
                   value={timeframe}
                   onChange={(e) => setTimeframe(e.target.value)}
@@ -332,7 +355,41 @@ export default function CustomersPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {customers.map((customer) => (
+                  {loading ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-8 text-center">
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#02016a]"></div>
+                          <span className="ml-2 text-gray-600">Loading customers...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : error ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-8 text-center">
+                        <div className="text-red-600">
+                          <p className="font-medium">Error loading customers</p>
+                          <p className="text-sm mt-1">{error}</p>
+                          <button 
+                            onClick={fetchCustomers}
+                            className="mt-2 px-4 py-2 bg-[#02016a] text-white rounded-lg hover:bg-[#03024a] transition-colors"
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : customers.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-8 text-center">
+                        <div className="text-gray-500">
+                          <p className="font-medium">No customers found</p>
+                          <p className="text-sm mt-1">Create your first customer to get started</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    customers.map((customer) => (
                     <tr key={customer.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4">
                         <input
@@ -375,7 +432,7 @@ export default function CustomersPage() {
                         {customer.orders}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ₦{customer.orderTotal.toLocaleString()}
+                        ₦{(customer.orderTotal || 0).toLocaleString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {customer.customerSince}
@@ -390,7 +447,8 @@ export default function CustomersPage() {
                         </span>
                       </td>
                     </tr>
-                  ))}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -441,6 +499,12 @@ export default function CustomersPage() {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onCreate={handleCreateCustomer}
+      />
+      
+      {/* Notifications */}
+      <NotificationContainer 
+        notifications={notifications} 
+        onRemove={removeNotification} 
       />
     </div>
   );

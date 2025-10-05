@@ -306,6 +306,10 @@ export class InventoryDataService {
           aValue = a.totalValue;
           bValue = b.totalValue;
           break;
+        case "dateAdded":
+          aValue = new Date(a.dateAdded).getTime();
+          bValue = new Date(b.dateAdded).getTime();
+          break;
         default:
           return 0;
       }

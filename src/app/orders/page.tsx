@@ -12,6 +12,8 @@ import Breadcrumb from "../../components/Breadcrumb";
 import TimePeriodSelector from "../../components/TimePeriodSelector";
 import { OrderDataService, Order } from "../../services/OrderDataService";
 import { NotificationContainer, useNotifications } from "../../components/Notification";
+import { fetchSalesDashboard, createSale, updateSaleStatus } from "../../services/sales";
+import type { SalesDashboardResponse, CreateSalePayload } from "../../services/sales";
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -35,6 +37,11 @@ export default function OrdersPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // Mobile menu state
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  
+  // API data state
+  const [apiData, setApiData] = useState<SalesDashboardResponse | null>(null);
+  const [apiLoading, setApiLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const handleFilterApply = (filters: any) => {
     setAppliedFilters({ ...appliedFilters, ...filters });
@@ -46,8 +53,31 @@ export default function OrdersPage() {
     setCurrentPage(1); // Reset to first page when filtering
   };
 
-  const handleCreateOrder = (orderData: any) => {
-    // Implement order creation logic here
+  const handleCreateOrder = async (orderData: any) => {
+    try {
+      // Convert orderData to CreateSalePayload format
+      const salePayload: CreateSalePayload = {
+        customerId: orderData.customerId || '', // You'll need to get this from customer selection
+        items: orderData.items.map((item: any) => ({
+          productId: item.id,
+          quantity: item.quantity,
+          price: item.price,
+        })),
+        paymentMethod: orderData.paymentType,
+        paymentStatus: orderData.payment === 'Full Payment' ? 'completed' : 'pending',
+        notes: orderData.orderNote,
+      };
+
+      await createSale(salePayload);
+      showSuccess("Order Created", "The order has been created successfully.");
+      setShowCreateModal(false);
+      
+      // Refresh the orders list after creating a new order
+      await fetchOrdersData();
+    } catch (error: any) {
+      console.error("Error creating order:", error);
+      showSuccess("Error", error.message || "Failed to create order");
+    }
   };
 
   // Handle time period selection
@@ -55,19 +85,81 @@ export default function OrdersPage() {
     setSelectedTimePeriod(period);
   };
 
-  // Generate orders using the service
-  const sampleOrders = OrderDataService.generateOrders(200).map(order => ({
-    id: order.id,
-    name: order.customer.name,
-    date: order.orderDate,
-    type: order.orderType,
-    tracking: order.trackingId,
-    total: OrderDataService.formatCurrency(order.totalAmount),
-    action: order.status,
-    status: order.status,
-    statusColor: order.statusColor,
-    warehouseNumber: order.items[0]?.warehouseNumber || 'N/A'
-  }));
+  // Fetch orders data from API
+  const fetchOrdersData = async () => {
+    setApiLoading(true);
+    setApiError(null);
+    
+    try {
+      const sortByMap: Record<string, string> = {
+        "Customer Name": "customerName",
+        "Order Date": "orderDate",
+        "Order Type": "orderType",
+        "Tracking ID": "trackingId",
+        "Order Total": "orderTotal",
+        "Status": "status",
+      };
+      
+      const sortBy = sortColumn ? sortByMap[sortColumn] : undefined;
+      const statusParam = appliedFilters?.status && appliedFilters.status !== "All" ? String(appliedFilters.status) : undefined;
+      const df = appliedFilters?.dateFilter?.from || appliedFilters?.dateFilter?.start || undefined;
+      const dt = appliedFilters?.dateFilter?.to || appliedFilters?.dateFilter?.end || undefined;
+      
+      const data = await fetchSalesDashboard({
+        page: currentPage,
+        limit: itemsPerPage,
+        search: searchTerm || undefined,
+        status: statusParam,
+        dateFrom: df,
+        dateTo: dt,
+        sortBy,
+        sortDir: (sortDirection as "asc" | "desc") || undefined,
+      });
+      
+      setApiData(data);
+    } catch (error: any) {
+      console.error("Error fetching orders:", error);
+      setApiError(error.message || "Failed to load orders");
+    } finally {
+      setApiLoading(false);
+    }
+  };
+
+  // Generate orders using API data or fallback to service
+  const sampleOrders = apiData
+    ? apiData.orders.map(o => {
+        const colorMap: Record<string, string> = {
+          green: 'bg-green-100 text-green-800',
+          orange: 'bg-orange-100 text-orange-800',
+          blue: 'bg-blue-100 text-blue-800',
+          red: 'bg-red-100 text-red-800',
+        };
+        
+        return {
+          id: String(o.id || ''),
+          name: String(o.customerName || 'Unknown Customer'),
+          date: String(o.orderDate || new Date().toISOString()),
+          type: String(o.orderType || 'Pick Up'),
+          tracking: String(o.trackingId || o.id || 'N/A'),
+          total: String(o.orderTotal || '₦0'),
+          action: String(o.action || o.status || 'Pending'),
+          status: String(o.status || 'Pending'),
+          statusColor: o.statusColor ? (colorMap[o.statusColor] || 'bg-gray-100 text-gray-800') : 'bg-gray-100 text-gray-800',
+          warehouseNumber: 'N/A' // API doesn't provide warehouse info yet
+        };
+      })
+    : OrderDataService.generateOrders(200).map(order => ({
+        id: order.id,
+        name: order.customer.name,
+        date: order.orderDate,
+        type: order.orderType,
+        tracking: order.trackingId,
+        total: OrderDataService.formatCurrency(order.totalAmount),
+        action: order.status,
+        status: order.status,
+        statusColor: order.statusColor,
+        warehouseNumber: order.items[0]?.warehouseNumber || 'N/A'
+      }));
   
   // Apply search filter
   const filteredOrders = sampleOrders.filter(order => {
@@ -124,36 +216,36 @@ export default function OrdersPage() {
     }
   });
 
-  const totalPages = Math.ceil(sortedOrders.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const currentOrders = sortedOrders.slice(startIndex, endIndex);
+  const totalPages = apiData ? Math.ceil((apiData.total || 0) / itemsPerPage) : Math.ceil(sortedOrders.length / itemsPerPage);
+  const startIndex = apiData ? 0 : (currentPage - 1) * itemsPerPage;
+  const endIndex = apiData ? (apiData.orders?.length ?? 0) : startIndex + itemsPerPage;
+  const currentOrders = apiData ? sampleOrders : sortedOrders.slice(startIndex, endIndex);
 
-  // Calculate real-time summary data using service
-  const fullOrders = OrderDataService.generateOrders(200);
-  const summaryData = OrderDataService.getOrderSummary(fullOrders);
-  
-  // Add additional calculated fields
-  const enhancedSummaryData = {
-    ...summaryData,
-    totalRevenue: fullOrders.reduce((sum, order) => sum + order.totalAmount, 0),
-    uniqueCustomers: new Set(fullOrders.map(order => order.customer.name)).size,
-    abandonedCarts: Math.floor(fullOrders.length * 0.15) // Simulate 15% abandoned cart rate
-  };
-
-  // Calculate data based on selected time period using service
-  const getTimePeriodData = () => {
-    const timePeriodData = OrderDataService.getTimePeriodData(fullOrders, selectedTimePeriod);
+  // Use API data for summary or fallback to service
+  const timePeriodData = apiData ? {
+    allOrders: apiData.summary.allOrders,
+    pendingOrders: apiData.summary.pending,
+    completedOrders: apiData.summary.completed,
+    canceledOrders: apiData.summary.canceled,
+    returnedOrders: apiData.summary.returned,
+    damagedOrders: apiData.summary.damaged,
+    abandonedCarts: apiData.summary.abandonedCart,
+    uniqueCustomers: apiData.summary.customers,
+  } : (() => {
+    const fullOrders = OrderDataService.generateOrders(200);
+    const summaryData = OrderDataService.getOrderSummary(fullOrders);
     
     return {
-      ...timePeriodData,
-      totalRevenue: enhancedSummaryData.totalRevenue * (selectedTimePeriod === "This Month" ? 4.3 : 1),
-      uniqueCustomers: Math.floor(enhancedSummaryData.uniqueCustomers * (selectedTimePeriod === "This Month" ? 4.3 : 1)),
-      abandonedCarts: Math.floor(enhancedSummaryData.abandonedCarts * (selectedTimePeriod === "This Month" ? 4.3 : 1))
+      allOrders: summaryData.allOrders,
+      pendingOrders: summaryData.pendingOrders,
+      completedOrders: summaryData.completedOrders,
+      canceledOrders: summaryData.canceledOrders,
+      returnedOrders: summaryData.returnedOrders,
+      damagedOrders: summaryData.damagedOrders,
+      abandonedCarts: Math.floor(fullOrders.length * 0.15),
+      uniqueCustomers: new Set(fullOrders.map(order => order.customer.name)).size,
     };
-  };
-
-  const timePeriodData = getTimePeriodData();
+  })();
 
   const handlePreviousPage = () => {
     if (currentPage > 1) {
@@ -213,39 +305,28 @@ export default function OrdersPage() {
     }
   };
 
-  const handleStatusChange = (orderIndex: number, newStatus: string) => {
-    // Update the order status in the sample data
-    const updatedOrders = [...sampleOrders];
+  const handleStatusChange = async (orderIndex: number, newStatus: string) => {
     const globalOrderIndex = startIndex + orderIndex;
-    if (updatedOrders[globalOrderIndex]) {
-      const orderId = updatedOrders[globalOrderIndex].id;
-      updatedOrders[globalOrderIndex].status = newStatus as any;
+    if (sampleOrders[globalOrderIndex]) {
+      const orderId = sampleOrders[globalOrderIndex].id;
       
-      // Update status color based on new status
-      const statusColors = {
-        'Completed': 'bg-green-100 text-green-800',
-        'In-Progress': 'bg-blue-100 text-blue-800', 
-        'Pending': 'bg-orange-100 text-orange-800',
-        'Canceled': 'bg-red-100 text-red-800',
-        'Returned': 'bg-yellow-100 text-yellow-800',
-        'Damaged': 'bg-purple-100 text-purple-800'
-      };
-      updatedOrders[globalOrderIndex].statusColor = statusColors[newStatus as keyof typeof statusColors] || 'bg-gray-100 text-gray-800';
-      
-      // Persist the status change to localStorage
-      const statusChanges = JSON.parse(localStorage.getItem('orderStatusChanges') || '{}');
-      statusChanges[orderId] = newStatus;
-      localStorage.setItem('orderStatusChanges', JSON.stringify(statusChanges));
-      
-      // Show success notification
-      showSuccess(
-        "Status Updated",
-        `Order status changed to ${newStatus} successfully!`
-      );
+      try {
+        // Update status via API
+        await updateSaleStatus(orderId, newStatus.toUpperCase());
+        
+        // Show success notification
+        showSuccess(
+          "Status Updated",
+          `Order status changed to ${newStatus} successfully!`
+        );
+        
+        // Refresh the orders list
+        await fetchOrdersData();
+      } catch (error: any) {
+        console.error("Error updating order status:", error);
+        showSuccess("Error", error.message || "Failed to update order status");
+      }
     }
-    
-    // In a real app, you would update the orders state here
-    // setOrders(updatedOrders);
     
     setShowActionDropdown(null);
   };
@@ -300,6 +381,13 @@ export default function OrdersPage() {
       clearTimeout(backupTimer);
     };
   }, [router]);
+
+  // Fetch orders data when component mounts or dependencies change
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchOrdersData();
+    }
+  }, [isAuthenticated, currentPage, itemsPerPage, searchTerm, appliedFilters, sortColumn, sortDirection]);
 
   // Handle sidebar keyboard events
   useEffect(() => {

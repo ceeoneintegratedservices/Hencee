@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { InventoryDataService, InventoryItem, InventorySummary } from '@/services/InventoryDataService';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
+import { getInventoryProducts, createInventoryProduct, updateInventoryProduct, deleteInventoryProduct, adjustProductStock, getProductMovements } from '@/services/inventory';
 import FilterByDateModal from '@/components/FilterByDateModal';
 import TimePeriodSelector from '@/components/TimePeriodSelector';
 import Sidebar from '@/components/Sidebar';
@@ -22,14 +23,18 @@ export default function InventoryPage() {
   const [summaryData, setSummaryData] = useState<InventorySummary | null>(null);
   const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
   
+  // API state management
+  const [apiLoading, setApiLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  
   // UI states
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [alphabeticalFilter, setAlphabeticalFilter] = useState('All');
   const [priceFilter, setPriceFilter] = useState('All');
-  const [sortBy, setSortBy] = useState('productName');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortBy, setSortBy] = useState('dateAdded');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedTimePeriod, setSelectedTimePeriod] = useState<'This Week' | 'This Month'>('This Week');
   
   // Dropdown states
@@ -59,20 +64,129 @@ export default function InventoryPage() {
     setLoading(false);
   }, [router]);
 
-  // Load inventory data
-  useEffect(() => {
-    if (isAuthenticated) {
+  // Fetch inventory data from API
+  const fetchInventoryData = async () => {
+    setApiLoading(true);
+    setApiError(null);
+    try {
+      const data = await getInventoryProducts();
+      // Handle both array response and { data: [] } response formats
+      const itemsArray = Array.isArray(data) ? data : ((data as any).data || []);
+      
+      // Map API response to InventoryItem format
+      const mappedItems = itemsArray.map((item: any) => ({
+        id: String(item.id || ''),
+        productName: String(item.name || item.productName || 'Unknown Product'),
+        category: String(item.category?.name || item.category || 'General'),
+        warehouseNumber: String(item.warehouse?.name || item.warehouseNumber || item.warehouse || 'N/A'),
+        unitPrice: Number(item.sellingPrice || item.price || item.unitPrice || 0),
+        inStock: Number(item.quantity || item.stock || item.inStock || 0),
+        discount: Number(item.discount || 0),
+        totalValue: Number(item.totalValue || (item.sellingPrice || item.price || 0) * (item.quantity || item.stock || 0)),
+        status: String(item.status || 'Active'),
+        lastUpdated: String(item.updatedAt || item.lastUpdated || new Date().toISOString()),
+        sku: String(item.sku || item.id || ''),
+        brand: String(item.brand || ''),
+        model: String(item.model || ''),
+        size: String(item.size || ''),
+        description: String(item.description || ''),
+        reorderLevel: Number(item.reorderPoint || item.reorderLevel || 10),
+        supplier: String(item.supplier || ''),
+        costPrice: Number(item.purchasePrice || item.costPrice || item.cost || 0),
+        sellingPrice: Number(item.sellingPrice || item.price || 0),
+        profitMargin: Number(item.profitMargin || 0),
+        imageUrl: String(item.coverImage || item.imageUrl || item.image || ''),
+        tags: Array.isArray(item.tags) ? item.tags : [],
+        notes: String(item.notes || ''),
+        isActive: Boolean(item.isActive !== false),
+        createdAt: String(item.createdAt || new Date().toISOString()),
+        dateAdded: String(item.createdAt || new Date().toISOString()),
+      }));
+      
+      setInventoryItems(mappedItems);
+      setFilteredItems(mappedItems);
+      
+      // Store items in localStorage so view page can access the same data
+      localStorage.setItem('inventoryItems', JSON.stringify(mappedItems));
+      
+      // Generate summary from API data
+      const summary = InventoryDataService.generateInventorySummary(mappedItems);
+      setSummaryData(summary);
+    } catch (err: any) {
+      console.error('Error fetching inventory:', err);
+      setApiError(err.message || 'Failed to load inventory');
+      showError('Error', err.message || 'Failed to load inventory');
+      
+      // Fallback to dummy data if API fails
       const items = InventoryDataService.generateInventoryItems(200);
       setInventoryItems(items);
       setFilteredItems(items);
-      
-      // Store items in localStorage so view page can access the same data
       localStorage.setItem('inventoryItems', JSON.stringify(items));
-      
       const summary = InventoryDataService.generateInventorySummary(items);
       setSummaryData(summary);
+    } finally {
+      setApiLoading(false);
+    }
+  };
+
+  // Load inventory data
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchInventoryData();
     }
   }, [isAuthenticated]);
+
+  // Handle inventory item creation
+  const handleCreateInventoryItem = async (itemData: any) => {
+    try {
+      const newItem = await createInventoryProduct(itemData);
+      // Refresh inventory data
+      await fetchInventoryData();
+      showSuccess('Success', 'Inventory item created successfully');
+    } catch (err: any) {
+      console.error('Error creating inventory item:', err);
+      showError('Error', err.message || 'Failed to create inventory item');
+    }
+  };
+
+  // Handle inventory item update
+  const handleUpdateInventoryItem = async (id: string, itemData: any) => {
+    try {
+      const updatedItem = await updateInventoryProduct(id, itemData);
+      // Refresh inventory data
+      await fetchInventoryData();
+      showSuccess('Success', 'Inventory item updated successfully');
+    } catch (err: any) {
+      console.error('Error updating inventory item:', err);
+      showError('Error', err.message || 'Failed to update inventory item');
+    }
+  };
+
+  // Handle inventory item deletion
+  const handleDeleteInventoryItem = async (id: string) => {
+    try {
+      await deleteInventoryProduct(id);
+      // Refresh inventory data
+      await fetchInventoryData();
+      showSuccess('Success', 'Inventory item deleted successfully');
+    } catch (err: any) {
+      console.error('Error deleting inventory item:', err);
+      showError('Error', err.message || 'Failed to delete inventory item');
+    }
+  };
+
+  // Handle stock adjustment
+  const handleStockAdjustment = async (id: string, adjustment: { quantity: number; reason: string; notes?: string }) => {
+    try {
+      await adjustProductStock(id, adjustment);
+      // Refresh inventory data
+      await fetchInventoryData();
+      showSuccess('Success', 'Stock adjusted successfully');
+    } catch (err: any) {
+      console.error('Error adjusting stock:', err);
+      showError('Error', err.message || 'Failed to adjust stock');
+    }
+  };
 
   // Filter and search items
   useEffect(() => {
@@ -646,7 +760,41 @@ export default function InventoryPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredItems.slice(0, 10).map((item, index) => (
+                  {apiLoading ? (
+                    <tr>
+                      <td colSpan={9} className="px-6 py-8 text-center">
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#02016a]"></div>
+                          <span className="ml-2 text-gray-600">Loading inventory...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : apiError ? (
+                    <tr>
+                      <td colSpan={9} className="px-6 py-8 text-center">
+                        <div className="text-red-600">
+                          <p className="font-medium">Error loading inventory</p>
+                          <p className="text-sm mt-1">{apiError}</p>
+                          <button 
+                            onClick={fetchInventoryData}
+                            className="mt-2 px-4 py-2 bg-[#02016a] text-white rounded-lg hover:bg-[#03024a] transition-colors"
+                          >
+                            Retry
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="px-6 py-8 text-center">
+                        <div className="text-gray-500">
+                          <p className="font-medium">No inventory items found</p>
+                          <p className="text-sm mt-1">Create your first inventory item to get started</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredItems.slice(0, 10).map((item, index) => (
                     <tr key={item.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => router.push(`/inventory/view?id=${item.id}`)}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <input type="checkbox" className="rounded border-gray-300" onClick={(e) => e.stopPropagation()} />
@@ -666,7 +814,7 @@ export default function InventoryPage() {
                                 }
                               }}
                             />
-                            <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center text-xs font-semibold text-gray-600 hidden">
+                            <div className="w-10 h-10 bg-gray-200 rounded items-center justify-center text-xs font-semibold text-gray-600 hidden">
                               {InventoryDataService.getTireBrandInitials(item.productName)}
                             </div>
                           </div>
@@ -763,14 +911,43 @@ export default function InventoryPage() {
                         </span>
                       </td>
                     </tr>
-                  ))}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
 
             {/* Mobile Cards */}
             <div className="lg:hidden">
-              {filteredItems.slice(0, 10).map((item, index) => (
+              {apiLoading ? (
+                <div className="p-8 text-center">
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#02016a]"></div>
+                    <span className="ml-2 text-gray-600">Loading inventory...</span>
+                  </div>
+                </div>
+              ) : apiError ? (
+                <div className="p-8 text-center">
+                  <div className="text-red-600">
+                    <p className="font-medium">Error loading inventory</p>
+                    <p className="text-sm mt-1">{apiError}</p>
+                    <button 
+                      onClick={fetchInventoryData}
+                      className="mt-2 px-4 py-2 bg-[#02016a] text-white rounded-lg hover:bg-[#03024a] transition-colors"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                </div>
+              ) : filteredItems.length === 0 ? (
+                <div className="p-8 text-center">
+                  <div className="text-gray-500">
+                    <p className="font-medium">No inventory items found</p>
+                    <p className="text-sm mt-1">Create your first inventory item to get started</p>
+                  </div>
+                </div>
+              ) : (
+                filteredItems.slice(0, 10).map((item, index) => (
                 <div key={item.id} className="p-4 border-b border-gray-200 cursor-pointer hover:bg-gray-50" onClick={() => router.push(`/inventory/view?id=${item.id}`)}>
                   <div className="flex items-start gap-3">
                     <input type="checkbox" className="mt-1 rounded border-gray-300" onClick={(e) => e.stopPropagation()} />
@@ -787,7 +964,7 @@ export default function InventoryPage() {
                           }
                         }}
                       />
-                      <div className="w-10 h-10 bg-gray-200 rounded flex items-center justify-center text-xs font-semibold text-gray-600 hidden">
+                      <div className="w-10 h-10 bg-gray-200 rounded items-center justify-center text-xs font-semibold text-gray-600 hidden">
                         {InventoryDataService.getTireBrandInitials(item.productName)}
                       </div>
                     </div>
@@ -880,7 +1057,8 @@ export default function InventoryPage() {
                     </div>
                   </div>
                 </div>
-              ))}
+                ))
+              )}
             </div>
 
             {/* Pagination */}

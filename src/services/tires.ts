@@ -3,16 +3,18 @@ import { authFetch } from "./authFetch";
 
 export interface Tire {
   id?: string;
-  brand: string;
-  model?: string;
-  size: string;
-  category: string;
-  price: number;
-  costPrice?: number;
-  quantity: number;
+  name: string;
   description?: string;
-  images?: string[];
-  status?: 'Published' | 'Unpublished' | 'Draft';
+  sku: string;
+  categoryId: string;
+  warehouseId: string;
+  purchasePrice: number;
+  sellingPrice: number;
+  quantity: number;
+  brand: string;
+  coverImage?: string;
+  additionalImages?: { url: string }[];
+  status?: 'PUBLISHED' | 'DRAFT';
   createdAt?: string;
   updatedAt?: string;
 }
@@ -21,7 +23,7 @@ export interface TireListParams {
   page?: number;
   limit?: number;
   search?: string;
-  category?: string;
+  categoryId?: string;
   brand?: string;
 }
 
@@ -40,7 +42,7 @@ export async function listTires(params: TireListParams = {}): Promise<TireListRe
   if (params.page != null) qp.set("page", String(params.page));
   if (params.limit != null) qp.set("limit", String(params.limit));
   if (params.search) qp.set("search", params.search);
-  if (params.category) qp.set("category", params.category);
+  if (params.categoryId) qp.set("categoryId", params.categoryId);
   if (params.brand) qp.set("brand", params.brand);
   
   try {

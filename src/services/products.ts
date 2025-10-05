@@ -54,3 +54,88 @@ export async function updateProduct(id: string, body: any) {
     throw error;
   }
 }
+
+export async function deleteProduct(id: string): Promise<void> {
+  try {
+    const response = await authFetch(API_ENDPOINTS.productById(id), {
+      method: 'DELETE',
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to delete product');
+    }
+  } catch (error) {
+    console.error('Error deleting product:', error);
+    throw error;
+  }
+}
+
+export async function searchProducts(query: string): Promise<any[]> {
+  try {
+    const queryParams = new URLSearchParams({ search: query });
+    const url = `${API_ENDPOINTS.productSearch}?${queryParams.toString()}`;
+    const response = await authFetch(url);
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error searching products:', error);
+    throw error;
+  }
+}
+
+export async function getLowStockProducts(): Promise<any[]> {
+  try {
+    const response = await authFetch(API_ENDPOINTS.productLowStock);
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching low stock products:', error);
+    throw error;
+  }
+}
+
+export async function updateProductStock(id: string, stock: number): Promise<any> {
+  try {
+    const response = await authFetch(API_ENDPOINTS.productStock(id), {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ stock }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to update product stock');
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error updating product stock:', error);
+    throw error;
+  }
+}
+
+export async function getProductsByCategory(categoryId: string): Promise<any[]> {
+  try {
+    const response = await authFetch(API_ENDPOINTS.productCategory(categoryId));
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching products by category:', error);
+    throw error;
+  }
+}
+
+export async function getProductsByWarehouse(warehouseId: string): Promise<any[]> {
+  try {
+    const response = await authFetch(API_ENDPOINTS.productWarehouse(warehouseId));
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching products by warehouse:', error);
+    throw error;
+  }
+}
