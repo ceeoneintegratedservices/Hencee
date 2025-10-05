@@ -197,15 +197,10 @@ export function getImageDimensions(file: File): Promise<{ width: number; height:
  * @returns Thumbnail URL
  */
 export function createThumbnailUrl(publicId: string, size: string = '150x150'): string {
-  return cloudinary.url(publicId, {
-    width: size.split('x')[0],
-    height: size.split('x')[1],
-    crop: 'fill',
-    gravity: 'auto',
-    quality: 'auto',
-    format: 'auto',
-    secure: true,
-  });
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  const [width, height] = size.split('x');
+  
+  return `https://res.cloudinary.com/${cloudName}/image/upload/w_${width},h_${height},c_fill,g_auto,q_auto,f_auto/${publicId}`;
 }
 
 /**
@@ -220,17 +215,11 @@ export function createResponsiveImageUrls(
 ): Record<string, string> {
   const urls: Record<string, string> = {};
   
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  
   sizes.forEach(size => {
     const [width, height] = size.split('x');
-    urls[size] = cloudinary.url(publicId, {
-      width: parseInt(width),
-      height: parseInt(height),
-      crop: 'fill',
-      gravity: 'auto',
-      quality: 'auto',
-      format: 'auto',
-      secure: true,
-    });
+    urls[size] = `https://res.cloudinary.com/${cloudName}/image/upload/w_${width},h_${height},c_fill,g_auto,q_auto,f_auto/${publicId}`;
   });
   
   return urls;

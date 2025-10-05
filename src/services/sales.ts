@@ -179,7 +179,7 @@ export async function getSalesByDateRange(dateFrom: string, dateTo: string): Pro
   }
 }
 
-export async function getPendingPayments(): Promise<Sale[]> {
+export async function getSalesWithPendingPayments(): Promise<Sale[]> {
   try {
     const response = await authFetch(API_ENDPOINTS.salesPendingPayments);
     const data = await response.json();

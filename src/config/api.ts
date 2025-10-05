@@ -111,6 +111,21 @@ export const API_ENDPOINTS = {
   compatibilityTestPermissionMapping: `${API_BASE_URL}/compatibility-test/test-permission-mapping`,
   compatibilityTestRoleMapping: `${API_BASE_URL}/compatibility-test/test-role-mapping`,
   
+  // Users endpoints
+  users: `${API_BASE_URL}/users`,
+  
+  // Audit logs endpoints
+  auditLogs: `${API_BASE_URL}/audit-logs`,
+  
+  // Reports endpoints
+  reports: {
+    sales: `${API_BASE_URL}/reports/sales`,
+    inventory: `${API_BASE_URL}/reports/inventory`,
+    customers: `${API_BASE_URL}/reports/customers`,
+    payments: `${API_BASE_URL}/reports/payments`,
+    finance: `${API_BASE_URL}/reports/finance`,
+  },
+  
   // API documentation
   apiDocs: `${API_BASE_URL}/api/docs`,
 }; 

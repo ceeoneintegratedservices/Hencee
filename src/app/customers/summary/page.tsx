@@ -9,18 +9,18 @@ import {
   listCustomers,
   type TopCustomer,
   type OutstandingBalanceCustomer,
-  type CustomerStats,
-  type CustomerRecord
+  type CustomerStats
 } from "@/services/customers";
+import { type CustomerRecord } from "@/types/customers";
 import { useNotifications } from "@/components/Notification";
 import { NotificationContainer } from "@/components/Notification";
 
 export default function CustomerSummaryPage() {
   const router = useRouter();
-  const { showSuccess, showError } = useNotifications();
+  const { showSuccess, showError, notifications, removeNotification } = useNotifications();
   
   // State for different data sections
-  const [topCustomers, setTopCustomers] = useState<TopCustomer[]>([]);
+  const [topCustomers, setTopCustomers] = useState<CustomerRecord[]>([]);
   const [outstandingCustomers, setOutstandingCustomers] = useState<OutstandingBalanceCustomer[]>([]);
   const [allCustomers, setAllCustomers] = useState<CustomerRecord[]>([]);
   const [selectedCustomerStats, setSelectedCustomerStats] = useState<CustomerStats | null>(null);
@@ -43,7 +43,7 @@ export default function CustomerSummaryPage() {
     setTopCustomersLoading(true);
     setTopCustomersError(null);
     try {
-      const data = await getTopCustomers(10);
+      const data = await getTopCustomers();
       setTopCustomers(data);
     } catch (error: any) {
       console.error('Error fetching top customers:', error);
@@ -119,12 +119,12 @@ export default function CustomerSummaryPage() {
   const totalCustomers = allCustomers.length;
   const totalOutstandingBalance = outstandingCustomers.reduce((sum, customer) => sum + customer.outstandingBalance, 0);
   const averageCustomerValue = topCustomers.length > 0 
-    ? topCustomers.reduce((sum, customer) => sum + customer.totalAmount, 0) / topCustomers.length 
+    ? topCustomers.reduce((sum, customer) => sum + (customer.orderTotal || 0), 0) / topCustomers.length
     : 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <NotificationContainer />
+      <NotificationContainer notifications={notifications} onRemove={removeNotification} />
       
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
@@ -246,8 +246,8 @@ export default function CustomerSummaryPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-semibold text-gray-900">₦{customer.totalAmount.toLocaleString()}</p>
-                        <p className="text-sm text-gray-600">{customer.totalPurchases} purchases</p>
+                        <p className="font-semibold text-gray-900">₦{(customer.orderTotal || 0).toLocaleString()}</p>
+                        <p className="text-sm text-gray-600">{customer.orders || 0} purchases</p>
                       </div>
                     </div>
                   ))}
