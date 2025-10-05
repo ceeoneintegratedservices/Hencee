@@ -86,7 +86,6 @@ export default function CustomerDetailsPage() {
   };
 
   const handleBulkAction = (action: string) => {
-    console.log(`Bulk action: ${action} for orders:`, selectedOrders);
   };
 
   const copyToClipboard = (text: string) => {

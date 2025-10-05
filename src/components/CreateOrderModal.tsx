@@ -115,7 +115,6 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
         
         // Debug: Log the actual structure of the API response
         if (process.env.NODE_ENV === 'development') {
-          console.log('API Products Response:', productsArray);
         }
         
         // Map API response to expected structure

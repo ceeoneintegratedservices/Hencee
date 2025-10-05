@@ -19,7 +19,6 @@ export default function LoginPage() {
     const token = localStorage.getItem('authToken');
     if (token && !loading && !success) {
       // Only redirect if we have a valid token and we're not in the middle of a login process
-      console.log('User already authenticated, redirecting to dashboard');
       router.push('/dashboard');
     }
   }, [router, loading, success]);
@@ -44,15 +43,11 @@ export default function LoginPage() {
         }),
       });
       const data = await res.json();
-      console.log('API Response:', data);
-      console.log('Response status:', res.status);
-      console.log('Response headers:', res.headers);
       
       if (!res.ok) {
         setError(data.message || "Password/email/whatsapp number does not match.");
       } else {
         // Handle successful login - redirect to dashboard
-        console.log("Login successful:", data);
         
         // Check if we have a token in the response
         let authToken = null;
@@ -68,24 +63,20 @@ export default function LoginPage() {
           authToken = data.authorization;
         } else {
           console.warn('No token found in response:', data);
-          console.log('Available fields in response:', Object.keys(data));
           // Still proceed if we have user data
         }
         
         // Store user data/token in localStorage if needed
         if (authToken) {
           localStorage.setItem('authToken', authToken);
-          console.log('Token stored:', authToken);
         } else {
           // If no token provided, create a simple authentication flag
           // This ensures the user can still access the dashboard
           const fallbackToken = `auth_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           localStorage.setItem('authToken', fallbackToken);
-          console.log('No token provided, using fallback auth token:', fallbackToken);
         }
         if (data.user) {
           localStorage.setItem('userData', JSON.stringify(data.user));
-          console.log('User data stored:', data.user);
         }
         
         // Show success message and redirect to dashboard
@@ -99,14 +90,12 @@ export default function LoginPage() {
           const storedUserData = localStorage.getItem('userData');
           
           if (storedToken || storedUserData) {
-            console.log('Redirecting to dashboard with token:', storedToken, 'and user data:', storedUserData);
             router.push('/dashboard');
           } else {
             console.error('No authentication data found in localStorage after login');
             // Create a fallback authentication as last resort
             const emergencyToken = `emergency_auth_${Date.now()}`;
             localStorage.setItem('authToken', emergencyToken);
-            console.log('Created emergency auth token:', emergencyToken);
             router.push('/dashboard');
           }
         }, 1000);

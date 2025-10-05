@@ -81,8 +81,6 @@ export default function ApprovalsPage() {
       
       // Debug: Log the actual structure of the API response
       if (process.env.NODE_ENV === 'development') {
-        console.log('API Approvals Response:', data);
-        console.log('Approvals Array:', approvalsArray);
       }
       
       // Map API response to ApprovalItem format
@@ -251,7 +249,6 @@ export default function ApprovalsPage() {
 
 
   const handleDateFilter = (dateFilter: any) => {
-    console.log('Date filter applied:', dateFilter);
     showSuccess('Success', 'Date filter applied successfully');
   };
 

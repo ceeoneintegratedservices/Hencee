@@ -115,7 +115,6 @@ function ViewOrderContent() {
       setShowItemStatusDropdown(null);
       
       // In a real app, you would make an API call to update the item status
-      console.log("Item status updated:", itemKey, "to", newStatus);
     }
   };
 
@@ -140,7 +139,6 @@ function ViewOrderContent() {
       setShowStatusDropdown(false);
       
       // In a real app, you would make an API call to update the order status
-      console.log("Order status updated:", order.id, "to", newStatus);
     }
   };
 

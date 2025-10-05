@@ -56,7 +56,16 @@ export default function CustomersPage() {
   // Handle customer creation
   const handleCreateCustomer = async (customerData: any) => {
     try {
-      const newCustomer = await createCustomer(customerData);
+      // Transform the data to match backend's expected format
+      const transformedData = {
+        name: `${customerData.firstName} ${customerData.lastName}`.trim(),
+        email: customerData.email,
+        phone: customerData.phone.startsWith('+') ? customerData.phone : `${customerData.countryCode}${customerData.phone}`,
+        address: customerData.address,
+        creditLimit: 0 // Default credit limit as expected by backend
+      };
+      
+      const newCustomer = await createCustomer(transformedData);
       setCustomers(prev => [newCustomer, ...prev]);
       showSuccess('Success', 'Customer created successfully');
       setIsCreateModalOpen(false);
@@ -114,7 +123,6 @@ export default function CustomersPage() {
   };
 
   const handleBulkAction = (action: string) => {
-    console.log(`Bulk action: ${action} for customers:`, selectedCustomers);
   };
 
 

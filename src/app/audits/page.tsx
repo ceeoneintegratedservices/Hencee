@@ -202,7 +202,6 @@ export default function AuditsPage() {
   };
 
   const handleDateFilter = (dateFilter: any) => {
-    console.log('Date filter applied:', dateFilter);
     showSuccess('Success', 'Date filter applied successfully');
   };
 

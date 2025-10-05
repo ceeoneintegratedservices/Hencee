@@ -13,6 +13,7 @@ interface CustomerData {
   lastName: string;
   email: string;
   phone: string;
+  countryCode: string;
   address: string;
   city: string;
   state: string;
@@ -26,6 +27,7 @@ export default function CreateCustomerModal({ isOpen, onClose, onCreate }: Creat
     lastName: "",
     email: "",
     phone: "",
+    countryCode: "+234",
     address: "",
     city: "",
     state: "",
@@ -48,6 +50,7 @@ export default function CreateCustomerModal({ isOpen, onClose, onCreate }: Creat
       lastName: "",
       email: "",
       phone: "",
+      countryCode: "+234",
       address: "",
       city: "",
       state: "",
@@ -146,7 +149,8 @@ export default function CreateCustomerModal({ isOpen, onClose, onCreate }: Creat
               <div className="flex gap-3">
                 <div className="relative">
                   <select
-                    value="+234"
+                    value={customerData.countryCode}
+                    onChange={(e) => handleInputChange('countryCode', e.target.value)}
                     className="block w-24 pl-3 pr-8 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
                   >
                     <option value="+234">🇳🇬 +234</option>

@@ -276,7 +276,6 @@ export default function InventoryPage() {
 
   const handleDateFilter = (dateFilter: any) => {
     // Handle date filtering logic here
-    console.log('Date filter applied:', dateFilter);
     showSuccess('Success', 'Date filter applied successfully');
   };
 

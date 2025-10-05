@@ -123,17 +123,13 @@ export default function CreateInventoryPage() {
         setWarehouses(warehousesData);
         
         // Debug logging
-        console.log('Fetched Categories:', categoriesData);
-        console.log('Fetched Warehouses:', warehousesData);
         
         // Set default selections if available
         if (categoriesData.length > 0) {
           setSelectedCategoryId(categoriesData[0].id);
-          console.log('Auto-selected category:', categoriesData[0].name, 'ID:', categoriesData[0].id);
         }
         if (warehousesData.length > 0) {
           setSelectedWarehouseId(warehousesData[0].id);
-          console.log('Auto-selected warehouse:', warehousesData[0].name, 'ID:', warehousesData[0].id);
         }
       } catch (error) {
         console.error('Error fetching categories and warehouses:', error);
@@ -225,9 +221,6 @@ export default function CreateInventoryPage() {
       };
       
       // Debug logging
-      console.log('Selected Category ID:', selectedCategoryId);
-      console.log('Selected Warehouse ID:', selectedWarehouseId);
-      console.log('Tire Data being sent:', tireData);
       
       // Send data to API
       await createTire(tireData);
@@ -277,9 +270,6 @@ export default function CreateInventoryPage() {
       };
       
       // Debug logging
-      console.log('Selected Category ID:', selectedCategoryId);
-      console.log('Selected Warehouse ID:', selectedWarehouseId);
-      console.log('Tire Data being sent:', tireData);
       
       // Send data to API
       await createTire(tireData);

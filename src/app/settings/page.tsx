@@ -147,7 +147,6 @@ export default function SettingsPage() {
     // Show success message (you can implement a toast notification here)
     alert('Settings updated successfully!');
     
-    console.log("Updated settings:", updatedData);
   };
 
   const handleTabClick = (tabId: string) => {

@@ -198,21 +198,21 @@ function ViewInventoryContent() {
   const handleSaveProduct = (formData: any, mainImage: string | null, additionalImages: string[]) => {
     if (inventoryItem) {
       // Update the inventory item with new data
-      const updatedItem = {
-        ...inventoryItem,
-        productName: formData.productName,
-        category: formData.category,
-        unitPrice: parseFloat(formData.sellingPrice) || inventoryItem.unitPrice,
-        costPrice: parseFloat(formData.costPrice) || inventoryItem.costPrice,
-        inStock: parseInt(formData.quantityInStock) || inventoryItem.inStock,
+        const updatedItem = {
+          ...inventoryItem,
+          productName: formData.productName,
+          category: formData.category,
+          unitPrice: parseFloat(formData.sellingPrice) || inventoryItem.unitPrice,
+          costPrice: parseFloat(formData.costPrice) || inventoryItem.costPrice,
+          inStock: parseInt(formData.quantityInStock) || inventoryItem.inStock,
         brand: formData.productBrand,
-        description: formData.shortDescription,
+          description: formData.shortDescription,
         longDescription: formData.longDescription,
-        image: mainImage || inventoryItem.image,
-        additionalImages: additionalImages.length > 0 ? additionalImages : inventoryItem.additionalImages
-      };
-      
-      setInventoryItem(updatedItem);
+          image: mainImage || inventoryItem.image,
+          additionalImages: additionalImages.length > 0 ? additionalImages : inventoryItem.additionalImages
+        };
+        
+        setInventoryItem(updatedItem);
       
       // Update localStorage with the updated item
       const storedItems = localStorage.getItem('inventoryItems');
@@ -223,9 +223,9 @@ function ViewInventoryContent() {
             item.id === updatedItem.id ? updatedItem : item
           );
           localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
-        } catch (error) {
+      } catch (error) {
           console.error('Error updating stored inventory items:', error);
-        }
+      }
       }
       
       showSuccess('Success', 'Product updated successfully');
@@ -234,9 +234,9 @@ function ViewInventoryContent() {
 
   const handleUnpublishProduct = () => {
     if (inventoryItem) {
-      const updatedItem = { ...inventoryItem, status: 'Unpublished' as const };
-      setInventoryItem(updatedItem);
-      
+        const updatedItem = { ...inventoryItem, status: 'Unpublished' as const };
+        setInventoryItem(updatedItem);
+        
       // Update localStorage
       const storedItems = localStorage.getItem('inventoryItems');
       if (storedItems) {
@@ -246,9 +246,9 @@ function ViewInventoryContent() {
             item.id === updatedItem.id ? updatedItem : item
           );
           localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
-        } catch (error) {
+      } catch (error) {
           console.error('Error updating stored inventory items:', error);
-        }
+      }
       }
       
       showSuccess('Success', 'Product unpublished successfully');
@@ -257,9 +257,9 @@ function ViewInventoryContent() {
 
   const handlePublishProduct = () => {
     if (inventoryItem) {
-      const updatedItem = { ...inventoryItem, status: 'Published' as const };
-      setInventoryItem(updatedItem);
-      
+        const updatedItem = { ...inventoryItem, status: 'Published' as const };
+        setInventoryItem(updatedItem);
+        
       // Update localStorage
       const storedItems = localStorage.getItem('inventoryItems');
       if (storedItems) {
@@ -269,9 +269,9 @@ function ViewInventoryContent() {
             item.id === updatedItem.id ? updatedItem : item
           );
           localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
-        } catch (error) {
+      } catch (error) {
           console.error('Error updating stored inventory items:', error);
-        }
+      }
       }
       
       showSuccess('Success', 'Product published successfully');
@@ -280,7 +280,6 @@ function ViewInventoryContent() {
 
   const handleDateFilter = (dateFilter: any) => {
     // Handle date filtering logic here
-    console.log('Date filter applied:', dateFilter);
     showSuccess('Success', 'Date filter applied successfully');
   };
 
