@@ -1,14 +1,31 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import Breadcrumb from "@/components/Breadcrumb";
+import { NotificationContainer, useNotifications } from "@/components/Notification";
+import { getSystemSettings, updateSystemSettings, getUserPreferences, updateUserPreferences, type SystemSettings, type UserPreferences } from "@/services/settings";
 
 export default function SettingsPage() {
+  const router = useRouter();
+  const { notifications, removeNotification, showSuccess, showError } = useNotifications();
+  
+  // Authentication and loading states
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [apiLoading, setApiLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  
+  // UI states
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("account");
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  
+  // API data states
+  const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
+  const [userPreferences, setUserPreferences] = useState<UserPreferences | null>(null);
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "", 
@@ -88,6 +105,69 @@ export default function SettingsPage() {
     }
   }, []);
 
+  // Authentication check
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      setIsAuthenticated(true);
+    } else {
+      router.push('/login');
+    }
+    setLoading(false);
+  }, [router]);
+
+  // Fetch settings data from API
+  const fetchSettingsData = async () => {
+    if (!isAuthenticated) return;
+    
+    setApiLoading(true);
+    setApiError(null);
+    
+    try {
+      const [systemData, preferencesData] = await Promise.allSettled([
+        getSystemSettings().catch(() => null),
+        getUserPreferences().catch(() => null)
+      ]);
+      
+      if (systemData.status === 'fulfilled' && systemData.value) {
+        const systemSettings = systemData.value;
+        setSystemSettings(systemSettings);
+        
+        // Populate business form data from API
+        setBusinessData(prev => ({
+          ...prev,
+          businessName: systemSettings.businessName || "",
+          businessType: systemSettings.businessType || "Tyre Retailer",
+          registrationNumber: systemSettings.registrationNumber || "",
+          taxId: systemSettings.taxId || "",
+          businessAddress: systemSettings.businessAddress || "",
+          businessPhone: systemSettings.businessPhone || "",
+          businessEmail: systemSettings.businessEmail || "",
+          website: systemSettings.website || "",
+          staffPosition: "Owner/Manager", // Default value
+          designation: "" // Default value
+        }));
+      }
+      
+      if (preferencesData.status === 'fulfilled' && preferencesData.value) {
+        setUserPreferences(preferencesData.value);
+      }
+      
+    } catch (err: any) {
+      setApiError(err.message || 'Failed to load settings');
+      showError('Error', err.message || 'Failed to load settings');
+    } finally {
+      setApiLoading(false);
+    }
+  };
+
+  // Load settings when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchSettingsData();
+    }
+  }, [isAuthenticated]);
+
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
       ...prev,
@@ -122,31 +202,93 @@ export default function SettingsPage() {
     setProfileImage(null);
   };
 
-  const handleUpdate = () => {
-    // Save updated data to localStorage
-    const userData = localStorage.getItem('userData');
-    let existingData: any = {};
+  const handleUpdate = async () => {
+    if (!isAuthenticated) return;
     
-    if (userData) {
-      try {
-        existingData = JSON.parse(userData);
-      } catch (error) {
-        console.error('Error parsing existing user data:', error);
+    setApiLoading(true);
+    
+    try {
+      // Update system settings
+      const systemPayload = {
+        businessName: businessData.businessName,
+        businessType: businessData.businessType,
+        registrationNumber: businessData.registrationNumber,
+        taxId: businessData.taxId,
+        businessAddress: businessData.businessAddress,
+        businessPhone: businessData.businessPhone,
+        businessEmail: businessData.businessEmail,
+        website: businessData.website,
+        currency: 'NGN', // Default currency
+        timezone: 'Africa/Lagos', // Default timezone
+        dateFormat: 'DD/MM/YYYY', // Default date format
+        language: 'en', // Default language
+        theme: 'light' as const, // Default theme
+        maintenanceMode: false,
+        backupStatus: 'enabled' as const,
+        backupFrequency: 'daily' as const
+      };
+      
+      await updateSystemSettings(systemPayload);
+      
+      // Update user preferences
+      const preferencesPayload = {
+        theme: 'light' as const,
+        language: 'en',
+        timezone: 'Africa/Lagos',
+        dateFormat: 'DD/MM/YYYY',
+        currency: 'NGN',
+        notifications: {
+          email: true,
+          push: true,
+          sms: false,
+          inApp: true
+        },
+        dashboard: {
+          defaultView: 'overview' as const,
+          refreshInterval: 5,
+          showCharts: true,
+          showAlerts: true
+        },
+        privacy: {
+          profileVisibility: 'private' as const,
+          activityTracking: true,
+          dataSharing: false
+        }
+      };
+      
+      await updateUserPreferences(preferencesPayload);
+      
+      // Also update localStorage for backward compatibility
+      const userData = localStorage.getItem('userData');
+      let existingData: any = {};
+      
+      if (userData) {
+        try {
+          existingData = JSON.parse(userData);
+        } catch (error) {
+          console.error('Error parsing existing user data:', error);
+        }
       }
+
+      const updatedData = {
+        ...existingData,
+        ...formData,
+        ...businessData,
+        profileImage: profileImage || existingData.profileImage || existingData.avatar
+      };
+
+      localStorage.setItem('userData', JSON.stringify(updatedData));
+      
+      showSuccess('Success', 'Settings updated successfully!');
+      
+      // Refresh settings data
+      await fetchSettingsData();
+      
+    } catch (err: any) {
+      showError('Error', err.message || 'Failed to update settings');
+    } finally {
+      setApiLoading(false);
     }
-
-    const updatedData = {
-      ...existingData,
-      ...formData,
-      ...businessData,
-      profileImage: profileImage || existingData.profileImage || existingData.avatar
-    };
-
-    localStorage.setItem('userData', JSON.stringify(updatedData));
-    
-    // Show success message (you can implement a toast notification here)
-    alert('Settings updated successfully!');
-    
   };
 
   const handleTabClick = (tabId: string) => {
@@ -178,6 +320,44 @@ export default function SettingsPage() {
     { id: "business", label: "Business" },
     { id: "security", label: "Security" }
   ];
+
+  if (loading || apiLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">
+            {loading ? 'Loading...' : 'Fetching settings data...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (apiError) {
+    return (
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar currentPage="settings" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-red-500 text-6xl mb-4">⚠️</div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Failed to Load Settings</h2>
+            <p className="text-gray-600 mb-4">{apiError}</p>
+            <button 
+              onClick={fetchSettingsData}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -675,6 +855,9 @@ export default function SettingsPage() {
           </div>
         </main>
       </div>
+      
+      {/* Notification Container */}
+      <NotificationContainer notifications={notifications} onRemove={removeNotification} />
     </div>
   );
 }

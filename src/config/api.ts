@@ -126,6 +126,15 @@ export const API_ENDPOINTS = {
     finance: `${API_BASE_URL}/reports/finance`,
   },
   
+  // Dashboard endpoints
+  dashboard: `${API_BASE_URL}/dashboard`,
+
+  // Expenses endpoints
+  expenses: `${API_BASE_URL}/expenses`,
+
+  // Settings endpoints
+  settings: `${API_BASE_URL}/settings`,
+
   // API documentation
   apiDocs: `${API_BASE_URL}/api/docs`,
 }; 

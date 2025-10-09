@@ -7,6 +7,7 @@ import FilterByDateModal from '@/components/FilterByDateModal';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import Breadcrumb from '@/components/Breadcrumb';
+import { getAuditLogs, type AuditLog as APIAuditLog } from '@/services/auditLogs';
 
 interface AuditLog {
   id: string;
@@ -31,6 +32,8 @@ export default function AuditsPage() {
   // Data states
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [filteredLogs, setFilteredLogs] = useState<AuditLog[]>([]);
+  const [apiLoading, setApiLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
   
   // UI states
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,9 +58,39 @@ export default function AuditsPage() {
     setLoading(false);
   }, [router]);
 
-  // Generate sample audit logs
-  useEffect(() => {
-    if (isAuthenticated) {
+  // Fetch audit logs from API
+  const fetchAuditLogs = async () => {
+    if (!isAuthenticated) return;
+    
+    setApiLoading(true);
+    setApiError(null);
+    
+    try {
+      const response = await getAuditLogs({
+        page: 1,
+        limit: 100 // Get more logs for better UX
+      });
+      
+      // Transform API data to match UI format
+      const transformedLogs: AuditLog[] = response.data.map((log: APIAuditLog) => ({
+        id: log.id,
+        timestamp: new Date(log.createdAt).toLocaleString(),
+        user: log.user?.email || 'Unknown User',
+        action: log.action,
+        resource: log.entityType,
+        details: typeof log.details === 'string' ? log.details : JSON.stringify(log.details),
+        ipAddress: log.ipAddress,
+        status: 'Success' as const // API doesn't provide status, defaulting to Success
+      }));
+      
+      setAuditLogs(transformedLogs);
+      setFilteredLogs(transformedLogs);
+      
+    } catch (err: any) {
+      setApiError(err.message || 'Failed to load audit logs');
+      showError('Error', err.message || 'Failed to load audit logs');
+      
+      // Fallback to sample data if API fails
       const sampleLogs: AuditLog[] = [
         {
           id: 'audit-1',
@@ -88,61 +121,20 @@ export default function AuditsPage() {
           details: 'Updated stock quantity for Bridgestone Potenza',
           ipAddress: '192.168.1.102',
           status: 'Success'
-        },
-        {
-          id: 'audit-4',
-          timestamp: '2024-01-15 10:15:30',
-          user: 'admin@ceeonewheels.com',
-          action: 'Delete',
-          resource: 'Customer',
-          details: 'Deleted customer: John Doe',
-          ipAddress: '192.168.1.100',
-          status: 'Success'
-        },
-        {
-          id: 'audit-5',
-          timestamp: '2024-01-15 10:10:20',
-          user: 'unknown@example.com',
-          action: 'Login',
-          resource: 'Authentication',
-          details: 'Failed login attempt with invalid credentials',
-          ipAddress: '203.0.113.45',
-          status: 'Failed'
-        },
-        {
-          id: 'audit-6',
-          timestamp: '2024-01-15 10:05:10',
-          user: 'manager@ceeonewheels.com',
-          action: 'Export',
-          resource: 'Reports',
-          details: 'Exported monthly sales report',
-          ipAddress: '192.168.1.101',
-          status: 'Success'
-        },
-        {
-          id: 'audit-7',
-          timestamp: '2024-01-15 09:55:35',
-          user: 'staff@ceeonewheels.com',
-          action: 'View',
-          resource: 'Customer Data',
-          details: 'Viewed customer order history',
-          ipAddress: '192.168.1.102',
-          status: 'Success'
-        },
-        {
-          id: 'audit-8',
-          timestamp: '2024-01-15 09:50:25',
-          user: 'admin@ceeonewheels.com',
-          action: 'Permission Change',
-          resource: 'User Management',
-          details: 'Changed user permissions for staff member',
-          ipAddress: '192.168.1.100',
-          status: 'Warning'
         }
       ];
       
       setAuditLogs(sampleLogs);
       setFilteredLogs(sampleLogs);
+    } finally {
+      setApiLoading(false);
+    }
+  };
+
+  // Load audit logs when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchAuditLogs();
     }
   }, [isAuthenticated]);
 
@@ -209,12 +201,38 @@ export default function AuditsPage() {
     showSuccess('Success', 'Audit logs exported successfully');
   };
 
-  if (loading) {
+  if (loading || apiLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading audit logs...</p>
+          <p className="mt-4 text-gray-600">
+            {loading ? 'Loading audit logs...' : 'Fetching audit data...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (apiError) {
+    return (
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar currentPage="audits" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header title="Audit Logs" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-red-500 text-6xl mb-4">⚠️</div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Failed to Load Audit Logs</h2>
+              <p className="text-gray-600 mb-4">{apiError}</p>
+              <button 
+                onClick={fetchAuditLogs}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );

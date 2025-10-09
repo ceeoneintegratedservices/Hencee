@@ -117,13 +117,10 @@ export default function InventoryPage() {
       setApiError(err.message || 'Failed to load inventory');
       showError('Error', err.message || 'Failed to load inventory');
       
-      // Fallback to dummy data if API fails
-      const items = InventoryDataService.generateInventoryItems(200);
-      setInventoryItems(items);
-      setFilteredItems(items);
-      localStorage.setItem('inventoryItems', JSON.stringify(items));
-      const summary = InventoryDataService.generateInventorySummary(items);
-      setSummaryData(summary);
+      // No fallback - show empty state instead
+      setInventoryItems([]);
+      setFilteredItems([]);
+      setSummaryData(null);
     } finally {
       setApiLoading(false);
     }

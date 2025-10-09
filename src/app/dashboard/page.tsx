@@ -7,9 +7,22 @@ import Sidebar from "../../components/Sidebar";
 import Header from "../../components/Header";
 import Breadcrumb from "../../components/Breadcrumb";
 import TimePeriodSelector from "../../components/TimePeriodSelector";
+import { 
+  getDashboardOverview, 
+  getDashboardActivities,
+  type DashboardOverview,
+  type DashboardActivities,
+  type TimeFrame
+} from "../../services/dashboard";
+import { useNotifications } from "../../components/Notification";
 
 export default function AdminDashboard() {
   const router = useRouter();
+  const { showError, showSuccess } = useNotifications();
+  
+  // Client-side only state to prevent hydration issues
+  const [mounted, setMounted] = useState(false);
+  
   // For dropdowns (e.g. This Week, Last 7 Days)
   const [summaryFilter] = useState("Sales");
   const [dateFilter] = useState("Last 7 Days");
@@ -18,6 +31,17 @@ export default function AdminDashboard() {
   // Sidebar toggle for mobile
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  
+  // API data state
+  const [dashboardData, setDashboardData] = useState<DashboardOverview | null>(null);
+  const [activities, setActivities] = useState<DashboardActivities | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Client-side only mounting
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Check authentication on component mount
   useEffect(() => {
@@ -74,182 +98,111 @@ export default function AdminDashboard() {
     setSelectedTimePeriod(period);
   };
 
-  // Calculate data based on selected time period
-  const getTimePeriodData = () => {
-    const now = new Date();
-    
-    if (selectedTimePeriod === "This Week") {
-      // This week data (current implementation)
-      return {
-        sales: 0,
-        volume: 0,
-        customers: 0,
-        activeCustomers: 0,
-        allOrders: 0,
-        pendingOrders: 0,
-        completedOrders: 0,
-        totalProfit: 0,
-        receivables: 0,
-        activeUsers: 0,
-        allUsers: 0,
-        pendingUsers: 0,
-        approvedUsers: 0,
-        rejectedUsers: 0,
-        abandonedCarts: 0,
-        allProducts: 0,
-        activeProducts: 0
-      };
-    } else {
-      // This month data - simulate monthly calculations
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
-      
-      // Simulate monthly data (multiply weekly data by ~4.3 for monthly average)
-      return {
-        sales: 125000, // Monthly sales data
-        volume: 45, // Monthly volume data
-        customers: 28, // Monthly customers data
-        activeCustomers: 22, // Monthly active customers data
-        allOrders: 156, // Monthly orders data
-        pendingOrders: 23, // Monthly pending orders data
-        completedOrders: 128, // Monthly completed orders data
-        totalProfit: 45000, // Monthly profit data
-        receivables: 18000, // Monthly receivables data
-        activeUsers: 15, // Monthly active users data
-        allUsers: 25, // Monthly all users data
-        pendingUsers: 3, // Monthly pending users data
-        approvedUsers: 20, // Monthly approved users data
-        rejectedUsers: 2, // Monthly rejected users data
-        abandonedCarts: 12, // Monthly abandoned carts data
-        allProducts: 89, // Monthly all products data
-        activeProducts: 76 // Monthly active products data
-      };
+  // Convert time period to API timeframe
+  const getTimeFrame = (period: "This Week" | "This Month"): TimeFrame => {
+    switch (period) {
+      case "This Week":
+        return "thisWeek";
+      case "This Month":
+        return "thisMonth";
+      default:
+        return "thisWeek";
     }
   };
 
-  const timePeriodData = getTimePeriodData();
-
-  // Activities state management
-  const [activities, setActivities] = useState<Array<{
-    id: number;
-    text: string;
-    type: 'orders' | 'inventory' | 'customers' | 'approvals' | 'users_roles';
-    timestamp: Date;
-  }>>([]);
-  const [isCheckingActivities, setIsCheckingActivities] = useState(false);
-
-  // Activity categories
-  const activityCategories = {
-    orders: 'Orders',
-    inventory: 'Inventory', 
-    customers: 'Customers',
-    approvals: 'Approvals',
-    users_roles: 'Users & Roles'
-  };
-
-  // Function to check for activities across dashboard sections
-  const checkForActivities = async () => {
-    setIsCheckingActivities(true);
+  // Fetch dashboard data from API
+  const fetchDashboardData = async () => {
+    if (!isAuthenticated) return;
     
-    // Simulate API calls to check for activities in different sections
+    setLoading(true);
+    setError(null);
+    
     try {
-      // In a real implementation, these would be actual API calls
-      const ordersActivities = await checkOrdersActivities();
-      const inventoryActivities = await checkInventoryActivities();
-      const customersActivities = await checkCustomersActivities();
-      const approvalsActivities = await checkApprovalsActivities();
-      const usersRolesActivities = await checkUsersRolesActivities();
-
-      // Combine all activities and sort by timestamp
-      const allActivities = [
-        ...ordersActivities,
-        ...inventoryActivities,
-        ...customersActivities,
-        ...approvalsActivities,
-        ...usersRolesActivities
-      ].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-
-      setActivities(allActivities);
-    } catch (error) {
-      console.error('Error checking activities:', error);
+      const timeframe = getTimeFrame(selectedTimePeriod);
+      const [overviewData, activitiesData] = await Promise.all([
+        getDashboardOverview(timeframe),
+        getDashboardActivities(timeframe)
+      ]);
+      
+      setDashboardData(overviewData);
+      setActivities(activitiesData);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load dashboard data');
+      showError('Error', err.message || 'Failed to load dashboard data');
     } finally {
-      setIsCheckingActivities(false);
+      setLoading(false);
     }
   };
 
-  // Mock functions to simulate checking activities in different sections
-  const checkOrdersActivities = async (): Promise<Array<{
-    id: number;
-    text: string;
-    type: 'orders' | 'inventory' | 'customers' | 'approvals' | 'users_roles';
-    timestamp: Date;
-  }>> => {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Return empty array for now - in real implementation, this would check actual order data
-    return [];
-  };
-
-  const checkInventoryActivities = async (): Promise<Array<{
-    id: number;
-    text: string;
-    type: 'orders' | 'inventory' | 'customers' | 'approvals' | 'users_roles';
-    timestamp: Date;
-  }>> => {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return [];
-  };
-
-  const checkCustomersActivities = async (): Promise<Array<{
-    id: number;
-    text: string;
-    type: 'orders' | 'inventory' | 'customers' | 'approvals' | 'users_roles';
-    timestamp: Date;
-  }>> => {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return [];
-  };
-
-  const checkApprovalsActivities = async (): Promise<Array<{
-    id: number;
-    text: string;
-    type: 'orders' | 'inventory' | 'customers' | 'approvals' | 'users_roles';
-    timestamp: Date;
-  }>> => {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return [];
-  };
-
-  const checkUsersRolesActivities = async (): Promise<Array<{
-    id: number;
-    text: string;
-    type: 'orders' | 'inventory' | 'customers' | 'approvals' | 'users_roles';
-    timestamp: Date;
-  }>> => {
-    await new Promise(resolve => setTimeout(resolve, 500));
-    return [];
-  };
-
-  // Check for activities on component mount and periodically
+  // Load dashboard data when authenticated or time period changes
   useEffect(() => {
-    // Initial check
-    checkForActivities();
+    if (isAuthenticated) {
+      fetchDashboardData();
+    }
+  }, [isAuthenticated, selectedTimePeriod]);
 
-    // Set up periodic checking every 30 seconds
-    const interval = setInterval(checkForActivities, 30000);
+  // Activity categories for display
+  const activityCategories = {
+    sale: 'Sales',
+    order: 'Orders',
+    inventory: 'Inventory', 
+    customer: 'Customers',
+    product: 'Products',
+    user: 'Users'
+  };
 
-    return () => clearInterval(interval);
-  }, []);
-
-  // Show loading while checking authentication
-  if (!isAuthenticated) {
+  // Client-side only rendering to prevent hydration issues
+  if (!mounted) {
     return (
       <div className="flex w-full h-screen bg-[#f4f5fa] items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading dashboard...</p>
-          <p className="text-sm text-gray-500 mt-2">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading while checking authentication or fetching data
+  if (!isAuthenticated || loading) {
+    return (
+      <div className="flex w-full h-screen bg-[#f4f5fa] items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading dashboard...</p>
+          <p className="text-sm text-gray-500 mt-2">
+            {!isAuthenticated ? 'Checking authentication...' : 'Fetching dashboard data...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex w-full h-screen bg-[#f4f5fa] items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-500 mb-4">⚠️</div>
+          <p className="text-red-600 mb-4">{error}</p>
+          <button 
+            onClick={fetchDashboardData}
+            className="px-4 py-2 bg-[#1C1D22] text-white rounded-lg hover:bg-[#2a2b32] transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show fallback if no data
+  if (!dashboardData) {
+    return (
+      <div className="flex w-full h-screen bg-[#f4f5fa] items-center justify-center">
+        <div className="text-center">
+          <div className="text-[#8b8d97] mb-4">📊</div>
+          <p className="text-[#8b8d97]">No dashboard data available</p>
         </div>
       </div>
     );
@@ -307,13 +260,15 @@ export default function AdminDashboard() {
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">Sales</div>
                   <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">₦{timePeriodData.sales.toLocaleString()}</span>
-                    <span className="text-xs text-[#519c66]">+0.00%</span>
+                    <span className="font-medium text-[20px] text-[#45464e]">₦{(dashboardData.sales?.sales?.value || 0).toLocaleString()}</span>
+                    <span className={`text-xs ${(dashboardData.sales?.sales?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
+                      {(dashboardData.sales?.sales?.change || 0) >= 0 ? '+' : ''}{(dashboardData.sales?.sales?.change || 0).toFixed(1)}%
+                    </span>
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">Volume</div>
-                  <div className="font-medium text-[20px] text-[#45464e]">{timePeriodData.volume}</div>
+                  <div className="font-medium text-[20px] text-[#45464e]">{dashboardData.sales?.sales?.volume || 0}</div>
                 </div>
               </div>
             </div>
@@ -344,15 +299,17 @@ export default function AdminDashboard() {
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">Customers</div>
                   <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">{timePeriodData.customers}</span>
-                    <span className="text-xs text-[#519c66]">+0.00%</span>
+                    <span className="font-medium text-[20px] text-[#45464e]">{dashboardData.customers?.customers?.value || 0}</span>
+                    <span className={`text-xs ${(dashboardData.customers?.customers?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
+                      {(dashboardData.customers?.customers?.change || 0) >= 0 ? '+' : ''}{(dashboardData.customers?.customers?.change || 0).toFixed(1)}%
+                    </span>
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">Active</div>
                   <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">{timePeriodData.activeCustomers}</span>
-                    <span className="text-xs text-[#519c66]">+0.00%</span>
+                    <span className="font-medium text-[20px] text-[#45464e]">{dashboardData.customers?.customers?.active || 0}</span>
+                    <span className="text-xs text-[#519c66]">Active</span>
                   </div>
                 </div>
               </div>
@@ -381,17 +338,19 @@ export default function AdminDashboard() {
               <div className="flex gap-2 sm:gap-4 lg:gap-8 w-full justify-between">
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">All Orders</div>
-                  <div className="font-medium text-[20px] text-[#45464e]">{timePeriodData.allOrders}</div>
+                  <div className="font-medium text-[20px] text-[#45464e]">{dashboardData.orders?.allOrders?.value || 0}</div>
                 </div>
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">Pending</div>
-                  <div className="font-medium text-[20px] text-[#45464e]">{timePeriodData.pendingOrders}</div>
+                  <div className="font-medium text-[20px] text-[#45464e]">{dashboardData.orders?.pending?.value || 0}</div>
                 </div>
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">Completed</div>
                   <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">{timePeriodData.completedOrders}</span>
-                    <span className="text-xs text-[#519c66]">+0.00%</span>
+                    <span className="font-medium text-[20px] text-[#45464e]">{dashboardData.orders?.completed?.value || 0}</span>
+                    <span className={`text-xs ${(dashboardData.orders?.completed?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
+                      {(dashboardData.orders?.completed?.change || 0) >= 0 ? '+' : ''}{(dashboardData.orders?.completed?.change || 0).toFixed(1)}%
+                    </span>
                   </div>
                 </div>
               </div>
@@ -627,13 +586,13 @@ export default function AdminDashboard() {
                 <div className="flex items-center justify-between">
                 <span className="font-medium text-[#45464e] text-[16px] font-inter">Recent Activities</span>
                   <button 
-                    onClick={checkForActivities}
-                    disabled={isCheckingActivities}
+                    onClick={fetchDashboardData}
+                    disabled={loading}
                     className="p-2 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
                     title="Refresh activities"
                   >
                     <svg 
-                      className={`w-4 h-4 text-[#8b8d97] ${isCheckingActivities ? 'animate-spin' : ''}`} 
+                      className={`w-4 h-4 text-[#8b8d97] ${loading ? 'animate-spin' : ''}`} 
                       fill="none" 
                       viewBox="0 0 24 24"
                     >
@@ -649,7 +608,7 @@ export default function AdminDashboard() {
                 </div>
                 
                 <div className="flex flex-col gap-3 w-full overflow-y-auto max-h-[400px] pr-2">
-                  {activities.length === 0 ? (
+                  {!activities || activities.activities.length === 0 ? (
                     <div className="flex flex-col items-center justify-center flex-1 py-8">
                       <div className="w-[120px] h-[120px] rounded-full bg-[#f4f5fa] flex items-center justify-center mb-6">
                         <div className="w-[50px] h-[50px] flex items-center justify-center">
@@ -665,24 +624,31 @@ export default function AdminDashboard() {
                       <span className="text-[#8b8d97] text-[13px] text-center mb-4 max-w-[200px]">
                         Activities from Orders, Inventory, Customers, Approvals, and Users & Roles will appear here automatically.
                       </span>
-                      {isCheckingActivities && (
+                      {loading && (
                         <div className="flex items-center gap-2 text-[#8b8d97] text-[12px]">
                           <div className="w-3 h-3 border border-[#8b8d97] border-t-transparent rounded-full animate-spin"></div>
-                          Checking for activities...
+                          Loading activities...
                         </div>
                       )}
                     </div>
                   ) : (
-                    activities.map((activity) => (
+                    activities.activities.map((activity) => (
                       <div key={activity.id} className="bg-[#f4f5fa] rounded-lg px-4 py-3 text-[#45464e] text-sm shadow-sm">
                         <div className="flex items-start justify-between">
-                          <span className="flex-1">{activity.text}</span>
+                          <span className="flex-1">{activity.description}</span>
                           <span className="text-[10px] text-[#8b8d97] ml-2 whitespace-nowrap">
-                            {activity.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {new Date(activity.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
-                        <div className="text-[10px] text-[#8b8d97] mt-1">
-                          {activityCategories[activity.type]}
+                        <div className="flex items-center justify-between mt-1">
+                          <span className="text-[10px] text-[#8b8d97]">
+                            {activityCategories[activity.type] || activity.type}
+                          </span>
+                          {activity.amount && (
+                            <span className="text-[10px] text-[#519c66] font-medium">
+                              ₦{activity.amount.toLocaleString()}
+                            </span>
+                          )}
                         </div>
                       </div>
                     ))

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import Breadcrumb from "@/components/Breadcrumb";
+import { useNotifications } from "@/components/Notification";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -16,6 +17,10 @@ import {
   Filler,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+import { getSalesReport, getFinanceReport } from "@/services/reports";
+import { listCustomers } from "@/services/customers";
+import { getInventoryProducts } from "@/services/inventory";
+import { listProducts } from "@/services/products";
 
 ChartJS.register(
   CategoryScale,
@@ -74,6 +79,9 @@ const generateSampleData = (timeframe: string) => {
 };
 
 export default function ReportsPage() {
+  const { showError, showSuccess } = useNotifications();
+  
+  // UI State
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [timeframe, setTimeframe] = useState("weekly");
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
@@ -87,7 +95,153 @@ export default function ReportsPage() {
   const [isDraggingScrollbar, setIsDraggingScrollbar] = useState(false);
   const chartContainerRef = useRef<HTMLDivElement>(null);
   
-  const sampleData = generateSampleData(timeframe);
+  // API State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [apiData, setApiData] = useState({
+    salesReport: null as any,
+    financeReport: null as any,
+    customers: [] as any[],
+    inventory: [] as any[],
+    products: [] as any[]
+  });
+  const [apiError, setApiError] = useState<string | null>(null);
+  
+  // Authentication check
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      setIsAuthenticated(true);
+    } else {
+      window.location.href = '/login';
+    }
+    setLoading(false);
+  }, []);
+
+  // Fetch API data
+  const fetchReportsData = async () => {
+    if (!isAuthenticated) return;
+    
+    setLoading(true);
+    setApiError(null);
+    
+    try {
+      // Calculate date range based on timeframe
+      const endDate = new Date();
+      const startDate = new Date();
+      
+      switch (timeframe) {
+        case 'daily':
+          startDate.setDate(endDate.getDate() - 1);
+          break;
+        case 'weekly':
+          startDate.setDate(endDate.getDate() - 7);
+          break;
+        case 'monthly':
+          startDate.setMonth(endDate.getMonth() - 1);
+          break;
+        case 'yearly':
+          startDate.setFullYear(endDate.getFullYear() - 1);
+          break;
+      }
+
+      const dateParams = {
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
+        groupBy: (timeframe === 'daily' ? 'day' : timeframe === 'weekly' ? 'week' : timeframe === 'monthly' ? 'month' : 'year') as 'day' | 'week' | 'month' | 'year'
+      };
+
+      // Fetch data from multiple APIs
+      const [salesReport, financeReport, customers, inventory, products] = await Promise.allSettled([
+        getSalesReport(dateParams).catch(() => null),
+        getFinanceReport(dateParams).catch(() => null),
+        listCustomers().catch(() => []),
+        getInventoryProducts().catch(() => []),
+        listProducts().catch(() => [])
+      ]);
+
+      setApiData({
+        salesReport: salesReport.status === 'fulfilled' ? salesReport.value : null,
+        financeReport: financeReport.status === 'fulfilled' ? financeReport.value : null,
+        customers: customers.status === 'fulfilled' ? customers.value : [],
+        inventory: inventory.status === 'fulfilled' ? inventory.value : [],
+        products: products.status === 'fulfilled' ? products.value : []
+      });
+
+    } catch (err: any) {
+      setApiError(err.message || 'Failed to load reports data');
+      showError('Error', err.message || 'Failed to load reports data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load data when authenticated or timeframe changes
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchReportsData();
+    }
+  }, [isAuthenticated, timeframe]);
+
+  // Generate data from API or fallback to sample data
+  const getReportsData = () => {
+    if (loading || apiError) {
+      return generateSampleData(timeframe);
+    }
+
+    // Use API data to generate reports
+    const { salesReport, financeReport, customers, inventory, products } = apiData;
+    
+    // Ensure we have arrays to work with
+    const safeProducts = Array.isArray(products) ? products : [];
+    const safeCustomers = Array.isArray(customers) ? customers : [];
+    const safeInventory = Array.isArray(inventory) ? inventory : [];
+
+    // Transform API data to match the expected format
+    const categories = safeProducts.slice(0, 4).map((product: any, index: number) => ({
+      name: product.name || `Product ${index + 1}`,
+      turnover: product.sellingPrice * (product.quantity || 0),
+      increase: Math.random() * 5, // Placeholder - would come from historical data
+      brand: product.brand || 'Unknown',
+      quantitySold: product.quantity || 0
+    }));
+
+    const transformedProducts = safeProducts.slice(0, 4).map((product: any) => ({
+      name: product.name || 'Unknown Product',
+      id: product.id || 'N/A',
+      category: product.category?.name || 'General',
+      quantity: `${product.quantity || 0} units`,
+      turnover: product.sellingPrice * (product.quantity || 0),
+      increase: Math.random() * 3 // Placeholder
+    }));
+
+    const transformedCustomers = safeCustomers.slice(0, 4).map((customer: any) => ({
+      name: customer.name || 'Unknown Customer',
+      orders: customer.orders || 0,
+      totalSpent: customer.orderTotal || 0,
+      lastOrder: customer.updatedAt ? new Date(customer.updatedAt).toISOString().split('T')[0] : 'N/A',
+      status: customer.status || 'Active'
+    }));
+
+    const transformedInventory = safeInventory.slice(0, 4).map((item: any) => ({
+      product: item.name || 'Unknown Product',
+      currentStock: item.quantity || 0,
+      minStock: item.reorderPoint || 10,
+      maxStock: (item.quantity || 0) * 2,
+      status: (item.quantity || 0) > (item.reorderPoint || 10) ? 'Good' : 'Low',
+      reorder: (item.quantity || 0) <= (item.reorderPoint || 10) ? 'Yes' : 'No',
+      supplier: 'Unknown Supplier'
+    }));
+
+    return {
+      categories,
+      products: transformedProducts,
+      customers: transformedCustomers,
+      inventory: transformedInventory
+    };
+  };
+
+  const sampleData = getReportsData();
 
   // Overview metrics - timeframe specific
   const getTimeframeMultiplier = (timeframe: string) => {
@@ -625,6 +779,49 @@ export default function ReportsPage() {
       downloadFile(docContent, `${filename}.doc`, 'application/msword');
     }
   };
+
+  // Show loading state
+  if (loading) {
+  return (
+    <div className="flex h-screen bg-gray-50">
+      <Sidebar currentPage="reports" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header title="Reports" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading reports data...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (apiError) {
+    return (
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar currentPage="reports" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header title="Reports" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-red-500 text-6xl mb-4">⚠️</div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Failed to Load Reports</h2>
+              <p className="text-gray-600 mb-4">{apiError}</p>
+              <button 
+                onClick={fetchReportsData}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">

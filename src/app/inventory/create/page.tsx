@@ -75,6 +75,10 @@ export default function CreateInventoryPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
+  
+  // Warehouse creation mode
+  const [isCreatingNewWarehouse, setIsCreatingNewWarehouse] = useState(false);
+  const [newWarehouseName, setNewWarehouseName] = useState('');
 
   // Tyre brands list
   const tyreBrands = [
@@ -210,7 +214,8 @@ export default function CreateInventoryPage() {
         description: formData.shortDescription,
         sku: formData.sku || `TIRE-${Date.now()}`, // Generate unique SKU if not provided
         categoryId: selectedCategoryId || "default-category-id",
-        warehouseId: selectedWarehouseId || "default-warehouse-id",
+        warehouseId: isCreatingNewWarehouse ? undefined : (selectedWarehouseId || "default-warehouse-id"),
+        warehouseName: isCreatingNewWarehouse ? newWarehouseName : undefined, // Send warehouse name for auto-creation
         purchasePrice: parseFloat(formData.costPrice) || 0, // Backend expects purchasePrice
         sellingPrice: parseFloat(formData.sellingPrice) || 0, // Backend expects sellingPrice
         quantity: parseInt(formData.quantityInStock) || 0,
@@ -243,6 +248,14 @@ export default function CreateInventoryPage() {
       showError('Validation Error', 'Product category is required');
       return;
     }
+    if (!isCreatingNewWarehouse && !selectedWarehouseId) {
+      showError('Validation Error', 'Please select a warehouse');
+      return;
+    }
+    if (isCreatingNewWarehouse && !newWarehouseName.trim()) {
+      showError('Validation Error', 'Please enter a warehouse name');
+      return;
+    }
     if (!formData.sellingPrice.trim()) {
       showError('Validation Error', 'Selling price is required');
       return;
@@ -259,7 +272,8 @@ export default function CreateInventoryPage() {
         description: formData.shortDescription,
         sku: formData.sku || `TIRE-${Date.now()}`, // Generate unique SKU if not provided
         categoryId: selectedCategoryId || "default-category-id",
-        warehouseId: selectedWarehouseId || "default-warehouse-id",
+        warehouseId: isCreatingNewWarehouse ? undefined : (selectedWarehouseId || "default-warehouse-id"),
+        warehouseName: isCreatingNewWarehouse ? newWarehouseName : undefined, // Send warehouse name for auto-creation
         purchasePrice: parseFloat(formData.costPrice) || 0, // Backend expects purchasePrice
         sellingPrice: parseFloat(formData.sellingPrice) || 0, // Backend expects sellingPrice
         quantity: parseInt(formData.quantityInStock) || 0,
@@ -507,29 +521,82 @@ export default function CreateInventoryPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Warehouse
                 </label>
-                <div className="relative">
-                  <select
-                    value={selectedWarehouseId}
-                    onChange={(e) => setSelectedWarehouseId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
-                  >
-                    {warehouses.length > 0 ? (
-                      warehouses.map((warehouse) => (
-                        <option key={warehouse.id} value={warehouse.id}>
-                          {warehouse.name} - {warehouse.location}
-                        </option>
-                      ))
-                    ) : (
-                      <option value="">Loading warehouses...</option>
-                    )}
-                  </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
+                
+                {/* Warehouse Mode Toggle */}
+                <div className="mb-4">
+                  <div className="flex space-x-4">
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="warehouseMode"
+                        checked={!isCreatingNewWarehouse}
+                        onChange={() => {
+                          setIsCreatingNewWarehouse(false);
+                          setNewWarehouseName('');
+                        }}
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-700">Select Existing Warehouse</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="warehouseMode"
+                        checked={isCreatingNewWarehouse}
+                        onChange={() => {
+                          setIsCreatingNewWarehouse(true);
+                          setSelectedWarehouseId('');
+                        }}
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-700">Create New Warehouse</span>
+                    </label>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Select the warehouse where this product will be stored</p>
+
+                {/* Existing Warehouse Dropdown */}
+                {!isCreatingNewWarehouse && (
+                  <div className="relative">
+                    <select
+                      value={selectedWarehouseId}
+                      onChange={(e) => setSelectedWarehouseId(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+                    >
+                      <option value="">Select a warehouse...</option>
+                      {warehouses.length > 0 ? (
+                        warehouses.map((warehouse) => (
+                          <option key={warehouse.id} value={warehouse.id}>
+                            {warehouse.name} - {warehouse.location}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="">Loading warehouses...</option>
+                      )}
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                      <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Select the warehouse where this product will be stored</p>
+                  </div>
+                )}
+
+                {/* New Warehouse Name Input */}
+                {isCreatingNewWarehouse && (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={newWarehouseName}
+                      onChange={(e) => setNewWarehouseName(e.target.value)}
+                      placeholder="Enter new warehouse name (e.g., 'Storage Room A')"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <div className="mt-2 text-sm text-gray-600">
+                      <p>💡 The system will automatically create this warehouse and assign it a unique ID.</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
             </div>

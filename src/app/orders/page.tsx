@@ -125,7 +125,7 @@ export default function OrdersPage() {
     }
   };
 
-  // Generate orders using API data or fallback to service
+  // Generate orders using API data only
   const sampleOrders = apiData
     ? apiData.orders.map(o => {
         const colorMap: Record<string, string> = {
@@ -148,18 +148,7 @@ export default function OrdersPage() {
           warehouseNumber: 'N/A' // API doesn't provide warehouse info yet
         };
       })
-    : OrderDataService.generateOrders(200).map(order => ({
-        id: order.id,
-        name: order.customer.name,
-        date: order.orderDate,
-        type: order.orderType,
-        tracking: order.trackingId,
-        total: OrderDataService.formatCurrency(order.totalAmount),
-        action: order.status,
-        status: order.status,
-        statusColor: order.statusColor,
-        warehouseNumber: order.items[0]?.warehouseNumber || 'N/A'
-      }));
+    : []; // Return empty array instead of dummy data
   
   // Apply search filter
   const filteredOrders = sampleOrders.filter(order => {

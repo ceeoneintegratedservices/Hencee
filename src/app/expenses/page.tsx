@@ -9,6 +9,7 @@ import Header from '@/components/Header';
 import Breadcrumb from '@/components/Breadcrumb';
 import AddExpenseModal from '@/components/AddExpenseModal';
 import ExpenseDetailsModal from '@/components/ExpenseDetailsModal';
+import { listExpenses, createExpense, updateExpense, deleteExpense, getExpenseCategories, getExpenseDepartments, type Expense as APIExpense } from '@/services/expenses';
 
 export default function ExpensesPage() {
   const router = useRouter();
@@ -17,6 +18,8 @@ export default function ExpensesPage() {
   // Authentication check
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [apiLoading, setApiLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
   
   // Data states
   const [expenseItems, setExpenseItems] = useState<ExpenseItem[]>([]);
@@ -70,15 +73,68 @@ export default function ExpensesPage() {
     setLoading(false);
   }, [router]);
 
-  // Load expenses data
+  // Fetch expenses from API
+  const fetchExpenses = async () => {
+    if (!isAuthenticated) return;
+    
+    setApiLoading(true);
+    setApiError(null);
+    
+    try {
+      const response = await listExpenses({
+        page: 1,
+        limit: 100 // Get more expenses for better UX
+      });
+      
+      // Transform API data to match UI format
+      const transformedExpenses: ExpenseItem[] = response.data.map((expense: APIExpense) => ({
+        id: expense.id,
+        title: expense.title,
+        description: expense.description,
+        amount: expense.amount,
+        currency: '₦', // Default currency
+        category: expense.category,
+        department: expense.department,
+        priority: expense.priority,
+        status: expense.status === 'Paid' ? 'Approved' : expense.status, // Map Paid to Approved for UI
+        requestDate: expense.requestDate,
+        requestedBy: expense.requester.name,
+        requestedByEmail: expense.requester.email,
+        approvedDate: expense.approvedDate,
+        approvedBy: expense.approvedBy,
+        receiptImage: expense.receiptUrl,
+        tags: [], // Default empty tags array
+        // Additional fields that might be needed
+        rejectionReason: expense.status === 'Rejected' ? 'Rejected by approver' : undefined,
+        decisionDate: expense.approvedDate || expense.updatedAt,
+        vendor: 'Unknown Vendor', // Default vendor
+        invoiceNumber: `INV-${expense.id.slice(-6)}` // Generate invoice number from ID
+      }));
+      
+      setExpenseItems(transformedExpenses);
+      setFilteredItems(transformedExpenses);
+      
+      // Generate summary from API data
+      const summary = ExpensesDataService.generateExpenseSummary(transformedExpenses);
+      setSummaryData(summary);
+      
+    } catch (err: any) {
+      setApiError(err.message || 'Failed to load expenses');
+      showError('Error', err.message || 'Failed to load expenses');
+      
+      // No fallback - show empty state instead
+      setExpenseItems([]);
+      setFilteredItems([]);
+      setSummaryData(null);
+    } finally {
+      setApiLoading(false);
+    }
+  };
+
+  // Load expenses when authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      const items = ExpensesDataService.generateExpenseItems(150);
-      setExpenseItems(items);
-      setFilteredItems(items);
-      
-      const summary = ExpensesDataService.generateExpenseSummary(items);
-      setSummaryData(summary);
+      fetchExpenses();
     }
   }, [isAuthenticated]);
 
@@ -222,12 +278,35 @@ export default function ExpensesPage() {
     showSuccess('Updated', `Expense toggled to ${target}.`);
   };
 
-  if (loading) {
+  if (loading || apiLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">
+            {loading ? 'Loading...' : 'Fetching expenses data...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (apiError) {
+    return (
+      <div className="flex w-full h-screen bg-gray-50 overflow-hidden">
+        <Sidebar currentPage="expenses" sidebarOpen={showSidebar} setSidebarOpen={setShowSidebar} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-red-500 text-6xl mb-4">⚠️</div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Failed to Load Expenses</h2>
+            <p className="text-gray-600 mb-4">{apiError}</p>
+            <button 
+              onClick={fetchExpenses}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     );

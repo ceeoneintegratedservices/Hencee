@@ -7,7 +7,8 @@ export interface Tire {
   description?: string;
   sku: string;
   categoryId: string;
-  warehouseId: string;
+  warehouseId?: string; // Made optional to support new warehouse creation
+  warehouseName?: string; // Added for new warehouse creation
   purchasePrice: number;
   sellingPrice: number;
   quantity: number;

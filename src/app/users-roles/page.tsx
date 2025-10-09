@@ -6,6 +6,7 @@ import Header from '@/components/Header';
 import Breadcrumb from '@/components/Breadcrumb';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import TimePeriodSelector from '@/components/TimePeriodSelector';
+import { listUsers, createUser, updateUser, deleteUser, type User as APIUser } from '@/services/users';
 
 interface Role {
   id: string;
@@ -53,6 +54,8 @@ export default function UsersRolesPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [apiLoading, setApiLoading] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   // UI: user permission drawer/modal
   const [showUserPermissions, setShowUserPermissions] = useState(false);
@@ -67,12 +70,7 @@ export default function UsersRolesPage() {
 
   const [roles, setRoles] = useState<Role[]>(defaultRoles);
   const [selectedRoleId, setSelectedRoleId] = useState<string>('admin');
-  const [users, setUsers] = useState<AppUser[]>([
-    { id: 'u1', name: 'Admin User', email: 'admin@company.com', status: 'Active', roleId: 'admin' },
-    { id: 'u2', name: 'Mary Johnson', email: 'mary@company.com', status: 'Active', roleId: 'manager' },
-    { id: 'u3', name: 'Ken Obi', email: 'ken@company.com', status: 'Inactive', roleId: 'sales' },
-    { id: 'u4', name: 'James Doe', email: 'james@company.com', status: 'Active', roleId: 'inventory' }
-  ]);
+  const [users, setUsers] = useState<AppUser[]>([]);
 
   // Users filters & pagination (must be declared before any conditional returns)
   const [userSearch, setUserSearch] = useState('');
@@ -131,6 +129,55 @@ export default function UsersRolesPage() {
     setIsAuthenticated(!!token);
     setLoading(false);
   }, []);
+
+  // Fetch users from API
+  const fetchUsers = async () => {
+    if (!isAuthenticated) return;
+    
+    setApiLoading(true);
+    setApiError(null);
+    
+    try {
+      const response = await listUsers({
+        page: 1,
+        limit: 100 // Get more users for better UX
+      });
+      
+      // Transform API data to match UI format
+      const transformedUsers: AppUser[] = response.data.map((user: APIUser) => ({
+        id: user.id,
+        name: `${user.firstName} ${user.lastName}`.trim(),
+        email: user.email,
+        status: user.isActive ? 'Active' : 'Inactive',
+        roleId: user.roleId || 'admin' // Default to admin if no role
+      }));
+      
+      setUsers(transformedUsers);
+      
+    } catch (err: any) {
+      setApiError(err.message || 'Failed to load users');
+      showSuccess('Error', err.message || 'Failed to load users');
+      
+      // Fallback to sample data if API fails
+      const sampleUsers: AppUser[] = [
+        { id: 'u1', name: 'Admin User', email: 'admin@company.com', status: 'Active', roleId: 'admin' },
+        { id: 'u2', name: 'Mary Johnson', email: 'mary@company.com', status: 'Active', roleId: 'manager' },
+        { id: 'u3', name: 'Ken Obi', email: 'ken@company.com', status: 'Inactive', roleId: 'sales' },
+        { id: 'u4', name: 'James Doe', email: 'james@company.com', status: 'Active', roleId: 'inventory' }
+      ];
+      
+      setUsers(sampleUsers);
+    } finally {
+      setApiLoading(false);
+    }
+  };
+
+  // Load users when authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchUsers();
+    }
+  }, [isAuthenticated]);
 
   // Load saved state
   useEffect(() => {
@@ -232,12 +279,35 @@ export default function UsersRolesPage() {
     showSuccess('Reset', `Permissions reset to role defaults for ${user.name}`);
   };
 
-  if (loading) {
+  if (loading || apiLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <p className="mt-4 text-gray-600">
+            {loading ? 'Loading...' : 'Fetching users data...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (apiError) {
+    return (
+      <div className="flex w-full h-screen bg-gray-50 overflow-hidden">
+        <Sidebar currentPage="users_roles" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-red-500 text-6xl mb-4">⚠️</div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Failed to Load Users</h2>
+            <p className="text-gray-600 mb-4">{apiError}</p>
+            <button 
+              onClick={fetchUsers}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     );
