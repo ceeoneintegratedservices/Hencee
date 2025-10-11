@@ -4,7 +4,7 @@ This project uses environment variables to configure the API base URL for the Ce
 
 ## Setup
 
-1. **Environment File**: The project uses `.env.local` for local development.
+1. **Environment File**: The project uses `.env.local` for local development..
 2. **Configuration**: The base URL is configured in `src/config/api.ts`
 
 ## Configuration
@@ -78,4 +78,5 @@ The CeeOne ERP API is currently:
 - Restart your development server after changing environment variables
 
 - Visit [https://ceeone-api.onrender.com/api](https://ceeone-api.onrender.com/api) for detailed API documentation 
+
 
