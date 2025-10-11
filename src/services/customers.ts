@@ -140,7 +140,16 @@ export async function getTopCustomers(): Promise<CustomerRecord[]> {
   try {
     const response = await authFetch(API_ENDPOINTS.customerTop);
     const data = await response.json();
-    return data;
+    
+    // Handle different response formats
+    if (data && Array.isArray(data.data)) {
+      return data.data;
+    } else if (Array.isArray(data)) {
+      return data;
+    } else {
+      console.error("Unexpected top customers API response format:", data);
+      return [];
+    }
   } catch (error) {
     console.error('Error fetching top customers:', error);
     throw error;

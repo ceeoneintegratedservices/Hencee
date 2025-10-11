@@ -126,7 +126,7 @@ export default function OrdersPage() {
   };
 
   // Generate orders using API data only
-  const sampleOrders = apiData
+  const sampleOrders = apiData && apiData.orders && Array.isArray(apiData.orders)
     ? apiData.orders.map(o => {
         const colorMap: Record<string, string> = {
           green: 'bg-green-100 text-green-800',
@@ -211,15 +211,15 @@ export default function OrdersPage() {
   const currentOrders = apiData ? sampleOrders : sortedOrders.slice(startIndex, endIndex);
 
   // Use API data for summary or fallback to service
-  const timePeriodData = apiData ? {
-    allOrders: apiData.summary.allOrders,
-    pendingOrders: apiData.summary.pending,
-    completedOrders: apiData.summary.completed,
-    canceledOrders: apiData.summary.canceled,
-    returnedOrders: apiData.summary.returned,
-    damagedOrders: apiData.summary.damaged,
-    abandonedCarts: apiData.summary.abandonedCart,
-    uniqueCustomers: apiData.summary.customers,
+  const timePeriodData = apiData && apiData.summary ? {
+    allOrders: apiData.summary.allOrders || 0,
+    pendingOrders: apiData.summary.pending || 0,
+    completedOrders: apiData.summary.completed || 0,
+    canceledOrders: apiData.summary.canceled || 0,
+    returnedOrders: apiData.summary.returned || 0,
+    damagedOrders: apiData.summary.damaged || 0,
+    abandonedCarts: apiData.summary.abandonedCart || 0,
+    uniqueCustomers: apiData.summary.customers || 0,
   } : (() => {
     const fullOrders = OrderDataService.generateOrders(200);
     const summaryData = OrderDataService.getOrderSummary(fullOrders);

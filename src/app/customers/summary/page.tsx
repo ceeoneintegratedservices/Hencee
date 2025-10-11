@@ -44,11 +44,14 @@ export default function CustomerSummaryPage() {
     setTopCustomersError(null);
     try {
       const data = await getTopCustomers();
-      setTopCustomers(data);
+      // Ensure data is always an array
+      setTopCustomers(Array.isArray(data) ? data : []);
     } catch (error: any) {
       console.error('Error fetching top customers:', error);
       setTopCustomersError(error.message || 'Failed to load top customers');
       showError('Error', error.message || 'Failed to load top customers');
+      // Set empty array on error to prevent map errors
+      setTopCustomers([]);
     } finally {
       setTopCustomersLoading(false);
     }
