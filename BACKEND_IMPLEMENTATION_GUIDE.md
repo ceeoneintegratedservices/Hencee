@@ -75,9 +75,9 @@ CREATE TABLE inventory (
 
 ## 3. **Update Your Backend Handler**
 
-Here's the exact code to add to your inventory creation endpoint:
+Here's the exact code to add to your inventory creation end-point:
 
-```typescript
+```typescript.
 // Example for Node.js/Express
 app.post('/inventory', async (req, res) => {
   try {
