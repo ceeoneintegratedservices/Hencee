@@ -14,10 +14,16 @@ import {
 import { type CustomerRecord } from "@/types/customers";
 import { useNotifications } from "@/components/Notification";
 import { NotificationContainer } from "@/components/Notification";
+import Sidebar from "@/components/Sidebar";
+import Header from "@/components/Header";
+import Breadcrumb from "@/components/Breadcrumb";
 
 export default function CustomerSummaryPage() {
   const router = useRouter();
   const { showSuccess, showError, notifications, removeNotification } = useNotifications();
+  
+  // Sidebar state
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   
   // State for different data sections
   const [topCustomers, setTopCustomers] = useState<CustomerRecord[]>([]);
@@ -126,26 +132,34 @@ export default function CustomerSummaryPage() {
     : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex w-full h-screen bg-[#f4f5fa] overflow-hidden">
       <NotificationContainer notifications={notifications} onRemove={removeNotification} />
       
-      {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">Customer Summary</h1>
-              <p className="text-gray-600 mt-1">Comprehensive customer analytics and insights</p>
-            </div>
-            <button
-              onClick={() => router.push('/customers')}
-              className="px-4 py-2 bg-[#02016a] text-white rounded-lg hover:bg-[#03024a] transition-colors"
-            >
-              View All Customers
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* Sidebar */}
+      <Sidebar 
+        currentPage="customers"
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+      />
+      
+      {/* Main Content */}
+      <main className="flex-1 h-screen overflow-y-auto transition-all duration-300 relative">
+        {/* Click overlay to close sidebar when clicking on main content */}
+        {sidebarOpen && (
+          <div 
+            className="fixed inset-0 z-20 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+        
+        {/* Header */}
+        <Header title="Customer Summary" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+        
+        {/* Breadcrumbs */}
+        <Breadcrumb items={[
+          { label: 'Dashboard', href: '/dashboard' },
+          { label: 'Customer Summary', href: '/customers/summary' }
+        ]} />
 
       <div className="p-6 space-y-6">
         {/* Summary Cards */}
@@ -432,6 +446,7 @@ export default function CustomerSummaryPage() {
           </div>
         </div>
       </div>
+      </main>
     </div>
   );
 }

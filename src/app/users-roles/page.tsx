@@ -144,12 +144,12 @@ export default function UsersRolesPage() {
       });
       
       // Transform API data to match UI format
-      const transformedUsers: AppUser[] = response.data.map((user: APIUser) => ({
+      const transformedUsers: AppUser[] = response.users.map((user: APIUser) => ({
         id: user.id,
-        name: `${user.firstName} ${user.lastName}`.trim(),
+        name: user.name, // API already provides name field
         email: user.email,
         status: user.isActive ? 'Active' : 'Inactive',
-        roleId: user.roleId || 'admin' // Default to admin if no role
+        roleId: user.role?.id || 'admin' // Use role.id from the role object
       }));
       
       setUsers(transformedUsers);

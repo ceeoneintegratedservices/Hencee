@@ -4,24 +4,28 @@ import { authFetch } from "./authFetch";
 export interface User {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
-  roleId: string;
-  role?: {
-    id: string;
-    name: string;
-    permissions: string[];
-  };
+  name: string;
+  phone: string;
   isActive: boolean;
+  isEmailVerified: boolean;
+  lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;
+  role: {
+    id: string;
+    name: string;
+    description: string;
+    roleType: string;
+    permissions: string[];
+  };
 }
 
 export interface UsersListResponse {
-  data: User[];
+  users: User[];
   total: number;
   page: number;
   limit: number;
+  totalPages: number;
 }
 
 export interface UserParams {
@@ -34,15 +38,15 @@ export interface UserParams {
 
 export interface CreateUserPayload {
   email: string;
-  firstName: string;
-  lastName: string;
+  name: string;
+  phone: string;
   password: string;
   roleId: string;
 }
 
 export interface UpdateUserPayload {
-  firstName?: string;
-  lastName?: string;
+  name?: string;
+  phone?: string;
   roleId?: string;
   isActive?: boolean;
 }

@@ -8,7 +8,7 @@ import Header from "../../components/Header";
 import Breadcrumb from "../../components/Breadcrumb";
 import TimePeriodSelector from "../../components/TimePeriodSelector";
 import { 
-  // getDashboardOverview, 
+  getDashboardOverview, 
   getDashboardActivities,
   type DashboardOverview,
   type DashboardActivities,
@@ -119,9 +119,12 @@ export default function AdminDashboard() {
     
     try {
       const timeframe = getTimeFrame(selectedTimePeriod);
-      const activitiesData = await getDashboardActivities(timeframe);
+      const [overviewData, activitiesData] = await Promise.all([
+        getDashboardOverview(timeframe),
+        getDashboardActivities(timeframe)
+      ]);
       
-      setDashboardData(null); // No overview data since API is commented out
+      setDashboardData(overviewData);
       setActivities(activitiesData);
     } catch (err: any) {
       setError(err.message || 'Failed to load dashboard data');
@@ -220,34 +223,7 @@ export default function AdminDashboard() {
         ]} />
         
         <div className="px-5 pt-7">
-          {/* Show indicator when using fallback data */}
-          {!dashboardData && (
-            <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <div className="flex items-center">
-                <svg className="w-4 h-4 text-yellow-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                <span className="text-sm text-yellow-800">Dashboard data unavailable. Showing fallback data.</span>
-              </div>
-            </div>
-          )}
-          
-          {/* Use fallback data when API data is not available */}
-          {(() => {
-            // Create fallback data when dashboardData is null
-            const fallbackData = dashboardData || {
-              sales: { sales: { value: 0, change: 0, volume: 0 } },
-              customers: { customers: { value: 0, change: 0, active: 0 } },
-              products: { allProducts: { value: 0, change: 0 }, active: { value: 0, change: 0 } },
-              orders: { allOrders: { value: 0, change: 0 }, pending: { value: 0 }, completed: { value: 0, change: 0 } },
-              marketing: { acquisition: 0, purchase: 0, retention: 0 },
-              volume: { volume: { value: 0 }, receivables: { value: 0 }, active: { value: 0 } },
-              users: { allUsers: { value: 0, change: 0 }, pending: { value: 0, change: 0 }, approved: { value: 0, change: 0 }, rejected: { value: 0, change: 0 } }
-            };
-            
-            return (
-              <>
-                {/* Top Section: 2 rows of summary cards with responsive layout */}
+          {/* Top Section: 2 rows of summary cards with responsive layout */}
           <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-10 gap-3 sm:gap-4 lg:gap-5 mb-5 items-stretch">
             {/* Row 1 - Sales Card (27%) */}
             <div
@@ -274,15 +250,15 @@ export default function AdminDashboard() {
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">Sales</div>
                   <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">₦{(fallbackData.sales?.sales?.value || 0).toLocaleString()}</span>
-                    <span className={`text-xs ${(fallbackData.sales?.sales?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
-                      {(fallbackData.sales?.sales?.change || 0) >= 0 ? '+' : ''}{(fallbackData.sales?.sales?.change || 0).toFixed(1)}%
+                    <span className="font-medium text-[20px] text-[#45464e]">₦{(dashboardData?.sales?.sales?.value || 0).toLocaleString()}</span>
+                    <span className={`text-xs ${(dashboardData?.sales?.sales?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
+                      {(dashboardData?.sales?.sales?.change || 0) >= 0 ? '+' : ''}{(dashboardData?.sales?.sales?.change || 0).toFixed(1)}%
                     </span>
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">Volume</div>
-                  <div className="font-medium text-[20px] text-[#45464e]">{fallbackData.sales?.sales?.volume || 0}</div>
+                  <div className="font-medium text-[20px] text-[#45464e]">{dashboardData?.sales?.sales?.volume || 0}</div>
                 </div>
               </div>
             </div>
@@ -313,16 +289,16 @@ export default function AdminDashboard() {
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">Customers</div>
                   <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">{fallbackData.customers?.customers?.value || 0}</span>
-                    <span className={`text-xs ${(fallbackData.customers?.customers?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
-                      {(fallbackData.customers?.customers?.change || 0) >= 0 ? '+' : ''}{(fallbackData.customers?.customers?.change || 0).toFixed(1)}%
+                    <span className="font-medium text-[20px] text-[#45464e]">{dashboardData?.customers?.customers?.value || 0}</span>
+                    <span className={`text-xs ${(dashboardData?.customers?.customers?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
+                      {(dashboardData?.customers?.customers?.change || 0) >= 0 ? '+' : ''}{(dashboardData?.customers?.customers?.change || 0).toFixed(1)}%
                     </span>
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">Active</div>
                   <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">{fallbackData.customers?.customers?.active || 0}</span>
+                    <span className="font-medium text-[20px] text-[#45464e]">{dashboardData?.customers?.customers?.active || 0}</span>
                     <span className="text-xs text-[#519c66]">Active</span>
                   </div>
                 </div>
@@ -352,18 +328,18 @@ export default function AdminDashboard() {
               <div className="flex gap-2 sm:gap-4 lg:gap-8 w-full justify-between">
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">All Orders</div>
-                  <div className="font-medium text-[20px] text-[#45464e]">{fallbackData.orders?.allOrders?.value || 0}</div>
+                  <div className="font-medium text-[20px] text-[#45464e]">{dashboardData?.orders?.allOrders?.value || 0}</div>
                 </div>
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">Pending</div>
-                  <div className="font-medium text-[20px] text-[#45464e]">{fallbackData.orders?.pending?.value || 0}</div>
+                  <div className="font-medium text-[20px] text-[#45464e]">{dashboardData?.orders?.pending?.value || 0}</div>
                 </div>
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">Completed</div>
                   <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">{fallbackData.orders?.completed?.value || 0}</span>
-                    <span className={`text-xs ${(fallbackData.orders?.completed?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
-                      {(fallbackData.orders?.completed?.change || 0) >= 0 ? '+' : ''}{(fallbackData.orders?.completed?.change || 0).toFixed(1)}%
+                    <span className="font-medium text-[20px] text-[#45464e]">{dashboardData?.orders?.completed?.value || 0}</span>
+                    <span className={`text-xs ${(dashboardData?.orders?.completed?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
+                      {(dashboardData?.orders?.completed?.change || 0) >= 0 ? '+' : ''}{(dashboardData?.orders?.completed?.change || 0).toFixed(1)}%
                     </span>
                   </div>
                 </div>
@@ -723,9 +699,6 @@ export default function AdminDashboard() {
             {/* Empty space to maintain grid alignment */}
             <div className="lg:col-span-1"></div>
           </div>
-              </>
-            );
-          })()}
         </div>
       </main>
     </div>

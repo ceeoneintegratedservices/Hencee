@@ -33,49 +33,14 @@ ChartJS.register(
   Filler
 );
 
-// Sample data for tyre business
-const generateSampleData = (timeframe: string) => {
-  // Generate timeframe-specific multipliers
-  const getTimeframeMultiplier = (timeframe: string) => {
-    switch (timeframe) {
-      case 'daily': return 0.14; // 1/7th of weekly
-      case 'weekly': return 1;
-      case 'monthly': return 4.3; // ~4.3 weeks per month
-      case 'yearly': return 52; // 52 weeks per year
-      default: return 1;
-    }
+// Generate empty data structure for fallback
+const generateEmptyData = () => {
+  return {
+    categories: [],
+    products: [],
+    customers: [],
+    inventory: []
   };
-
-  const multiplier = getTimeframeMultiplier(timeframe);
-  const categories = [
-    { name: "GL601 Tyres", turnover: Math.round(26000 * multiplier), increase: 3.2, brand: "Michelin", quantitySold: Math.round(450 * multiplier) },
-    { name: "GL602 Tyres", turnover: Math.round(22000 * multiplier), increase: 2.0, brand: "Bridgestone", quantitySold: Math.round(320 * multiplier) },
-    { name: "GL908 Tyres", turnover: Math.round(22000 * multiplier), increase: 1.5, brand: "Goodyear", quantitySold: Math.round(280 * multiplier) },
-    { name: "DW703tx Tyres", turnover: Math.round(18000 * multiplier), increase: 2.8, brand: "Continental", quantitySold: Math.round(520 * multiplier) }
-  ];
-
-  const products = [
-    { name: "Michelin GL601", id: "23567", category: "GL601", quantity: `${Math.round(225 * multiplier)} units`, turnover: Math.round(17000 * multiplier), increase: 2.3 },
-    { name: "Bridgestone GL602", id: "25831", category: "GL602", quantity: `${Math.round(200 * multiplier)} units`, turnover: Math.round(12000 * multiplier), increase: 1.3 },
-    { name: "Goodyear GL908", id: "56841", category: "GL908", quantity: `${Math.round(200 * multiplier)} units`, turnover: Math.round(10000 * multiplier), increase: 1.3 },
-    { name: "Continental DW703tx", id: "23567", category: "DW703tx", quantity: `${Math.round(125 * multiplier)} units`, turnover: Math.round(9000 * multiplier), increase: 1.0 }
-  ];
-
-  const customers = [
-    { name: "John Smith", orders: Math.round(15 * multiplier), totalSpent: Math.round(45000 * multiplier), lastOrder: "2024-01-15", status: "Active" },
-    { name: "Sarah Johnson", orders: Math.round(12 * multiplier), totalSpent: Math.round(38000 * multiplier), lastOrder: "2024-01-14", status: "Active" },
-    { name: "Mike Wilson", orders: Math.round(8 * multiplier), totalSpent: Math.round(25000 * multiplier), lastOrder: "2024-01-13", status: "Active" },
-    { name: "Emily Davis", orders: Math.round(20 * multiplier), totalSpent: Math.round(62000 * multiplier), lastOrder: "2024-01-12", status: "VIP" }
-  ];
-
-  const inventory = [
-    { product: "Michelin Primacy 4", currentStock: Math.round(225 * multiplier), minStock: 50, maxStock: 500, status: "Good", reorder: "No", supplier: "Michelin Nigeria" },
-    { product: "Bridgestone Ecopia", currentStock: Math.round(200 * multiplier), minStock: 30, maxStock: 400, status: "Good", reorder: "No", supplier: "Bridgestone West Africa" },
-    { product: "Goodyear Wrangler", currentStock: Math.round(200 * multiplier), minStock: 100, maxStock: 300, status: "Good", reorder: "No", supplier: "Goodyear Nigeria" },
-    { product: "Continental ContiTrac", currentStock: Math.round(125 * multiplier), minStock: 50, maxStock: 200, status: "Low", reorder: "Yes", supplier: "Continental Tyres" }
-  ];
-
-  return { categories, products, customers, inventory };
 };
 
 export default function ReportsPage() {
@@ -130,7 +95,7 @@ export default function ReportsPage() {
       const endDate = new Date();
       const startDate = new Date();
       
-      switch (timeframe) {
+    switch (timeframe) {
         case 'daily':
           startDate.setDate(endDate.getDate() - 1);
           break;
@@ -183,10 +148,10 @@ export default function ReportsPage() {
     }
   }, [isAuthenticated, timeframe]);
 
-  // Generate data from API or fallback to sample data
+  // Generate data from API or fallback to empty data
   const getReportsData = () => {
     if (loading || apiError) {
-      return generateSampleData(timeframe);
+      return generateEmptyData();
     }
 
     // Use API data to generate reports
@@ -197,41 +162,95 @@ export default function ReportsPage() {
     const safeCustomers = Array.isArray(customers) ? customers : [];
     const safeInventory = Array.isArray(inventory) ? inventory : [];
 
-    // Transform API data to match the expected format
-    const categories = safeProducts.slice(0, 4).map((product: any, index: number) => ({
-      name: product.name || `Product ${index + 1}`,
-      turnover: product.sellingPrice * (product.quantity || 0),
-      increase: Math.random() * 5, // Placeholder - would come from historical data
-      brand: product.brand || 'Unknown',
-      quantitySold: product.quantity || 0
-    }));
+    // Transform API data to match the expected format - Group by categories
+    const categoryMap = new Map();
+    
+    // Group products by category and calculate totals
+    safeProducts.forEach((product: any) => {
+      const categoryName = product.category?.name || 'General';
+      const turnover = (product.sellingPrice || 0) * (product.quantity || 0);
+      const costPrice = product.purchasePrice || product.costPrice || 0;
+      const profit = turnover - (costPrice * (product.quantity || 0));
+      const profitMargin = turnover > 0 ? (profit / turnover) * 100 : 0;
+      
+      if (categoryMap.has(categoryName)) {
+        const existing = categoryMap.get(categoryName);
+        existing.turnover += turnover;
+        existing.profit += profit;
+        existing.quantitySold += product.quantity || 0;
+        existing.productCount += 1;
+      } else {
+        categoryMap.set(categoryName, {
+          name: categoryName,
+          turnover: turnover,
+          profit: profit,
+          quantitySold: product.quantity || 0,
+          productCount: 1,
+          brand: product.brand || 'Mixed'
+        });
+      }
+    });
+    
+    // Convert to array and calculate final metrics
+    const categories = Array.from(categoryMap.values())
+      .map(category => ({
+        name: category.name,
+        turnover: Math.round(category.turnover),
+        increase: Math.round((category.turnover > 0 ? (category.profit / category.turnover) * 100 : 0) * 100) / 100, // Round to 2 decimal places
+        brand: category.brand,
+        quantitySold: category.quantitySold
+      }))
+      .sort((a, b) => b.turnover - a.turnover) // Sort by turnover descending
+      .slice(0, 4); // Take top 4 categories
 
-    const transformedProducts = safeProducts.slice(0, 4).map((product: any) => ({
-      name: product.name || 'Unknown Product',
-      id: product.id || 'N/A',
-      category: product.category?.name || 'General',
-      quantity: `${product.quantity || 0} units`,
-      turnover: product.sellingPrice * (product.quantity || 0),
-      increase: Math.random() * 3 // Placeholder
-    }));
+    const transformedProducts = safeProducts.slice(0, 4).map((product: any) => {
+      const turnover = (product.sellingPrice || 0) * (product.quantity || 0);
+      const costPrice = product.purchasePrice || product.costPrice || 0;
+      const profit = turnover - (costPrice * (product.quantity || 0));
+      const profitMargin = turnover > 0 ? (profit / turnover) * 100 : 0;
+      
+      return {
+        name: product.name || 'Unknown Product',
+        id: product.id || 'N/A',
+        category: product.category?.name || 'General',
+        quantity: `${product.quantity || 0} units`,
+        turnover: Math.round(turnover),
+        increase: Math.round(profitMargin * 100) / 100 // Round to 2 decimal places
+      };
+    });
 
-    const transformedCustomers = safeCustomers.slice(0, 4).map((customer: any) => ({
-      name: customer.name || 'Unknown Customer',
-      orders: customer.orders || 0,
-      totalSpent: customer.orderTotal || 0,
-      lastOrder: customer.updatedAt ? new Date(customer.updatedAt).toISOString().split('T')[0] : 'N/A',
-      status: customer.status || 'Active'
-    }));
+    const transformedCustomers = safeCustomers.slice(0, 4).map((customer: any) => {
+      const totalSpent = customer.orderTotal || customer.totalSpent || 0;
+      const orderCount = customer.orders || customer.orderCount || 0;
+      const averageOrderValue = orderCount > 0 ? totalSpent / orderCount : 0;
+      
+      return {
+        name: customer.name || 'Unknown Customer',
+        orders: orderCount,
+        totalSpent: totalSpent,
+        lastOrder: customer.updatedAt ? new Date(customer.updatedAt).toISOString().split('T')[0] : 
+                  customer.lastOrderDate ? new Date(customer.lastOrderDate).toISOString().split('T')[0] : 'N/A',
+        status: customer.isActive ? 'Active' : 'Inactive'
+      };
+    });
 
-    const transformedInventory = safeInventory.slice(0, 4).map((item: any) => ({
-      product: item.name || 'Unknown Product',
-      currentStock: item.quantity || 0,
-      minStock: item.reorderPoint || 10,
-      maxStock: (item.quantity || 0) * 2,
-      status: (item.quantity || 0) > (item.reorderPoint || 10) ? 'Good' : 'Low',
-      reorder: (item.quantity || 0) <= (item.reorderPoint || 10) ? 'Yes' : 'No',
-      supplier: 'Unknown Supplier'
-    }));
+    const transformedInventory = safeInventory.slice(0, 4).map((item: any) => {
+      const currentStock = item.quantity || 0;
+      const reorderPoint = item.reorderPoint || 10;
+      const maxStock = item.maxStock || (currentStock * 2);
+      const isLowStock = currentStock <= reorderPoint;
+      const stockStatus = isLowStock ? 'Low' : currentStock > (reorderPoint * 2) ? 'Good' : 'Medium';
+      
+      return {
+        product: item.name || 'Unknown Product',
+        currentStock: currentStock,
+        minStock: reorderPoint,
+        maxStock: maxStock,
+        status: stockStatus,
+        reorder: isLowStock ? 'Yes' : 'No',
+        supplier: item.supplier || item.warehouse?.name || 'Unknown Supplier'
+      };
+    });
 
     return {
       categories,
@@ -243,73 +262,93 @@ export default function ReportsPage() {
 
   const sampleData = getReportsData();
 
-  // Overview metrics - timeframe specific
-  const getTimeframeMultiplier = (timeframe: string) => {
-    switch (timeframe) {
-      case 'daily': return 0.14;
-      case 'weekly': return 1;
-      case 'monthly': return 4.3;
-      case 'yearly': return 52;
-      default: return 1;
+  // Calculate real metrics from API data
+  const calculateMetrics = () => {
+    const { salesReport, financeReport, customers, inventory, products } = apiData;
+    
+    // Calculate total revenue from sales report
+    let totalRevenue = 0;
+    if (salesReport && salesReport.data && Array.isArray(salesReport.data)) {
+      totalRevenue = salesReport.data.reduce((sum: number, item: any) => 
+        sum + (item.revenue || item.totalSales || 0), 0);
     }
+    
+    // Calculate total profit from finance report
+    let totalProfit = 0;
+    if (financeReport && financeReport.data && Array.isArray(financeReport.data)) {
+      totalProfit = financeReport.data.reduce((sum: number, item: any) => 
+        sum + (item.profit || item.netIncome || 0), 0);
+    }
+    
+    // Calculate total customers
+    const totalCustomers = Array.isArray(customers) ? customers.length : 0;
+    
+    // Calculate total products
+    const totalProducts = Array.isArray(products) ? products.length : 0;
+    
+    return {
+      totalRevenue,
+      totalProfit,
+      totalCustomers,
+      totalProducts
+    };
   };
 
-  const multiplier = getTimeframeMultiplier(timeframe);
+  const metrics = calculateMetrics();
   
-  // Generate chart data for wavy curves based on timeframe with scrolling
+  // Generate chart data from API responses
   const generateChartData = () => {
     let allLabels: string[] = [];
-    const allRevenueData: number[] = [];
-    const allProfitData: number[] = [];
+    let allRevenueData: number[] = [];
+    let allProfitData: number[] = [];
     
-    if (chartZoom === 'daily') {
-      // For daily view, show current month with daily data
-      const now = new Date();
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
-      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    // Use real API data if available
+    if (apiData.salesReport && apiData.financeReport) {
+      const salesData = apiData.salesReport;
+      const financeData = apiData.financeReport;
       
-      // Generate labels for days of current month
-      allLabels = Array.from({ length: daysInMonth }, (_, i) => `${i + 1}`);
-      
-      // Generate daily data with wavy patterns
-      for (let day = 1; day <= daysInMonth; day++) {
-        // Create wavy patterns with daily variations
-        const dayProgress = (day - 1) / (daysInMonth - 1); // 0 to 1
-        const revenue = 30000 + (Math.sin(dayProgress * Math.PI * 2) * 15000) + (Math.sin(dayProgress * Math.PI * 4) * 8000) + (Math.sin(dayProgress * Math.PI * 8) * 3000);
-        const profit = 20000 + (Math.sin(dayProgress * Math.PI * 1.5) * 12000) + (Math.sin(dayProgress * Math.PI * 3) * 6000) + (Math.sin(dayProgress * Math.PI * 6) * 2000);
-        
-        allRevenueData.push(Math.round(revenue * multiplier));
-        allProfitData.push(Math.round(profit * multiplier));
+      // Extract data from API responses
+      if (salesData.data && Array.isArray(salesData.data)) {
+        salesData.data.forEach((item: any) => {
+          allLabels.push(item.period || item.date || 'Unknown');
+          allRevenueData.push(item.revenue || item.totalSales || 0);
+        });
       }
+      
+      if (financeData.data && Array.isArray(financeData.data)) {
+        financeData.data.forEach((item: any) => {
+          allProfitData.push(item.profit || item.netIncome || 0);
+        });
+      }
+      
+      // If we don't have enough data, pad with zeros
+      while (allProfitData.length < allRevenueData.length) {
+        allProfitData.push(0);
+      }
+      while (allRevenueData.length < allProfitData.length) {
+        allRevenueData.push(0);
+      }
+    } else {
+      // Fallback: Generate minimal data based on timeframe
+      if (chartZoom === 'daily') {
+        const now = new Date();
+        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        allLabels = Array.from({ length: daysInMonth }, (_, i) => `${i + 1}`);
+        allRevenueData = Array(daysInMonth).fill(0);
+        allProfitData = Array(daysInMonth).fill(0);
     } else if (chartZoom === 'monthly') {
-      // For monthly view, show Jan to Dec
       const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       allLabels = months;
-      
-      for (let i = 0; i < 12; i++) {
-        // Create wavy patterns with multiple sine waves for organic curves
-        const revenue = 30000 + (Math.sin(i * 0.8) * 20000) + (Math.sin(i * 0.3) * 10000) + (Math.sin(i * 0.1) * 5000);
-        const profit = 20000 + (Math.sin(i * 0.6) * 15000) + (Math.sin(i * 0.4) * 8000) + (Math.sin(i * 0.2) * 3000);
-        
-        allRevenueData.push(Math.round(revenue * multiplier));
-        allProfitData.push(Math.round(profit * multiplier));
-      }
+        allRevenueData = Array(12).fill(0);
+        allProfitData = Array(12).fill(0);
     } else if (chartZoom === 'yearly') {
-      // For yearly view, show years from 2025 onwards (increasing)
       const years = [];
       for (let year = 2025; year <= 2036; year++) {
         years.push(year.toString());
       }
       allLabels = years;
-      
-      for (let i = 0; i < 12; i++) {
-        // Create wavy patterns for yearly data
-        const revenue = 30000 + (Math.sin(i * 0.5) * 25000) + (Math.sin(i * 0.2) * 12000) + (Math.sin(i * 0.1) * 6000);
-        const profit = 20000 + (Math.sin(i * 0.4) * 18000) + (Math.sin(i * 0.15) * 9000) + (Math.sin(i * 0.08) * 4000);
-        
-        allRevenueData.push(Math.round(revenue * multiplier));
-        allProfitData.push(Math.round(profit * multiplier));
+        allRevenueData = Array(12).fill(0);
+        allProfitData = Array(12).fill(0);
       }
     }
     
@@ -512,13 +551,13 @@ export default function ReportsPage() {
   };
   
   const overviewData = {
-    totalProfit: Math.round(21190 * multiplier),
-    revenue: Math.round(18300 * multiplier),
-    sales: Math.round(17432 * multiplier),
-    netPurchaseValue: Math.round(117432 * multiplier),
-    netSalesValue: Math.round(80432 * multiplier),
-    momProfit: Math.round(30432 * multiplier),
-    yoyProfit: Math.round(110432 * multiplier)
+    totalProfit: metrics.totalProfit,
+    revenue: metrics.totalRevenue,
+    sales: metrics.totalRevenue, // Using revenue as sales for now
+    netPurchaseValue: 0, // Would need purchase data from API
+    netSalesValue: metrics.totalRevenue,
+    momProfit: metrics.totalProfit, // Using total profit for now
+    yoyProfit: metrics.totalProfit // Using total profit for now
   };
 
   // Export functionality
@@ -815,6 +854,31 @@ export default function ReportsPage() {
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
                 Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show no data state
+  if (!loading && !apiError && sampleData.categories.length === 0 && sampleData.products.length === 0 && sampleData.customers.length === 0 && sampleData.inventory.length === 0) {
+    return (
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar currentPage="reports" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header title="Reports" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-gray-400 text-6xl mb-4">📊</div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">No Data Available</h2>
+              <p className="text-gray-600 mb-4">No reports data found for the selected timeframe.</p>
+              <button 
+                onClick={fetchReportsData}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Refresh
               </button>
             </div>
           </div>

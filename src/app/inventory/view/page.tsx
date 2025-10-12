@@ -124,7 +124,7 @@ function ViewInventoryContent() {
     
     // Cleanup function to prevent state updates after unmount
     return () => { mounted = false; };
-  }, [isAuthenticated, searchParams, showError]);
+  }, [isAuthenticated, searchParams.get('id')]); // Only depend on the actual ID value, not the entire searchParams object
 
   // Fallback: Load from localStorage if API fails
   useEffect(() => {
@@ -156,7 +156,7 @@ function ViewInventoryContent() {
       setPurchases(samplePurchases);
       setFilteredPurchases(samplePurchases);
     }
-  }, [isAuthenticated, searchParams, inventoryItem]);
+  }, [isAuthenticated, searchParams.get('id')]); // Only depend on the ID, not the entire searchParams object or inventoryItem
 
   // Filter purchases
   useEffect(() => {
@@ -471,7 +471,7 @@ function ViewInventoryContent() {
                 </svg>
                 <div>
                   <p className="text-sm text-gray-600">Views</p>
-                  <p className="text-lg font-semibold text-gray-900">{inventoryItem.views.toLocaleString()}</p>
+                  <p className="text-lg font-semibold text-gray-900">{(inventoryItem.views || 0).toLocaleString()}</p>
                 </div>
               </div>
             </div>
@@ -484,7 +484,7 @@ function ViewInventoryContent() {
                 </svg>
                 <div>
                   <p className="text-sm text-gray-600">Favourite</p>
-                  <p className="text-lg font-semibold text-gray-900">{inventoryItem.favorites}</p>
+                  <p className="text-lg font-semibold text-gray-900">{inventoryItem.favorites || 0}</p>
                 </div>
               </div>
             </div>
