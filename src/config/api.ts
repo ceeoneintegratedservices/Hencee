@@ -135,6 +135,13 @@ export const API_ENDPOINTS = {
   // Settings endpoints
   settings: `${API_BASE_URL}/settings`,
 
+  // Session endpoints
+  sessions: `${API_BASE_URL}/sessions`,
+  sessionById: (id: string) => `${API_BASE_URL}/sessions/${id}`,
+  sessionsActive: `${API_BASE_URL}/sessions/active`,
+  sessionsStats: `${API_BASE_URL}/sessions/stats`,
+  sessionsOthers: `${API_BASE_URL}/sessions/others`,
+
   // API documentation
   apiDocs: `${API_BASE_URL}/api/docs`,
 }; 

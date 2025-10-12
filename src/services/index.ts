@@ -24,3 +24,6 @@ export * from './reports';
 
 // Audit Logs
 export * from './auditLogs';
+
+// Sessions
+export * from './sessions';

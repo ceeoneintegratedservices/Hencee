@@ -7,6 +7,16 @@ import Sidebar from "@/components/Sidebar";
 import Breadcrumb from "@/components/Breadcrumb";
 import { NotificationContainer, useNotifications } from "@/components/Notification";
 import { getSystemSettings, updateSystemSettings, getUserPreferences, updateUserPreferences, type SystemSettings, type UserPreferences } from "@/services/settings";
+import { 
+  SessionService, 
+  type SessionDto, 
+  type SessionStats, 
+  getDeviceIcon, 
+  getBrowserIcon, 
+  getOperatingSystemIcon, 
+  formatLastActivity,
+  isSessionExpiringSoon 
+} from "@/services/sessions";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -26,6 +36,12 @@ export default function SettingsPage() {
   // API data states
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
   const [userPreferences, setUserPreferences] = useState<UserPreferences | null>(null);
+  
+  // Session states
+  const [sessions, setSessions] = useState<SessionDto[]>([]);
+  const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "", 
@@ -161,10 +177,40 @@ export default function SettingsPage() {
     }
   };
 
+  // Fetch session data
+  const fetchSessionData = async () => {
+    if (!isAuthenticated) return;
+    
+    setSessionsLoading(true);
+    setSessionsError(null);
+    
+    try {
+      const [sessionsData, statsData] = await Promise.allSettled([
+        SessionService.getActiveSessions().catch(() => null),
+        SessionService.getSessionStats().catch(() => null)
+      ]);
+      
+      if (sessionsData.status === 'fulfilled' && sessionsData.value) {
+        setSessions(sessionsData.value.sessions || []);
+      }
+      
+      if (statsData.status === 'fulfilled' && statsData.value) {
+        setSessionStats(statsData.value.stats);
+      }
+      
+    } catch (err: any) {
+      setSessionsError(err.message || 'Failed to load session data');
+      showError('Error', err.message || 'Failed to load session data');
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
   // Load settings when authenticated
   useEffect(() => {
     if (isAuthenticated) {
       fetchSettingsData();
+      fetchSessionData();
     }
   }, [isAuthenticated]);
 
@@ -200,6 +246,27 @@ export default function SettingsPage() {
 
   const removeImage = () => {
     setProfileImage(null);
+  };
+
+  // Session management functions
+  const handleRevokeSession = async (sessionId: string) => {
+    try {
+      await SessionService.revokeSession(sessionId);
+      showSuccess('Success', 'Session revoked successfully');
+      await fetchSessionData(); // Refresh session data
+    } catch (err: any) {
+      showError('Error', err.message || 'Failed to revoke session');
+    }
+  };
+
+  const handleRevokeAllOthers = async () => {
+    try {
+      await SessionService.revokeAllOthers();
+      showSuccess('Success', 'All other sessions revoked successfully');
+      await fetchSessionData(); // Refresh session data
+    } catch (err: any) {
+      showError('Error', err.message || 'Failed to revoke sessions');
+    }
   };
 
   const handleUpdate = async () => {
@@ -833,23 +900,123 @@ export default function SettingsPage() {
 
               {/* Login Sessions */}
               <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Active Sessions</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Current Session</p>
-                      <p className="text-xs text-gray-600">Chrome on Windows • Lagos, Nigeria</p>
-                    </div>
-                    <span className="text-xs text-green-600 font-medium">Active</span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">Mobile App</p>
-                      <p className="text-xs text-gray-600">iOS App • Lagos, Nigeria</p>
-                    </div>
-                    <button className="text-xs text-red-600 font-medium hover:text-red-800">Revoke</button>
-                  </div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-medium text-gray-900">Active Sessions</h3>
+                  {sessions.length > 1 && (
+                    <button
+                      onClick={handleRevokeAllOthers}
+                      className="text-sm text-red-600 font-medium hover:text-red-800 transition-colors"
+                    >
+                      Revoke All Others
+                    </button>
+                  )}
                 </div>
+                
+                {sessionsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                    <span className="ml-2 text-gray-600">Loading sessions...</span>
+                  </div>
+                ) : sessionsError ? (
+                  <div className="text-center py-8">
+                    <p className="text-red-600 font-medium">Error loading sessions</p>
+                    <p className="text-sm text-gray-500 mt-1">{sessionsError}</p>
+                    <button
+                      onClick={fetchSessionData}
+                      className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : sessions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">No active sessions found</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {sessions.map((session) => (
+                      <div 
+                        key={session.id} 
+                        className={`flex items-center justify-between p-3 border rounded-lg ${
+                          session.isCurrent 
+                            ? 'border-green-200 bg-green-50' 
+                            : 'border-gray-200 bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className="text-2xl">
+                            {getDeviceIcon(session.deviceType)}
+                          </div>
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <p className="text-sm font-medium text-gray-900">
+                                {session.browser} on {session.operatingSystem}
+                              </p>
+                              {session.isCurrent && (
+                                <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                                  Current
+                                </span>
+                              )}
+                              {isSessionExpiringSoon(session.expiresAt) && (
+                                <span className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
+                                  Expiring Soon
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-600">
+                              {session.city}, {session.location} • {formatLastActivity(session.lastActivity)}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              IP: {session.ipAddress}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className={`text-xs font-medium ${
+                            session.isActive ? 'text-green-600' : 'text-gray-500'
+                          }`}>
+                            {session.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                          {!session.isCurrent && (
+                            <button 
+                              onClick={() => handleRevokeSession(session.id)}
+                              className="text-xs text-red-600 font-medium hover:text-red-800 transition-colors"
+                            >
+                              Revoke
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Session Statistics */}
+                {sessionStats && (
+                  <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                    <h4 className="text-sm font-medium text-gray-900 mb-3">Session Statistics</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-600">Total Sessions</p>
+                        <p className="text-lg font-semibold text-gray-900">{sessionStats.totalSessions}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-600">Active Sessions</p>
+                        <p className="text-lg font-semibold text-gray-900">{sessionStats.activeSessions}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-600">Expired Sessions</p>
+                        <p className="text-lg font-semibold text-gray-900">{sessionStats.expiredSessions}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-600">Last Login</p>
+                        <p className="text-lg font-semibold text-gray-900">
+                          {sessionStats.lastLogin ? formatLastActivity(sessionStats.lastLogin) : 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
