@@ -35,6 +35,10 @@ export const API_ENDPOINTS = {
   productCategory: (categoryId: string) => `${API_BASE_URL}/products/category/${categoryId}`,
   productWarehouse: (warehouseId: string) => `${API_BASE_URL}/products/warehouse/${warehouseId}`,
   
+  // Warehouse endpoints
+  warehouses: `${API_BASE_URL}/warehouses`,
+  warehouseById: (id: string) => `${API_BASE_URL}/warehouses/${id}`,
+  
   // Sales endpoints
   sales: `${API_BASE_URL}/sales`,
   saleById: (id: string) => `${API_BASE_URL}/sales/id/${id}`,

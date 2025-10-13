@@ -27,3 +27,4 @@ export * from './auditLogs';
 
 // Sessions
 export * from './sessions';
+export * from './warehouses';

@@ -72,7 +72,8 @@ export default function AuditsPage() {
       });
       
       // Transform API data to match UI format
-      const transformedLogs: AuditLog[] = response.data.map((log: APIAuditLog) => ({
+      const logsArray = Array.isArray(response.data) ? response.data : [];
+      const transformedLogs: AuditLog[] = logsArray.map((log: APIAuditLog) => ({
         id: log.id,
         timestamp: new Date(log.createdAt).toLocaleString(),
         user: log.user?.email || 'Unknown User',
@@ -481,7 +482,20 @@ export default function AuditsPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredLogs.slice(0, 10).map((log) => (
+                  {filteredLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-6 py-12 text-center">
+                        <div className="flex flex-col items-center justify-center">
+                          <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No audit logs found</h3>
+                          <p className="text-gray-500">No audit logs match your current filters.</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredLogs.slice(0, 10).map((log) => (
                     <tr key={log.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <input type="checkbox" className="rounded border-gray-300" />
@@ -510,14 +524,26 @@ export default function AuditsPage() {
                         </span>
                       </td>
                     </tr>
-                  ))}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
 
             {/* Mobile Cards */}
             <div className="lg:hidden">
-              {filteredLogs.slice(0, 10).map((log) => (
+              {filteredLogs.length === 0 ? (
+                <div className="p-8 text-center">
+                  <div className="flex flex-col items-center justify-center">
+                    <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No audit logs found</h3>
+                    <p className="text-gray-500">No audit logs match your current filters.</p>
+                  </div>
+                </div>
+              ) : (
+                filteredLogs.slice(0, 10).map((log) => (
                 <div key={log.id} className="p-4 border-b border-gray-200">
                   <div className="flex items-start gap-3">
                     <input type="checkbox" className="mt-1 rounded border-gray-300" />
@@ -550,7 +576,8 @@ export default function AuditsPage() {
                     </div>
                   </div>
                 </div>
-              ))}
+                ))
+              )}
             </div>
 
             {/* Pagination */}

@@ -326,26 +326,26 @@ export default function SettingsPage() {
       await updateUserPreferences(preferencesPayload);
       
       // Also update localStorage for backward compatibility
-      const userData = localStorage.getItem('userData');
-      let existingData: any = {};
-      
-      if (userData) {
-        try {
-          existingData = JSON.parse(userData);
-        } catch (error) {
-          console.error('Error parsing existing user data:', error);
-        }
+    const userData = localStorage.getItem('userData');
+    let existingData: any = {};
+    
+    if (userData) {
+      try {
+        existingData = JSON.parse(userData);
+      } catch (error) {
+        console.error('Error parsing existing user data:', error);
       }
+    }
 
-      const updatedData = {
-        ...existingData,
-        ...formData,
-        ...businessData,
-        profileImage: profileImage || existingData.profileImage || existingData.avatar
-      };
+    const updatedData = {
+      ...existingData,
+      ...formData,
+      ...businessData,
+      profileImage: profileImage || existingData.profileImage || existingData.avatar
+    };
 
-      localStorage.setItem('userData', JSON.stringify(updatedData));
-      
+    localStorage.setItem('userData', JSON.stringify(updatedData));
+    
       showSuccess('Success', 'Settings updated successfully!');
       
       // Refresh settings data
@@ -933,7 +933,7 @@ export default function SettingsPage() {
                     <p className="text-gray-500">No active sessions found</p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                <div className="space-y-3">
                     {sessions.map((session) => (
                       <div 
                         key={session.id} 
@@ -947,7 +947,7 @@ export default function SettingsPage() {
                           <div className="text-2xl">
                             {getDeviceIcon(session.deviceType)}
                           </div>
-                          <div>
+                    <div>
                             <div className="flex items-center space-x-2">
                               <p className="text-sm font-medium text-gray-900">
                                 {session.browser} on {session.operatingSystem}
@@ -962,14 +962,14 @@ export default function SettingsPage() {
                                   Expiring Soon
                                 </span>
                               )}
-                            </div>
+                    </div>
                             <p className="text-xs text-gray-600">
                               {session.city}, {session.location} • {formatLastActivity(session.lastActivity)}
                             </p>
                             <p className="text-xs text-gray-500">
                               IP: {session.ipAddress}
                             </p>
-                          </div>
+                  </div>
                         </div>
                         <div className="flex items-center space-x-2">
                           <span className={`text-xs font-medium ${
@@ -996,18 +996,18 @@ export default function SettingsPage() {
                   <div className="mt-6 p-4 bg-gray-50 rounded-lg">
                     <h4 className="text-sm font-medium text-gray-900 mb-3">Session Statistics</h4>
                     <div className="grid grid-cols-2 gap-4">
-                      <div>
+                    <div>
                         <p className="text-xs text-gray-600">Total Sessions</p>
                         <p className="text-lg font-semibold text-gray-900">{sessionStats.totalSessions}</p>
-                      </div>
+                    </div>
                       <div>
                         <p className="text-xs text-gray-600">Active Sessions</p>
                         <p className="text-lg font-semibold text-gray-900">{sessionStats.activeSessions}</p>
-                      </div>
+                  </div>
                       <div>
                         <p className="text-xs text-gray-600">Expired Sessions</p>
                         <p className="text-lg font-semibold text-gray-900">{sessionStats.expiredSessions}</p>
-                      </div>
+                </div>
                       <div>
                         <p className="text-xs text-gray-600">Last Login</p>
                         <p className="text-lg font-semibold text-gray-900">

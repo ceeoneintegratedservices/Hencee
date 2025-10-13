@@ -29,7 +29,7 @@ export default function CustomersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
   const [timeframe, setTimeframe] = useState("This Week");
-  
+
   // API state management
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -128,7 +128,7 @@ export default function CustomersPage() {
 
   const copyToClipboard = (text: string | undefined) => {
     if (text) {
-      navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(text);
     }
   };
 

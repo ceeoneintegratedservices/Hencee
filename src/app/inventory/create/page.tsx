@@ -402,7 +402,7 @@ export default function CreateInventoryPage() {
                   Tyre Category
                 </label>
                 <div className="relative">
-                  <select
+                <select
                     value={selectedCategoryId}
                     onChange={(e) => setSelectedCategoryId(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
@@ -416,7 +416,7 @@ export default function CreateInventoryPage() {
                     ) : (
                       <option value="">Loading categories...</option>
                     )}
-                  </select>
+                </select>
                   <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                     <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -551,13 +551,13 @@ export default function CreateInventoryPage() {
                       />
                       <span className="text-sm text-gray-700">Create New Warehouse</span>
                     </label>
-                  </div>
+                </div>
                 </div>
 
                 {/* Existing Warehouse Dropdown */}
                 {!isCreatingNewWarehouse && (
                   <div className="relative">
-                    <select
+                      <select
                       value={selectedWarehouseId}
                       onChange={(e) => setSelectedWarehouseId(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
@@ -572,7 +572,7 @@ export default function CreateInventoryPage() {
                       ) : (
                         <option value="">Loading warehouses...</option>
                       )}
-                    </select>
+                      </select>
                     <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
                       <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -584,14 +584,14 @@ export default function CreateInventoryPage() {
 
                 {/* New Warehouse Name Input */}
                 {isCreatingNewWarehouse && (
-                  <div className="relative">
-                    <input
+                    <div className="relative">
+                      <input
                       type="text"
                       value={newWarehouseName}
                       onChange={(e) => setNewWarehouseName(e.target.value)}
                       placeholder="Enter new warehouse name (e.g., 'Storage Room A')"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
                     <div className="mt-2 text-sm text-gray-600">
                       <p>💡 The system will automatically create this warehouse and assign it a unique ID.</p>
                     </div>

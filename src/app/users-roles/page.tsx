@@ -144,7 +144,8 @@ export default function UsersRolesPage() {
       });
       
       // Transform API data to match UI format
-      const transformedUsers: AppUser[] = response.users.map((user: APIUser) => ({
+      const usersArray = Array.isArray(response.users) ? response.users : [];
+      const transformedUsers: AppUser[] = usersArray.map((user: APIUser) => ({
         id: user.id,
         name: user.name, // API already provides name field
         email: user.email,
@@ -517,7 +518,20 @@ export default function UsersRolesPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {pagedUsers.map(u => (
+                  {pagedUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center">
+                        <div className="flex flex-col items-center justify-center">
+                          <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                          </svg>
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No users found</h3>
+                          <p className="text-gray-500">No users match your current filters.</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    pagedUsers.map(u => (
                     <tr key={u.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { setSelectedUser(u); setShowUserPermissions(true); }}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{u.name}</div>
@@ -551,7 +565,8 @@ export default function UsersRolesPage() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

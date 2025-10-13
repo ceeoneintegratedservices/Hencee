@@ -87,7 +87,8 @@ export default function ExpensesPage() {
       });
       
       // Transform API data to match UI format
-      const transformedExpenses: ExpenseItem[] = response.data.map((expense: APIExpense) => ({
+      const expensesArray = Array.isArray(response.data) ? response.data : [];
+      const transformedExpenses: ExpenseItem[] = expensesArray.map((expense: APIExpense) => ({
         id: expense.id,
         title: expense.title,
         description: expense.description,
@@ -614,7 +615,26 @@ export default function ExpensesPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {pagedItems.map((item) => (
+                  {pagedItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-12 text-center">
+                        <div className="flex flex-col items-center justify-center">
+                          <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No expenses found</h3>
+                          <p className="text-gray-500 mb-4">Get started by adding your first expense.</p>
+                          <button
+                            onClick={() => setShowAddExpenseModal(true)}
+                            className="bg-[#02016a] text-white px-4 py-2 rounded-lg hover:bg-[#03024a] transition-colors"
+                          >
+                            Add Expense
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    pagedItems.map((item) => (
                     <tr key={item.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <input type="checkbox" className="rounded border-gray-300" />
@@ -690,14 +710,32 @@ export default function ExpensesPage() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
 
             {/* Mobile Cards */}
             <div className="lg:hidden">
-              {pagedItems.map((item) => (
+              {pagedItems.length === 0 ? (
+                <div className="p-8 text-center">
+                  <div className="flex flex-col items-center justify-center">
+                    <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No expenses found</h3>
+                    <p className="text-gray-500 mb-4">Get started by adding your first expense.</p>
+                    <button
+                      onClick={() => setShowAddExpenseModal(true)}
+                      className="bg-[#02016a] text-white px-4 py-2 rounded-lg hover:bg-[#03024a] transition-colors"
+                    >
+                      Add Expense
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                pagedItems.map((item) => (
                 <div key={item.id} className="p-4 border-b border-gray-200 last:border-b-0">
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex-1 min-w-0">
@@ -773,7 +811,8 @@ export default function ExpensesPage() {
                     </div>
                   </div>
                 </div>
-              ))}
+                ))
+              )}
             </div>
           {/* Pagination (inside card footer) */}
           <div className="px-4 sm:px-6 py-4 border-t border-gray-200">

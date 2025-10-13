@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { InventoryDataService, InventoryItem } from '@/services/InventoryDataService';
+import { getWarehouses, createWarehouse, Warehouse } from '@/services/warehouses';
 
 interface FormData {
   productName: string;
@@ -54,6 +55,14 @@ export default function EditProductModal({ isOpen, onClose, onSave, inventoryIte
   // Image states
   const [mainImage, setMainImage] = useState<string | null>(null);
   const [additionalImages, setAdditionalImages] = useState<string[]>([]);
+
+  // Warehouse states
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [warehouseLoading, setWarehouseLoading] = useState(false);
+  const [showAddWarehouse, setShowAddWarehouse] = useState(false);
+  const [newWarehouseName, setNewWarehouseName] = useState('');
+  const [newWarehouseAddress, setNewWarehouseAddress] = useState('');
+  const [newWarehouseCapacity, setNewWarehouseCapacity] = useState('');
 
   // Tyre brands list
   const tyreBrands = [
@@ -111,6 +120,51 @@ export default function EditProductModal({ isOpen, onClose, onSave, inventoryIte
       }
     }
   }, [inventoryItem, isOpen]);
+
+  // Fetch warehouses when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchWarehouses();
+    }
+  }, [isOpen]);
+
+  const fetchWarehouses = async () => {
+    setWarehouseLoading(true);
+    try {
+      const warehousesData = await getWarehouses();
+      setWarehouses(warehousesData);
+    } catch (error) {
+      console.error('Error fetching warehouses:', error);
+    } finally {
+      setWarehouseLoading(false);
+    }
+  };
+
+  const handleAddWarehouse = async () => {
+    if (!newWarehouseName.trim() || !newWarehouseAddress.trim() || !newWarehouseCapacity.trim()) {
+      return;
+    }
+
+    try {
+      const newWarehouse = await createWarehouse({
+        name: newWarehouseName.trim(),
+        address: newWarehouseAddress.trim(),
+        capacity: parseInt(newWarehouseCapacity),
+        isActive: true
+      });
+
+      setWarehouses(prev => [...prev, newWarehouse]);
+      setFormData(prev => ({ ...prev, warehouseNumber: newWarehouse.id }));
+      
+      // Reset form
+      setNewWarehouseName('');
+      setNewWarehouseAddress('');
+      setNewWarehouseCapacity('');
+      setShowAddWarehouse(false);
+    } catch (error) {
+      console.error('Error creating warehouse:', error);
+    }
+  };
 
   const handleInputChange = (field: keyof FormData, value: string | boolean) => {
     setFormData(prev => ({
@@ -319,19 +373,81 @@ export default function EditProductModal({ isOpen, onClose, onSave, inventoryIte
                 <p className="text-xs text-gray-500 mt-1">Type to search or select from popular tyre brands</p>
               </div>
 
-              {/* Warehouse Number */}
+              {/* Warehouse Selection */}
               <div className="bg-gray-50 p-4 rounded-lg">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Warehouse Number
+                  Warehouse
                 </label>
-                <input
-                  type="text"
-                  value={formData.warehouseNumber}
-                  onChange={(e) => handleInputChange('warehouseNumber', e.target.value)}
-                  placeholder="Enter warehouse number (e.g., WH-001, WH-002)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <p className="text-xs text-gray-500 mt-1">This will be displayed in product details and invoices</p>
+                <div className="space-y-3">
+                  {/* Warehouse Dropdown */}
+                  <select
+                    value={formData.warehouseNumber}
+                    onChange={(e) => handleInputChange('warehouseNumber', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={warehouseLoading}
+                  >
+                    <option value="">Select a warehouse</option>
+                    {warehouses.map((warehouse) => (
+                      <option key={warehouse.id} value={warehouse.id}>
+                        {warehouse.name} - {warehouse.address}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  {/* Add New Warehouse Button */}
+                  <button
+                    type="button"
+                    onClick={() => setShowAddWarehouse(!showAddWarehouse)}
+                    className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    {showAddWarehouse ? 'Cancel' : '+ Add New Warehouse'}
+                  </button>
+                  
+                  {/* Add New Warehouse Form */}
+                  {showAddWarehouse && (
+                    <div className="bg-white p-4 rounded-lg border border-gray-200 space-y-3">
+                      <h4 className="text-sm font-medium text-gray-700">Add New Warehouse</h4>
+                      <input
+                        type="text"
+                        value={newWarehouseName}
+                        onChange={(e) => setNewWarehouseName(e.target.value)}
+                        placeholder="Warehouse name"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <input
+                        type="text"
+                        value={newWarehouseAddress}
+                        onChange={(e) => setNewWarehouseAddress(e.target.value)}
+                        placeholder="Warehouse address"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <input
+                        type="number"
+                        value={newWarehouseCapacity}
+                        onChange={(e) => setNewWarehouseCapacity(e.target.value)}
+                        placeholder="Capacity"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleAddWarehouse}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
+                        >
+                          Add Warehouse
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddWarehouse(false)}
+                          className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Select the warehouse where this product is stored</p>
               </div>
 
               {/* Discount */}
