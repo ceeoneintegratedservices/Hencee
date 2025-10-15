@@ -7,7 +7,7 @@ Your backend should accept and store the Cloudinary image URLs that your fronten
 ## 1. **Update Your Inventory Creation Endpoint**
 
 ### **Current Endpoint**: `POST /inventory`
-### **What to Change**: Accept `images` and `mainImage` fields.
+### **What to Change**: Accept `images` and `mainImage` fields
 
 ```typescript
 // Before (what you probably have now)
