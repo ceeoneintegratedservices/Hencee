@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { InventoryDataService, InventoryItem, Purchase } from '@/services/InventoryDataService';
 import { getProduct, updateProduct } from '@/services/products';
+import { getProductPurchaseHistory } from '@/services/inventory';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import FilterByDateModal from '@/components/FilterByDateModal';
 import EditProductModal from '@/components/EditProductModal';
@@ -104,11 +105,38 @@ function ViewInventoryContent() {
         
         setInventoryItem(item);
         
-        // For now, we'll continue using mock purchase data
-        // In a real implementation, you'd fetch real purchase data from the API
-        const samplePurchases = InventoryDataService.generatePurchases(itemId as string, 20);
-        setPurchases(samplePurchases);
-        setFilteredPurchases(samplePurchases);
+        // Fetch real purchase data from the API
+        try {
+          const purchaseHistory = await getProductPurchaseHistory(itemId as string, 20);
+          
+          // Ensure we have a valid response with purchases array
+          if (!purchaseHistory || !Array.isArray(purchaseHistory.purchases)) {
+            console.warn('Invalid purchase history response:', purchaseHistory);
+            setPurchases([]);
+            setFilteredPurchases([]);
+            return;
+          }
+          
+          const purchases: Purchase[] = purchaseHistory.purchases.map(p => ({
+            id: p.id || '',
+            date: p.date || new Date().toISOString(),
+            price: p.price || 0,
+            quantity: p.quantity || 0,
+            totalAmount: p.totalAmount || 0,
+            status: p.status || 'PENDING',
+            orderType: p.orderType || 'Standard',
+            customerName: p.customerName || 'Unknown Customer',
+            customerPhone: p.customerPhone || '',
+            saleReference: p.saleReference || '',
+          }));
+          setPurchases(purchases);
+          setFilteredPurchases(purchases);
+        } catch (error) {
+          console.error('Failed to fetch purchase history:', error);
+          // Fallback to empty array if API fails
+          setPurchases([]);
+          setFilteredPurchases([]);
+        }
         
       } catch (error) {
         if (mounted) {
@@ -166,9 +194,11 @@ function ViewInventoryContent() {
     }
     
     const filtered = purchases.filter(purchase => 
-      purchase.orderDate.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      purchase.date.toLowerCase().includes(searchQuery.toLowerCase()) ||
       purchase.orderType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      purchase.status.toLowerCase().includes(searchQuery.toLowerCase())
+      purchase.status.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      purchase.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      purchase.saleReference.toLowerCase().includes(searchQuery.toLowerCase())
     );
     setFilteredPurchases(filtered);
   }, [searchQuery, purchases]);
@@ -456,7 +486,7 @@ function ViewInventoryContent() {
                 <div>
                   <p className="text-sm text-gray-600">Total Orders</p>
                   <p className="text-lg font-semibold text-gray-900">
-                    {InventoryDataService.formatCurrency(purchases.reduce((sum, p) => sum + p.orderTotal, 0))}
+                    {InventoryDataService.formatCurrency(purchases.reduce((sum, p) => sum + p.totalAmount, 0))}
                   </p>
                 </div>
               </div>
@@ -507,7 +537,7 @@ function ViewInventoryContent() {
               <div>
                 <p className="text-sm text-gray-600">Pending</p>
                 <p className="text-lg font-semibold text-gray-900">
-                  {purchases.filter(p => p.status === 'Pending').length}
+                  {purchases.filter(p => p.status === 'PENDING').length}
                 </p>
               </div>
             </div>
@@ -517,7 +547,7 @@ function ViewInventoryContent() {
               <div>
                 <p className="text-sm text-gray-600">Completed</p>
                 <p className="text-lg font-semibold text-gray-900">
-                  {purchases.filter(p => p.status === 'Completed').length}
+                  {purchases.filter(p => p.status === 'COMPLETED').length}
                 </p>
               </div>
             </div>
@@ -527,7 +557,7 @@ function ViewInventoryContent() {
               <div>
                 <p className="text-sm text-gray-600">Canceled</p>
                 <p className="text-lg font-semibold text-gray-900">
-                  {purchases.filter(p => p.status === 'Cancelled').length}
+                  {purchases.filter(p => p.status === 'CANCELLED').length}
                 </p>
               </div>
             </div>
@@ -537,7 +567,7 @@ function ViewInventoryContent() {
               <div>
                 <p className="text-sm text-gray-600">Returned</p>
                 <p className="text-lg font-semibold text-gray-900">
-                  {purchases.filter(p => p.status === 'Returned').length}
+                  {purchases.filter(p => p.status === 'RETURNED').length}
                 </p>
               </div>
             </div>
@@ -678,7 +708,7 @@ function ViewInventoryContent() {
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       <div className="flex items-center gap-1">
-                        Category
+                        Customer
                         <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                         </svg>
@@ -702,7 +732,7 @@ function ViewInventoryContent() {
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       <div className="flex items-center gap-1">
-                        Discount
+                        Reference
                         <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                         </svg>
@@ -728,7 +758,7 @@ function ViewInventoryContent() {
                         <input type="checkbox" className="rounded border-gray-300" />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(purchase.orderDate).toLocaleDateString('en-US', { 
+                        {new Date(purchase.date).toLocaleDateString('en-US', { 
                           year: 'numeric', 
                           month: 'short', 
                           day: 'numeric',
@@ -737,19 +767,22 @@ function ViewInventoryContent() {
                         })}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {purchase.orderType}
+                        <div>
+                          <div className="font-medium">{purchase.customerName}</div>
+                          <div className="text-xs text-gray-500">{purchase.customerPhone}</div>
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {InventoryDataService.formatCurrency(purchase.unitPrice)}
+                        {InventoryDataService.formatCurrency(purchase.price)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {purchase.quantity}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {InventoryDataService.formatCurrency(purchase.discount)}
+                        <div className="text-xs text-gray-500">{purchase.saleReference}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {InventoryDataService.formatCurrency(purchase.orderTotal)}
+                        {InventoryDataService.formatCurrency(purchase.totalAmount)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs rounded-full font-medium ${InventoryDataService.getStatusColor(purchase.status)}`}>
@@ -772,7 +805,7 @@ function ViewInventoryContent() {
                       <div className="flex items-start justify-between">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900">
-                            {new Date(purchase.orderDate).toLocaleDateString('en-US', { 
+                            {new Date(purchase.date).toLocaleDateString('en-US', { 
                               year: 'numeric', 
                               month: 'short', 
                               day: 'numeric',
@@ -780,11 +813,12 @@ function ViewInventoryContent() {
                               minute: '2-digit'
                             })}
                           </p>
-                          <p className="text-xs text-gray-500 mt-1">{purchase.orderType}</p>
+                          <p className="text-xs text-gray-500 mt-1">{purchase.customerName}</p>
+                          <p className="text-xs text-gray-500">{purchase.customerPhone}</p>
                           <div className="mt-2 space-y-1">
                             <div className="flex justify-between text-xs">
-                              <span className="text-gray-500">Unit Price:</span>
-                              <span className="text-gray-900">{InventoryDataService.formatCurrency(purchase.unitPrice)}</span>
+                              <span className="text-gray-500">Price:</span>
+                              <span className="text-gray-900">{InventoryDataService.formatCurrency(purchase.price)}</span>
                             </div>
                             <div className="flex justify-between text-xs">
                               <span className="text-gray-500">Qty:</span>
@@ -792,7 +826,11 @@ function ViewInventoryContent() {
                             </div>
                             <div className="flex justify-between text-xs">
                               <span className="text-gray-500">Total:</span>
-                              <span className="text-gray-900">{InventoryDataService.formatCurrency(purchase.orderTotal)}</span>
+                              <span className="text-gray-900">{InventoryDataService.formatCurrency(purchase.totalAmount)}</span>
+                            </div>
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-500">Ref:</span>
+                              <span className="text-gray-900">{purchase.saleReference}</span>
                             </div>
                           </div>
                         </div>

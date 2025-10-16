@@ -33,13 +33,15 @@ export interface InventorySummary {
 
 export interface Purchase {
   id: string;
-  orderDate: string;
-  orderType: string;
-  unitPrice: number;
+  date: string;
+  price: number;
   quantity: number;
-  discount: number;
-  orderTotal: number;
-  status: "Completed" | "Pending" | "Cancelled" | "Returned";
+  totalAmount: number;
+  status: "COMPLETED" | "PENDING" | "CANCELLED" | "RETURNED";
+  orderType: string;
+  customerName: string;
+  customerPhone: string;
+  saleReference: string;
 }
 
 export class InventoryDataService {
@@ -81,7 +83,10 @@ export class InventoryDataService {
     "Fingerprint Lock", "Voice Control Lock", "App-Controlled Lock", "Smart Deadbolt"
   ];
 
-  static formatCurrency(amount: number): string {
+  static formatCurrency(amount: number | null | undefined): string {
+    if (amount === null || amount === undefined || isNaN(amount)) {
+      return `${this.CURRENCY_SYMBOL}0.00`;
+    }
     return `${this.CURRENCY_SYMBOL}${amount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`;
   }
 
@@ -185,28 +190,43 @@ export class InventoryDataService {
 
   static generatePurchases(itemId: string, count: number = 10): Purchase[] {
     return Array.from({ length: count }, (_, index) => {
-      const orderDate = new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000);
-      const unitPrice = Math.floor(Math.random() * 500000) + 50000;
+      const date = new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000);
+      const price = Math.floor(Math.random() * 500000) + 50000;
       const quantity = Math.floor(Math.random() * 5) + 1;
-      const discount = Math.random() > 0.8 ? Math.floor(Math.random() * 5000) : 0;
-      const orderTotal = (unitPrice - discount) * quantity;
+      const totalAmount = price * quantity;
       
-      const statuses: ("Completed" | "Pending" | "Cancelled" | "Returned")[] = 
-        ["Completed", "Pending", "Cancelled", "Returned"];
+      const statuses: ("COMPLETED" | "PENDING" | "CANCELLED" | "RETURNED")[] = 
+        ["COMPLETED", "PENDING", "CANCELLED", "RETURNED"];
       const status = statuses[Math.floor(Math.random() * statuses.length)];
 
       const orderTypes = ["Home Delivery", "Pickup", "Express Delivery"];
       const orderType = orderTypes[Math.floor(Math.random() * orderTypes.length)];
 
+      // Generate customer names
+      const firstNames = ["John", "Jane", "Michael", "Sarah", "David", "Lisa", "Robert", "Emily", "James", "Jessica"];
+      const lastNames = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez"];
+      const firstName = firstNames[Math.floor(Math.random() * firstNames.length)];
+      const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
+      const customerName = `${firstName} ${lastName}`;
+
+      // Generate phone numbers
+      const phoneNumbers = ["+2347012345678", "+2348023456789", "+2348034567890", "+2347045678901", "+2348056789012"];
+      const customerPhone = phoneNumbers[Math.floor(Math.random() * phoneNumbers.length)];
+
+      // Generate sale reference
+      const saleReference = `SALE-${Math.floor(Math.random() * 100000000)}`;
+
       return {
         id: `purchase-${itemId}-${index + 1}`,
-        orderDate: orderDate.toISOString(),
-        orderType,
-        unitPrice,
+        date: date.toISOString(),
+        price,
         quantity,
-        discount,
-        orderTotal,
-        status
+        totalAmount,
+        status,
+        orderType,
+        customerName,
+        customerPhone,
+        saleReference
       };
     });
   }

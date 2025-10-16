@@ -1,6 +1,8 @@
 import { API_ENDPOINTS } from "../config/api";
 import { authFetch } from "./authFetch";
 
+// Updated to include primaryCategoryId and primaryWarehouseId
+
 export interface SystemSettings {
   id: string;
   businessName: string;
@@ -11,6 +13,8 @@ export interface SystemSettings {
   businessPhone: string;
   businessEmail: string;
   website: string;
+  primaryCategoryId?: string;
+  primaryWarehouseId?: string;
   currency: string;
   timezone: string;
   dateFormat: string;
@@ -62,6 +66,8 @@ export interface UpdateSystemSettingsPayload {
   businessPhone?: string;
   businessEmail?: string;
   website?: string;
+  primaryCategoryId?: string;
+  primaryWarehouseId?: string;
   currency?: string;
   timezone?: string;
   dateFormat?: string;

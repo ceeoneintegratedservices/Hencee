@@ -17,6 +17,14 @@ import {
   formatLastActivity,
   isSessionExpiringSoon 
 } from "@/services/sessions";
+import { 
+  TwoFactorAuthService,
+  type TwoFactorStatusResponse,
+  type TwoFactorSetupResponse,
+  type TwoFactorVerifySetupResponse,
+  type BackupCodesResponse
+} from "@/services/twoFactorAuth";
+import { getCategories, getWarehouses, type Category, type Warehouse } from "@/services/categories";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -42,6 +50,27 @@ export default function SettingsPage() {
   const [sessionStats, setSessionStats] = useState<SessionStats | null>(null);
   const [sessionsLoading, setSessionsLoading] = useState(false);
   const [sessionsError, setSessionsError] = useState<string | null>(null);
+  
+  // 2FA states
+  const [twoFactorStatus, setTwoFactorStatus] = useState<TwoFactorStatusResponse | null>(null);
+  const [twoFactorLoading, setTwoFactorLoading] = useState(false);
+  const [showTwoFactorSetup, setShowTwoFactorSetup] = useState(false);
+  const [showBackupCodes, setShowBackupCodes] = useState(false);
+  const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  const [qrCode, setQrCode] = useState<string>('');
+  const [setupToken, setSetupToken] = useState<string>('');
+  
+  // Categories and warehouses states
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [warehousesLoading, setWarehousesLoading] = useState(false);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
+  const [isCreatingNewCategory, setIsCreatingNewCategory] = useState(false);
+  const [isCreatingNewWarehouse, setIsCreatingNewWarehouse] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [newWarehouseName, setNewWarehouseName] = useState('');
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "", 
@@ -140,33 +169,40 @@ export default function SettingsPage() {
     setApiError(null);
     
     try {
-      const [systemData, preferencesData] = await Promise.allSettled([
-        getSystemSettings().catch(() => null),
-        getUserPreferences().catch(() => null)
+      const [systemData, preferencesData] = await Promise.all([
+        getSystemSettings(),
+        getUserPreferences()
       ]);
       
-      if (systemData.status === 'fulfilled' && systemData.value) {
-        const systemSettings = systemData.value;
-        setSystemSettings(systemSettings);
+      if (systemData) {
+        setSystemSettings(systemData);
         
         // Populate business form data from API
         setBusinessData(prev => ({
           ...prev,
-          businessName: systemSettings.businessName || "",
-          businessType: systemSettings.businessType || "Tyre Retailer",
-          registrationNumber: systemSettings.registrationNumber || "",
-          taxId: systemSettings.taxId || "",
-          businessAddress: systemSettings.businessAddress || "",
-          businessPhone: systemSettings.businessPhone || "",
-          businessEmail: systemSettings.businessEmail || "",
-          website: systemSettings.website || "",
+          businessName: systemData.businessName || "",
+          businessType: systemData.businessType || "Tyre Retailer",
+          registrationNumber: systemData.registrationNumber || "",
+          taxId: systemData.taxId || "",
+          businessAddress: systemData.businessAddress || "",
+          businessPhone: systemData.businessPhone || "",
+          businessEmail: systemData.businessEmail || "",
+          website: systemData.website || "",
           staffPosition: "Owner/Manager", // Default value
           designation: "" // Default value
         }));
+        
+        // Set selected category and warehouse from API data
+        if ((systemData as any).primaryCategoryId) {
+          setSelectedCategoryId((systemData as any).primaryCategoryId);
+        }
+        if ((systemData as any).primaryWarehouseId) {
+          setSelectedWarehouseId((systemData as any).primaryWarehouseId);
+        }
       }
       
-      if (preferencesData.status === 'fulfilled' && preferencesData.value) {
-        setUserPreferences(preferencesData.value);
+      if (preferencesData) {
+        setUserPreferences(preferencesData);
       }
       
     } catch (err: any) {
@@ -185,17 +221,17 @@ export default function SettingsPage() {
     setSessionsError(null);
     
     try {
-      const [sessionsData, statsData] = await Promise.allSettled([
-        SessionService.getActiveSessions().catch(() => null),
-        SessionService.getSessionStats().catch(() => null)
+      const [sessionsData, statsData] = await Promise.all([
+        SessionService.getActiveSessions(),
+        SessionService.getSessionStats()
       ]);
       
-      if (sessionsData.status === 'fulfilled' && sessionsData.value) {
-        setSessions(sessionsData.value.sessions || []);
+      if (sessionsData) {
+        setSessions(sessionsData.sessions || []);
       }
       
-      if (statsData.status === 'fulfilled' && statsData.value) {
-        setSessionStats(statsData.value.stats);
+      if (statsData) {
+        setSessionStats(statsData.stats);
       }
       
     } catch (err: any) {
@@ -206,11 +242,68 @@ export default function SettingsPage() {
     }
   };
 
+
+  // Fetch 2FA status
+  const fetchTwoFactorStatus = async () => {
+    if (!isAuthenticated) return;
+    
+    setTwoFactorLoading(true);
+    
+    try {
+      const status = await TwoFactorAuthService.getStatus();
+      setTwoFactorStatus(status);
+      
+      // Update security data with current 2FA status
+      setSecurityData(prev => ({
+        ...prev,
+        twoFactorEnabled: status.isEnabled
+      }));
+      
+    } catch (err: any) {
+      console.warn('Failed to fetch 2FA status:', err);
+      // Don't show error for 2FA status fetch
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  };
+
+  // Fetch categories and warehouses
+  const fetchCategoriesAndWarehouses = async () => {
+    if (!isAuthenticated) return;
+    
+    setCategoriesLoading(true);
+    setWarehousesLoading(true);
+    
+    try {
+      const [categoriesData, warehousesData] = await Promise.all([
+        getCategories().catch((error) => {
+          console.warn('Failed to fetch categories:', error);
+          return [];
+        }),
+        getWarehouses().catch((error) => {
+          console.warn('Failed to fetch warehouses:', error);
+          return [];
+        })
+      ]);
+      
+      setCategories(categoriesData);
+      setWarehouses(warehousesData);
+      
+    } catch (err: any) {
+      console.warn('Failed to fetch categories and warehouses:', err);
+    } finally {
+      setCategoriesLoading(false);
+      setWarehousesLoading(false);
+    }
+  };
+
   // Load settings when authenticated
   useEffect(() => {
     if (isAuthenticated) {
       fetchSettingsData();
       fetchSessionData();
+      fetchTwoFactorStatus();
+      fetchCategoriesAndWarehouses();
     }
   }, [isAuthenticated]);
 
@@ -275,7 +368,7 @@ export default function SettingsPage() {
     setApiLoading(true);
     
     try {
-      // Update system settings
+      // Update system settings via API
       const systemPayload = {
         businessName: businessData.businessName,
         businessType: businessData.businessType,
@@ -285,6 +378,8 @@ export default function SettingsPage() {
         businessPhone: businessData.businessPhone,
         businessEmail: businessData.businessEmail,
         website: businessData.website,
+        primaryCategoryId: selectedCategoryId || undefined,
+        primaryWarehouseId: selectedWarehouseId || undefined,
         currency: 'NGN', // Default currency
         timezone: 'Africa/Lagos', // Default timezone
         dateFormat: 'DD/MM/YYYY', // Default date format
@@ -297,7 +392,7 @@ export default function SettingsPage() {
       
       await updateSystemSettings(systemPayload);
       
-      // Update user preferences
+      // Update user preferences via API
       const preferencesPayload = {
         theme: 'light' as const,
         language: 'en',
@@ -355,6 +450,175 @@ export default function SettingsPage() {
       showError('Error', err.message || 'Failed to update settings');
     } finally {
       setApiLoading(false);
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    if (!securityData.currentPassword || !securityData.newPassword || !securityData.confirmPassword) {
+      showError('Error', 'Please fill in all password fields');
+      return;
+    }
+
+    if (securityData.newPassword !== securityData.confirmPassword) {
+      showError('Error', 'New passwords do not match');
+      return;
+    }
+
+    // Enhanced password validation to match backend requirements
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/;
+    if (!passwordRegex.test(securityData.newPassword)) {
+      showError('Error', 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character');
+      return;
+    }
+
+    if (securityData.newPassword.length < 8) {
+      showError('Error', 'New password must be at least 8 characters long');
+      return;
+    }
+
+    setApiLoading(true);
+    
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://ceeone-api.onrender.com'}/auth/change-password`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: JSON.stringify({
+          currentPassword: securityData.currentPassword,
+          newPassword: securityData.newPassword,
+          confirmPassword: securityData.confirmPassword
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        
+        // Handle validation errors specifically
+        if (errorData.details && errorData.details.validationErrors) {
+          const validationErrors = errorData.details.validationErrors;
+          showError('Validation Error', validationErrors.join('. '));
+        } else {
+          throw new Error(errorData.message || 'Failed to change password');
+        }
+        return;
+      }
+
+      // Clear password fields
+      setSecurityData(prev => ({
+        ...prev,
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      }));
+
+      showSuccess('Success', 'Password changed successfully!');
+      
+    } catch (err: any) {
+      showError('Error', err.message || 'Failed to change password');
+    } finally {
+      setApiLoading(false);
+    }
+  };
+
+  const handleTwoFactorToggle = async () => {
+    if (securityData.twoFactorEnabled) {
+      // Disable 2FA
+      const password = prompt('Enter your password to disable 2FA:');
+      if (!password) return;
+      
+      const token = prompt('Enter your 2FA code:');
+      if (!token) return;
+      
+      setTwoFactorLoading(true);
+      
+      try {
+        await TwoFactorAuthService.disable(password, token);
+        setSecurityData(prev => ({ ...prev, twoFactorEnabled: false }));
+        await fetchTwoFactorStatus();
+        showSuccess('Success', 'Two-factor authentication disabled successfully!');
+      } catch (err: any) {
+        showError('Error', err.message || 'Failed to disable 2FA');
+      } finally {
+        setTwoFactorLoading(false);
+      }
+    } else {
+      // Enable 2FA - start setup process
+      const password = prompt('Enter your password to enable 2FA:');
+      if (!password) return;
+      
+      setTwoFactorLoading(true);
+      
+      try {
+        const setupData = await TwoFactorAuthService.setup(password);
+        setQrCode(setupData.qrCode);
+        setBackupCodes(setupData.backupCodes);
+        setShowTwoFactorSetup(true);
+        showSuccess('Success', '2FA setup initiated. Please scan the QR code with your authenticator app.');
+      } catch (err: any) {
+        showError('Error', err.message || 'Failed to setup 2FA');
+      } finally {
+        setTwoFactorLoading(false);
+      }
+    }
+  };
+
+  const handleTwoFactorSetupComplete = async () => {
+    if (!setupToken) {
+      showError('Error', 'Please enter the 6-digit code from your authenticator app');
+      return;
+    }
+    
+    const password = prompt('Enter your password to complete 2FA setup:');
+    if (!password) return;
+    
+    setTwoFactorLoading(true);
+    
+    try {
+      const result = await TwoFactorAuthService.verifySetup(setupToken, password);
+      setSecurityData(prev => ({ ...prev, twoFactorEnabled: true }));
+      setBackupCodes(result.backupCodes);
+      setShowTwoFactorSetup(false);
+      setShowBackupCodes(true);
+      setSetupToken('');
+      await fetchTwoFactorStatus();
+      showSuccess('Success', 'Two-factor authentication enabled successfully!');
+    } catch (err: any) {
+      showError('Error', err.message || 'Failed to complete 2FA setup');
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  };
+
+  const handleViewBackupCodes = async () => {
+    setTwoFactorLoading(true);
+    
+    try {
+      const result = await TwoFactorAuthService.getBackupCodes();
+      setBackupCodes(result.backupCodes);
+      setShowBackupCodes(true);
+    } catch (err: any) {
+      showError('Error', err.message || 'Failed to get backup codes');
+    } finally {
+      setTwoFactorLoading(false);
+    }
+  };
+
+  const handleRegenerateBackupCodes = async () => {
+    const password = prompt('Enter your password to regenerate backup codes:');
+    if (!password) return;
+    
+    setTwoFactorLoading(true);
+    
+    try {
+      const result = await TwoFactorAuthService.regenerateBackupCodes(password);
+      setBackupCodes(result.backupCodes);
+      showSuccess('Success', 'Backup codes regenerated successfully!');
+    } catch (err: any) {
+      showError('Error', err.message || 'Failed to regenerate backup codes');
+    } finally {
+      setTwoFactorLoading(false);
     }
   };
 
@@ -698,7 +962,16 @@ export default function SettingsPage() {
 
           {/* Business Section */}
           <div id="business-section" className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 p-8">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-8">Business Information</h2>
+            <div className="flex justify-between items-start mb-8">
+              <h2 className="text-2xl font-semibold text-gray-900">Business Information</h2>
+              <button
+                onClick={handleUpdate}
+                disabled={apiLoading}
+                className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {apiLoading ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
             
             <div className="space-y-6">
               {/* Business Details */}
@@ -725,6 +998,187 @@ export default function SettingsPage() {
                     <option value="Vehicle Maintenance">Vehicle Maintenance</option>
                     <option value="Fleet Management">Fleet Management</option>
                   </select>
+                </div>
+                
+                {/* Category Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Primary Category</label>
+                  <div className="space-y-3">
+                    {/* Category Dropdown */}
+                    {!isCreatingNewCategory && (
+                      <div className="relative">
+                        <select
+                          value={selectedCategoryId}
+                          onChange={(e) => setSelectedCategoryId(e.target.value)}
+                          className="w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+                          disabled={categoriesLoading}
+                        >
+                          <option value="">Select a category...</option>
+                          {categories.length > 0 ? (
+                            categories.map((category) => (
+                              <option key={category.id} value={category.id}>
+                                {category.name}
+                              </option>
+                            ))
+                          ) : (
+                            <option value="">{categoriesLoading ? 'Loading categories...' : 'No categories available'}</option>
+                          )}
+                        </select>
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* New Category Input */}
+                    {isCreatingNewCategory && (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={newCategoryName}
+                          onChange={(e) => setNewCategoryName(e.target.value)}
+                          placeholder="Enter new category name"
+                          className="w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              if (newCategoryName.trim()) {
+                                // Add the new category to the list (you might want to call an API here)
+                                const newCategory: Category = {
+                                  id: `temp-${Date.now()}`,
+                                  name: newCategoryName.trim(),
+                                  description: '',
+                                  createdAt: new Date().toISOString(),
+                                  updatedAt: new Date().toISOString()
+                                };
+                                setCategories(prev => [...prev, newCategory]);
+                                setSelectedCategoryId(newCategory.id);
+                                setNewCategoryName('');
+                                setIsCreatingNewCategory(false);
+                                showSuccess('Success', 'Category added successfully!');
+                              }
+                            }}
+                            className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                          >
+                            Add Category
+                          </button>
+                          <button
+                            onClick={() => {
+                              setIsCreatingNewCategory(false);
+                              setNewCategoryName('');
+                            }}
+                            className="px-3 py-1 bg-gray-300 text-gray-700 text-sm rounded hover:bg-gray-400"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Add New Category Button */}
+                    {!isCreatingNewCategory && (
+                      <button
+                        onClick={() => setIsCreatingNewCategory(true)}
+                        className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        + Add New Category
+                      </button>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Warehouse Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Primary Warehouse</label>
+                  <div className="space-y-3">
+                    {/* Warehouse Dropdown */}
+                    {!isCreatingNewWarehouse && (
+                      <div className="relative">
+                        <select
+                          value={selectedWarehouseId}
+                          onChange={(e) => setSelectedWarehouseId(e.target.value)}
+                          className="w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+                          disabled={warehousesLoading}
+                        >
+                          <option value="">Select a warehouse...</option>
+                          {warehouses.length > 0 ? (
+                            warehouses.map((warehouse) => (
+                              <option key={warehouse.id} value={warehouse.id}>
+                                {warehouse.name} - {warehouse.location}
+                              </option>
+                            ))
+                          ) : (
+                            <option value="">{warehousesLoading ? 'Loading warehouses...' : 'No warehouses available'}</option>
+                          )}
+                        </select>
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                          <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* New Warehouse Input */}
+                    {isCreatingNewWarehouse && (
+                      <div className="space-y-2">
+                        <input
+                          type="text"
+                          value={newWarehouseName}
+                          onChange={(e) => setNewWarehouseName(e.target.value)}
+                          placeholder="Enter new warehouse name"
+                          className="w-full px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              if (newWarehouseName.trim()) {
+                                // Add the new warehouse to the list (you might want to call an API here)
+                                const newWarehouse: Warehouse = {
+                                  id: `temp-${Date.now()}`,
+                                  name: newWarehouseName.trim(),
+                                  location: 'Location to be set',
+                                  description: '',
+                                  createdAt: new Date().toISOString(),
+                                  updatedAt: new Date().toISOString()
+                                };
+                                setWarehouses(prev => [...prev, newWarehouse]);
+                                setSelectedWarehouseId(newWarehouse.id);
+                                setNewWarehouseName('');
+                                setIsCreatingNewWarehouse(false);
+                                showSuccess('Success', 'Warehouse added successfully!');
+                              }
+                            }}
+                            className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+                          >
+                            Add Warehouse
+                          </button>
+                          <button
+                            onClick={() => {
+                              setIsCreatingNewWarehouse(false);
+                              setNewWarehouseName('');
+                            }}
+                            className="px-3 py-1 bg-gray-300 text-gray-700 text-sm rounded hover:bg-gray-400"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Add New Warehouse Button */}
+                    {!isCreatingNewWarehouse && (
+                      <button
+                        onClick={() => setIsCreatingNewWarehouse(true)}
+                        className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        + Add New Warehouse
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Registration Number</label>
@@ -865,8 +1319,39 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
-                <button className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors">
-                  Update Password
+                
+                {/* Password Requirements */}
+                <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <h4 className="text-sm font-medium text-blue-900 mb-2">Password Requirements:</h4>
+                  <ul className="text-xs text-blue-800 space-y-1">
+                    <li className={`flex items-center ${securityData.newPassword.length >= 8 ? 'text-green-600' : ''}`}>
+                      <span className="mr-2">{securityData.newPassword.length >= 8 ? '✓' : '○'}</span>
+                      At least 8 characters long
+                    </li>
+                    <li className={`flex items-center ${/[A-Z]/.test(securityData.newPassword) ? 'text-green-600' : ''}`}>
+                      <span className="mr-2">{/[A-Z]/.test(securityData.newPassword) ? '✓' : '○'}</span>
+                      At least one uppercase letter
+                    </li>
+                    <li className={`flex items-center ${/[a-z]/.test(securityData.newPassword) ? 'text-green-600' : ''}`}>
+                      <span className="mr-2">{/[a-z]/.test(securityData.newPassword) ? '✓' : '○'}</span>
+                      At least one lowercase letter
+                    </li>
+                    <li className={`flex items-center ${/\d/.test(securityData.newPassword) ? 'text-green-600' : ''}`}>
+                      <span className="mr-2">{/\d/.test(securityData.newPassword) ? '✓' : '○'}</span>
+                      At least one number
+                    </li>
+                    <li className={`flex items-center ${/[@$!%*?&]/.test(securityData.newPassword) ? 'text-green-600' : ''}`}>
+                      <span className="mr-2">{/[@$!%*?&]/.test(securityData.newPassword) ? '✓' : '○'}</span>
+                      At least one special character (@$!%*?&)
+                    </li>
+                  </ul>
+                </div>
+                <button 
+                  onClick={handlePasswordChange}
+                  disabled={apiLoading}
+                  className="mt-4 bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {apiLoading ? 'Updating...' : 'Update Password'}
                 </button>
               </div>
 
@@ -878,8 +1363,9 @@ export default function SettingsPage() {
                     <p className="text-sm text-gray-600">Add an extra layer of security to your account</p>
                   </div>
                   <button
-                    onClick={() => handleSecurityChange('twoFactorEnabled', !securityData.twoFactorEnabled)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    onClick={handleTwoFactorToggle}
+                    disabled={twoFactorLoading}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                       securityData.twoFactorEnabled ? 'bg-blue-600' : 'bg-gray-300'
                     }`}
                   >
@@ -890,10 +1376,33 @@ export default function SettingsPage() {
                     />
                   </button>
                 </div>
-                {securityData.twoFactorEnabled && (
+                
+                {securityData.twoFactorEnabled ? (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <p className="text-sm text-blue-800 mb-2">Two-factor authentication is enabled</p>
-                    <p className="text-xs text-blue-600">You'll need to enter a verification code from your authenticator app when signing in.</p>
+                    <p className="text-xs text-blue-600 mb-3">You'll need to enter a verification code from your authenticator app when signing in.</p>
+                    
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleViewBackupCodes}
+                        disabled={twoFactorLoading}
+                        className="text-xs bg-blue-100 text-blue-800 px-3 py-1 rounded hover:bg-blue-200 transition-colors disabled:opacity-50"
+                      >
+                        View Backup Codes
+                      </button>
+                      <button
+                        onClick={handleRegenerateBackupCodes}
+                        disabled={twoFactorLoading}
+                        className="text-xs bg-yellow-100 text-yellow-800 px-3 py-1 rounded hover:bg-yellow-200 transition-colors disabled:opacity-50"
+                      >
+                        Regenerate Codes
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <p className="text-sm text-gray-600">Two-factor authentication is disabled</p>
+                    <p className="text-xs text-gray-500">Enable 2FA to add an extra layer of security to your account.</p>
                   </div>
                 )}
               </div>
@@ -1022,6 +1531,90 @@ export default function SettingsPage() {
           </div>
         </main>
       </div>
+      
+      {/* 2FA Setup Modal */}
+      {showTwoFactorSetup && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Setup Two-Factor Authentication</h3>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-3">Scan this QR code with your authenticator app:</p>
+              {qrCode && (
+                <div className="flex justify-center mb-4">
+                  <img src={qrCode} alt="2FA QR Code" className="w-48 h-48" />
+                </div>
+              )}
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Enter 6-digit code from your app:
+              </label>
+              <input
+                type="text"
+                value={setupToken}
+                onChange={(e) => setSetupToken(e.target.value)}
+                placeholder="123456"
+                maxLength={6}
+                className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={handleTwoFactorSetupComplete}
+                disabled={twoFactorLoading || setupToken.length !== 6}
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {twoFactorLoading ? 'Verifying...' : 'Complete Setup'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowTwoFactorSetup(false);
+                  setSetupToken('');
+                }}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Backup Codes Modal */}
+      {showBackupCodes && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Backup Codes</h3>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-3">
+                Save these backup codes in a safe place. Each code can only be used once.
+              </p>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <div className="grid grid-cols-2 gap-2">
+                  {backupCodes.map((code, index) => (
+                    <div key={index} className="text-sm font-mono text-gray-800 bg-white p-2 rounded border">
+                      {code}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowBackupCodes(false)}
+                className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              >
+                I've Saved These Codes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Notification Container */}
       <NotificationContainer notifications={notifications} onRemove={removeNotification} />

@@ -3,8 +3,9 @@
 import { useState, useEffect } from "react";
 
 import { CreateSalePayload } from "@/services/sales";
-import { listCustomers } from "@/services/customers";
+import { listCustomers, createCustomer } from "@/services/customers";
 import { listProducts } from "@/services/products";
+import { CreateCustomerBody } from "@/types/customers";
 
 interface CreateOrderModalProps {
   isOpen: boolean;
@@ -84,6 +85,17 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsError, setProductsError] = useState<string | null>(null);
   const [showInvoicePreview, setShowInvoicePreview] = useState(false);
+
+  // New customer form state
+  const [newCustomerData, setNewCustomerData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    countryCode: '+234',
+    address: ''
+  });
+  const [creatingCustomer, setCreatingCustomer] = useState(false);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -373,9 +385,47 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
     return orderData.items.reduce((total, item) => total + item.total, 0);
   };
 
-  const handleCreate = () => {
-    onCreate(orderData);
-    onClose();
+  // Create new customer function
+  const createNewCustomer = async (): Promise<string> => {
+    if (!newCustomerData.firstName || !newCustomerData.lastName || !newCustomerData.email || !newCustomerData.phone || !newCustomerData.address) {
+      throw new Error('Please fill in all required customer fields');
+    }
+
+    const customerPayload: CreateCustomerBody = {
+      name: `${newCustomerData.firstName} ${newCustomerData.lastName}`,
+      email: newCustomerData.email,
+      phone: `${newCustomerData.countryCode}${newCustomerData.phone}`,
+      address: newCustomerData.address
+    };
+
+    const newCustomer = await createCustomer(customerPayload);
+    return newCustomer.id;
+  };
+
+  const handleCreate = async () => {
+    try {
+      let customerId = explicitCustomerId;
+
+      // If creating a new customer, create them first
+      if (isNewCustomer) {
+        setCreatingCustomer(true);
+        customerId = await createNewCustomer();
+      }
+
+      // Update order data with customer ID
+      const orderDataWithCustomer = {
+        ...orderData,
+        customerId: customerId
+      };
+
+      onCreate(orderDataWithCustomer);
+      onClose();
+    } catch (error: any) {
+      console.error('Error creating order:', error);
+      alert(error.message || 'Failed to create order');
+    } finally {
+      setCreatingCustomer(false);
+    }
   };
 
   const handleOverlayClick = (e: React.MouseEvent) => {
@@ -586,12 +636,12 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                                 {customer.email && <p className="text-xs text-gray-500">{customer.email}</p>}
                                 {customer.phone && <p className="text-xs text-gray-500">{customer.phone}</p>}
                                 {customer.totalOrders && (
-                                  <div className="flex items-center gap-4 mt-1">
-                                    <span className="text-xs text-gray-400">{customer.totalOrders} orders</span>
+                                <div className="flex items-center gap-4 mt-1">
+                                  <span className="text-xs text-gray-400">{customer.totalOrders} orders</span>
                                     {customer.lastOrderDate && (
-                                      <span className="text-xs text-gray-400">Last: {customer.lastOrderDate}</span>
+                                  <span className="text-xs text-gray-400">Last: {customer.lastOrderDate}</span>
                                     )}
-                                  </div>
+                                </div>
                                 )}
                               </div>
                             </div>
@@ -620,6 +670,8 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                         <input
                           type="text"
                           placeholder="Enter first name"
+                          value={newCustomerData.firstName}
+                          onChange={(e) => setNewCustomerData(prev => ({ ...prev, firstName: e.target.value }))}
                           className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
                         />
                       </div>
@@ -635,6 +687,8 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                         <input
                           type="text"
                           placeholder="Enter last name"
+                          value={newCustomerData.lastName}
+                          onChange={(e) => setNewCustomerData(prev => ({ ...prev, lastName: e.target.value }))}
                           className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
                         />
                       </div>
@@ -652,6 +706,8 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                       <input
                         type="email"
                         placeholder="Enter email address"
+                        value={newCustomerData.email}
+                        onChange={(e) => setNewCustomerData(prev => ({ ...prev, email: e.target.value }))}
                         className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
                       />
                     </div>
@@ -661,7 +717,10 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                     <label className="block text-[14px] text-[#45464e] mb-2">Phone Number</label>
                     <div className="flex gap-3">
                       <div className="relative">
-                        <select className="block w-24 pl-3 pr-8 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent appearance-none">
+                        <select 
+                          value={newCustomerData.countryCode}
+                          onChange={(e) => setNewCustomerData(prev => ({ ...prev, countryCode: e.target.value }))}
+                          className="block w-24 pl-3 pr-8 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent appearance-none">
                           <option value="+234">🇳🇬 +234</option>
                           <option value="+1">🇺🇸 +1</option>
                           <option value="+44">🇬🇧 +44</option>
@@ -675,11 +734,13 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                       <input
                         type="tel"
                         placeholder="Enter phone number"
+                        value={newCustomerData.phone}
+                        onChange={(e) => setNewCustomerData(prev => ({ ...prev, phone: e.target.value }))}
                         className="flex-1 px-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
                       />
                     </div>
               </div>
-
+                  
                   <div>
                     <label className="block text-[14px] text-[#45464e] mb-2">Address</label>
                     <div className="relative">
@@ -692,6 +753,8 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                       <input
                         type="text"
                         placeholder="Enter address"
+                        value={newCustomerData.address}
+                        onChange={(e) => setNewCustomerData(prev => ({ ...prev, address: e.target.value }))}
                         className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
                       />
                     </div>
@@ -866,20 +929,20 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                       return (
                         <div
                           key={String(product.id || '')}
-                          onClick={() => addProductToOrder(product)}
-                          className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-                        >
-                          <div className="flex justify-between items-center">
-                            <div>
+                      onClick={() => addProductToOrder(product)}
+                      className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
                               <h4 className="text-[14px] font-medium text-[#45464e]">{productName}</h4>
                               {productCategory && <p className="text-[12px] text-[#8b8d97]">{productCategory}</p>}
-                            </div>
-                            <div className="text-right">
+                        </div>
+                        <div className="text-right">
                               <p className="text-[14px] font-medium text-[#45464e]">₦{productPrice.toLocaleString()}</p>
                               <p className="text-[12px] text-[#8b8d97]">Stock: {productStock}</p>
-                            </div>
-                          </div>
                         </div>
+                      </div>
+                    </div>
                       );
                     }).filter(Boolean)
                   ) : searchQuery.trim() ? (
@@ -889,8 +952,8 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                   ) : (
                     <div className="p-3 text-sm text-gray-500 text-center">
                       Start typing to search products
-                    </div>
-                  )}
+                </div>
+              )}
                 </div>
               )}
             </div>
@@ -1009,9 +1072,16 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
           </button>
           <button
             onClick={handleCreate}
-            className="px-6 py-2 bg-[#02016a] text-white rounded-lg font-medium text-[14px] hover:bg-[#03024a] transition-colors"
+            disabled={creatingCustomer}
+            className="px-6 py-2 bg-[#02016a] text-white rounded-lg font-medium text-[14px] hover:bg-[#03024a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            Create Order
+            {creatingCustomer && (
+              <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            )}
+            {creatingCustomer ? 'Creating Customer...' : 'Create Order'}
           </button>
         </div>
       </div>

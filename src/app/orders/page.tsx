@@ -17,7 +17,7 @@ import type { SalesDashboardResponse, CreateSalePayload } from "../../services/s
 
 export default function OrdersPage() {
   const router = useRouter();
-  const { notifications, removeNotification, showSuccess } = useNotifications();
+  const { notifications, removeNotification, showSuccess, showError } = useNotifications();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [orders, setOrders] = useState<Order[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -55,9 +55,14 @@ export default function OrdersPage() {
 
   const handleCreateOrder = async (orderData: any) => {
     try {
+      // Validate that we have a customer ID
+      if (!orderData.customerId) {
+        throw new Error('Customer ID is required to create an order');
+      }
+
       // Convert orderData to CreateSalePayload format
       const salePayload: CreateSalePayload = {
-        customerId: orderData.customerId || '', // You'll need to get this from customer selection
+        customerId: orderData.customerId,
         items: orderData.items.map((item: any) => ({
           productId: item.id,
           quantity: item.quantity,
@@ -76,7 +81,7 @@ export default function OrdersPage() {
       await fetchOrdersData();
     } catch (error: any) {
       console.error("Error creating order:", error);
-      showSuccess("Error", error.message || "Failed to create order");
+      showError("Error", error.message || "Failed to create order");
     }
   };
 

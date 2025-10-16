@@ -61,6 +61,29 @@ export interface StockAdjustment {
   reference?: string;
 }
 
+export interface PurchaseHistoryItem {
+  id: string;
+  date: string;
+  price: number;
+  quantity: number;
+  totalAmount: number;
+  status: "COMPLETED" | "PENDING" | "CANCELLED" | "RETURNED";
+  orderType: string;
+  customerName: string;
+  customerPhone: string;
+  saleReference: string;
+}
+
+export interface PurchaseHistoryResponse {
+  productId: string;
+  productName: string;
+  totalPurchases: number;
+  totalQuantitySold: number;
+  totalRevenue: number;
+  averagePrice: number;
+  purchases: PurchaseHistoryItem[];
+}
+
 // Inventory API Functions
 export async function getInventoryProducts(): Promise<InventoryProduct[]> {
   try {
@@ -210,6 +233,17 @@ export async function getInventoryPermissions(): Promise<any> {
     return data;
   } catch (error) {
     console.error('Error fetching inventory permissions:', error);
+    throw error;
+  }
+}
+
+export async function getProductPurchaseHistory(id: string, limit: number = 20): Promise<PurchaseHistoryResponse> {
+  try {
+    const response = await authFetch(`${API_ENDPOINTS.inventoryById(id)}/purchase-history?limit=${limit}`);
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching product purchase history:', error);
     throw error;
   }
 }
