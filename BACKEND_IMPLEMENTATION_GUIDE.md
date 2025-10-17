@@ -1,4 +1,4 @@
-# Backend Implementation Guide for Cloudinary Images
+# Backend Implementation Guide for Cloudinary Images.
 
 ## 🎯 **What Your Backend Needs to Do**
 
