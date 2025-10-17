@@ -6,6 +6,7 @@ import { Suspense } from 'react';
 import { InventoryDataService, InventoryItem, Purchase } from '@/services/InventoryDataService';
 import { getProduct, updateProduct } from '@/services/products';
 import { getProductPurchaseHistory } from '@/services/inventory';
+import { getWarehouse } from '@/services/warehouses';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import FilterByDateModal from '@/components/FilterByDateModal';
 import EditProductModal from '@/components/EditProductModal';
@@ -26,6 +27,7 @@ function ViewInventoryContent() {
   // Data states
   const [inventoryItem, setInventoryItem] = useState<InventoryItem | null>(null);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [warehouseInfo, setWarehouseInfo] = useState<{ id: string; name: string } | null>(null);
   
   // UI states
   const [searchQuery, setSearchQuery] = useState('');
@@ -97,13 +99,33 @@ function ViewInventoryContent() {
           dateAdded: p.createdAt || new Date().toISOString(),
           // Required fields for InventoryItem
           costPrice: p.purchasePrice ?? p.costPrice ?? 0,
-          image: '',
+          image: p.coverImage || p.image || '',
           views: p.views || 0,
           favorites: p.favorites || 0,
-          lastOrder: p.lastOrderDate || undefined,
+          lastOrder: p.lastOrderDate || p.lastOrder || undefined,
+          warehouseNumber: p.warehouse?.name || p.warehouseName || p.warehouse || 'N/A',
+          brand: p.brand || '',
+          longDescription: p.longDescription || p.description || '',
+          additionalImages: p.additionalImages || []
         } as any;
         
         setInventoryItem(item);
+        
+        // Fetch warehouse information if warehouse ID is available
+        if (p.warehouse?.id || p.warehouseId) {
+          try {
+            const warehouseId = p.warehouse?.id || p.warehouseId;
+            const warehouse = await getWarehouse(warehouseId);
+            setWarehouseInfo({ id: warehouse.id, name: warehouse.name });
+          } catch (error) {
+            console.error('Failed to fetch warehouse info:', error);
+            // Keep the warehouse ID as fallback
+            setWarehouseInfo({ 
+              id: p.warehouse?.id || p.warehouseId || '', 
+              name: p.warehouse?.name || 'Unknown Warehouse' 
+            });
+          }
+        }
         
         // Fetch real purchase data from the API
         try {
@@ -129,8 +151,17 @@ function ViewInventoryContent() {
             customerPhone: p.customerPhone || '',
             saleReference: p.saleReference || '',
           }));
-          setPurchases(purchases);
-          setFilteredPurchases(purchases);
+          
+          // Sort purchases by date to get the most recent order
+          const sortedPurchases = purchases.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          setPurchases(sortedPurchases);
+          setFilteredPurchases(sortedPurchases);
+          
+          // Update the inventory item with the last order date
+          if (sortedPurchases.length > 0) {
+            const lastOrderDate = sortedPurchases[0].date;
+            setInventoryItem(prev => prev ? { ...prev, lastOrder: lastOrderDate } : null);
+          }
         } catch (error) {
           console.error('Failed to fetch purchase history:', error);
           // Fallback to empty array if API fails
@@ -179,6 +210,14 @@ function ViewInventoryContent() {
       
       setInventoryItem(item);
       
+      // Set warehouse info from the item if available
+      if (item.warehouseNumber && item.warehouseNumber !== 'N/A') {
+        setWarehouseInfo({ 
+          id: item.warehouseNumber, 
+          name: item.warehouseNumber 
+        });
+      }
+      
       // Generate sample purchases
       const samplePurchases = InventoryDataService.generatePurchases(itemId, 20);
       setPurchases(samplePurchases);
@@ -225,9 +264,28 @@ function ViewInventoryContent() {
     setShowEditModal(true);
   };
 
-  const handleSaveProduct = (formData: any, mainImage: string | null, additionalImages: string[]) => {
+  const handleSaveProduct = async (formData: any, mainImage: string | null, additionalImages: string[]) => {
     if (inventoryItem) {
-      // Update the inventory item with new data
+      try {
+        // Prepare the update payload for the API
+        const updatePayload = {
+          name: formData.productName,
+          category: formData.category,
+          sellingPrice: parseFloat(formData.sellingPrice) || inventoryItem.unitPrice,
+          purchasePrice: parseFloat(formData.costPrice) || inventoryItem.costPrice,
+          quantity: parseInt(formData.quantityInStock) || inventoryItem.inStock,
+          brand: formData.productBrand,
+          description: formData.shortDescription,
+          longDescription: formData.longDescription,
+          coverImage: mainImage || inventoryItem.image,
+          additionalImages: additionalImages.length > 0 ? additionalImages : inventoryItem.additionalImages,
+          warehouse: formData.warehouseNumber || inventoryItem.warehouseNumber
+        };
+
+        // Call the API to update the product
+        await updateProduct(inventoryItem.id, updatePayload);
+
+        // Update the local state with new data
         const updatedItem = {
           ...inventoryItem,
           productName: formData.productName,
@@ -235,30 +293,35 @@ function ViewInventoryContent() {
           unitPrice: parseFloat(formData.sellingPrice) || inventoryItem.unitPrice,
           costPrice: parseFloat(formData.costPrice) || inventoryItem.costPrice,
           inStock: parseInt(formData.quantityInStock) || inventoryItem.inStock,
-        brand: formData.productBrand,
+          brand: formData.productBrand,
           description: formData.shortDescription,
-        longDescription: formData.longDescription,
+          longDescription: formData.longDescription,
           image: mainImage || inventoryItem.image,
-          additionalImages: additionalImages.length > 0 ? additionalImages : inventoryItem.additionalImages
+          additionalImages: additionalImages.length > 0 ? additionalImages : inventoryItem.additionalImages,
+          warehouseNumber: formData.warehouseNumber || inventoryItem.warehouseNumber
         };
         
         setInventoryItem(updatedItem);
       
-      // Update localStorage with the updated item
-      const storedItems = localStorage.getItem('inventoryItems');
-      if (storedItems) {
-        try {
-          const items: InventoryItem[] = JSON.parse(storedItems);
-          const updatedItems = items.map(item => 
-            item.id === updatedItem.id ? updatedItem : item
-          );
-          localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
-      } catch (error) {
-          console.error('Error updating stored inventory items:', error);
+        // Update localStorage with the updated item
+        const storedItems = localStorage.getItem('inventoryItems');
+        if (storedItems) {
+          try {
+            const items: InventoryItem[] = JSON.parse(storedItems);
+            const updatedItems = items.map(item => 
+              item.id === updatedItem.id ? updatedItem : item
+            );
+            localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
+          } catch (error) {
+            console.error('Error updating stored inventory items:', error);
+          }
+        }
+        
+        showSuccess('Success', 'Product updated successfully');
+      } catch (error: any) {
+        console.error('Error updating product:', error);
+        showError('Error', error.message || 'Failed to update product');
       }
-      }
-      
-      showSuccess('Success', 'Product updated successfully');
     }
   };
 
@@ -444,7 +507,13 @@ function ViewInventoryContent() {
                             month: 'short', 
                             day: 'numeric'
                           })
-                        : 'No orders yet'
+                        : purchases.length > 0 
+                          ? new Date(purchases[0].date).toLocaleDateString('en-US', { 
+                              year: 'numeric', 
+                              month: 'short', 
+                              day: 'numeric'
+                            })
+                          : 'No orders yet'
                       }
                     </p>
                   </div>
@@ -467,7 +536,7 @@ function ViewInventoryContent() {
                   <div>
                     <p className="text-sm text-gray-600 mb-1">Warehouse</p>
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                      {inventoryItem.warehouseNumber || 'N/A'}
+                      {warehouseInfo?.name || inventoryItem.warehouseNumber || 'N/A'}
                     </span>
                   </div>
                 </div>

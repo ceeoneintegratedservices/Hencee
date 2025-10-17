@@ -12,6 +12,7 @@ import Breadcrumb from "../../components/Breadcrumb";
 import TimePeriodSelector from "../../components/TimePeriodSelector";
 import { OrderDataService, Order } from "../../services/OrderDataService";
 import { NotificationContainer, useNotifications } from "../../components/Notification";
+import { updateOrderStatus } from "../../services/orders";
 import { fetchSalesDashboard, createSale, updateSaleStatus } from "../../services/sales";
 import type { SalesDashboardResponse, CreateSalePayload } from "../../services/sales";
 
@@ -90,7 +91,7 @@ export default function OrdersPage() {
     setSelectedTimePeriod(period);
   };
 
-  // Fetch orders data from API
+  // Fetch orders data from API using sales dashboard endpoint
   const fetchOrdersData = async () => {
     setApiLoading(true);
     setApiError(null);
@@ -110,6 +111,7 @@ export default function OrdersPage() {
       const df = appliedFilters?.dateFilter?.from || appliedFilters?.dateFilter?.start || undefined;
       const dt = appliedFilters?.dateFilter?.to || appliedFilters?.dateFilter?.end || undefined;
       
+      // Use sales dashboard endpoint to get order summary and list
       const data = await fetchSalesDashboard({
         page: currentPage,
         limit: itemsPerPage,
@@ -305,8 +307,19 @@ export default function OrdersPage() {
       const orderId = sampleOrders[globalOrderIndex].id;
       
       try {
-        // Update status via API
-        await updateSaleStatus(orderId, newStatus.toUpperCase());
+        // Map frontend status to backend status
+        const statusMap: Record<string, "PENDING" | "COMPLETED" | "CANCELLED"> = {
+          "Pending": "PENDING",
+          "Completed": "COMPLETED", 
+          "In-Progress": "PENDING", // Map In-Progress to PENDING for now
+          "Cancelled": "CANCELLED",
+          "Canceled": "CANCELLED"
+        };
+        
+        const backendStatus = statusMap[newStatus] || "PENDING";
+        
+        // Update status via API using PATCH method (orders endpoint)
+        await updateOrderStatus(orderId, backendStatus);
         
         // Show success notification
         showSuccess(
@@ -318,7 +331,7 @@ export default function OrdersPage() {
         await fetchOrdersData();
       } catch (error: any) {
         console.error("Error updating order status:", error);
-        showSuccess("Error", error.message || "Failed to update order status");
+        showError("Error", error.message || "Failed to update order status");
       }
     }
     

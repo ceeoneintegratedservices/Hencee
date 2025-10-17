@@ -6,6 +6,7 @@ import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import { OrderDataService, Order } from "@/services/OrderDataService";
 import { NotificationContainer, useNotifications } from "@/components/Notification";
+import { updateOrderStatus } from "@/services/orders";
 
 function ViewOrderContent() {
   const router = useRouter();
@@ -118,27 +119,44 @@ function ViewOrderContent() {
     }
   };
 
-  const handleStatusChange = (newStatus: string) => {
+  const handleStatusChange = async (newStatus: string) => {
     if (order) {
-      // Update the order status
-      const updatedOrder = { ...order, status: newStatus as any };
-      setOrder(updatedOrder);
-      
-      // Persist the status change to localStorage
-      const statusChanges = JSON.parse(localStorage.getItem('orderStatusChanges') || '{}');
-      statusChanges[order.id] = newStatus;
-      localStorage.setItem('orderStatusChanges', JSON.stringify(statusChanges));
-      
-      // Show success notification
-      showSuccess(
-        "Status Updated",
-        `Order status changed to ${newStatus} successfully!`
-      );
-      
-      // Close dropdown
-      setShowStatusDropdown(false);
-      
-      // In a real app, you would make an API call to update the order status
+      try {
+        // Map frontend status to backend status
+        const statusMap: Record<string, "PENDING" | "COMPLETED" | "CANCELLED"> = {
+          "Pending": "PENDING",
+          "Completed": "COMPLETED", 
+          "In-Progress": "PENDING", // Map In-Progress to PENDING for now
+          "Cancelled": "CANCELLED",
+          "Canceled": "CANCELLED"
+        };
+        
+        const backendStatus = statusMap[newStatus] || "PENDING";
+        
+        // Update status via API using PATCH method
+        const updatedOrderData = await updateOrderStatus(order.id, backendStatus);
+        
+        // Update the order status in local state
+        const updatedOrder = { ...order, status: newStatus as any };
+        setOrder(updatedOrder);
+        
+        // Persist the status change to localStorage
+        const statusChanges = JSON.parse(localStorage.getItem('orderStatusChanges') || '{}');
+        statusChanges[order.id] = newStatus;
+        localStorage.setItem('orderStatusChanges', JSON.stringify(statusChanges));
+        
+        // Show success notification
+        showSuccess(
+          "Status Updated",
+          `Order status changed to ${newStatus} successfully!`
+        );
+        
+        // Close dropdown
+        setShowStatusDropdown(false);
+      } catch (error: any) {
+        console.error("Error updating order status:", error);
+        showSuccess("Error", error.message || "Failed to update order status");
+      }
     }
   };
 

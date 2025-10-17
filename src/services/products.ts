@@ -45,7 +45,7 @@ export async function updateProduct(id: string, body: any) {
   try {
     const url = `${API_ENDPOINTS.products}/${encodeURIComponent(id)}`;
     const res = await authFetch(url, { 
-      method: "PATCH", 
+      method: "PUT", 
       body: JSON.stringify(body) 
     });
     const data = await res.json();

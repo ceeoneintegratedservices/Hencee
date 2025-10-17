@@ -220,6 +220,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
   const selectCustomer = (customer: Customer) => {
     setOrderData(prev => ({ ...prev, customer: customer.name }));
     setCustomerSearchQuery(customer.name);
+    setExplicitCustomerId(customer.id); // Store the customer ID
     setShowCustomerList(false);
   };
 
@@ -412,6 +413,11 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
         customerId = await createNewCustomer();
       }
 
+      // Validate that we have a customer ID
+      if (!customerId) {
+        throw new Error('Customer ID is required. Please select a customer or create a new one.');
+      }
+
       // Update order data with customer ID
       const orderDataWithCustomer = {
         ...orderData,
@@ -600,6 +606,10 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                       onChange={(e) => {
                         setCustomerSearchQuery(e.target.value);
                         setOrderData(prev => ({ ...prev, customer: e.target.value }));
+                        // Clear customer ID when manually typing
+                        if (e.target.value !== orderData.customer) {
+                          setExplicitCustomerId("");
+                        }
                       }}
                       onFocus={() => setShowCustomerList(true)}
                       placeholder="Search customers..."
