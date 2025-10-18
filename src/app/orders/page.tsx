@@ -132,6 +132,60 @@ export default function OrdersPage() {
     }
   };
 
+  // Refresh data when component becomes visible (e.g., returning from view order page)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && isAuthenticated) {
+        fetchOrdersData();
+      }
+    };
+
+    const handleFocus = () => {
+      if (isAuthenticated) {
+        fetchOrdersData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [isAuthenticated]);
+
+  // Refresh data when component mounts (e.g., returning from view order page)
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchOrdersData();
+    }
+  }, [isAuthenticated]);
+
+  // Refresh data when user navigates back to this page
+  useEffect(() => {
+    const handlePopState = () => {
+      if (isAuthenticated) {
+        fetchOrdersData();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isAuthenticated]);
+
+  // Refresh data when component becomes visible (e.g., returning from view order page)
+  useEffect(() => {
+    const handlePageShow = () => {
+      if (isAuthenticated) {
+        fetchOrdersData();
+      }
+    };
+
+    window.addEventListener('pageshow', handlePageShow);
+    return () => window.removeEventListener('pageshow', handlePageShow);
+  }, [isAuthenticated]);
+
   // Generate orders using API data only
   const sampleOrders = apiData && apiData.orders && Array.isArray(apiData.orders)
     ? apiData.orders.map(o => {
@@ -302,9 +356,9 @@ export default function OrdersPage() {
   };
 
   const handleStatusChange = async (orderIndex: number, newStatus: string) => {
-    const globalOrderIndex = startIndex + orderIndex;
-    if (sampleOrders[globalOrderIndex]) {
-      const orderId = sampleOrders[globalOrderIndex].id;
+    // Get the correct order from currentOrders (which handles both API and fallback data)
+    if (currentOrders[orderIndex]) {
+      const orderId = currentOrders[orderIndex].id;
       
       try {
         // Map frontend status to backend status

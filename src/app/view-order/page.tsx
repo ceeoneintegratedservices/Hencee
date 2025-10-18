@@ -6,7 +6,8 @@ import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import { OrderDataService, Order } from "@/services/OrderDataService";
 import { NotificationContainer, useNotifications } from "@/components/Notification";
-import { updateOrderStatus } from "@/services/orders";
+import { updateOrderStatus, getOrderById } from "@/services/orders";
+import { getSalesByCustomer, Sale } from "@/services/sales";
 
 function ViewOrderContent() {
   const router = useRouter();
@@ -35,21 +36,115 @@ function ViewOrderContent() {
   const [showItemStatusDropdown, setShowItemStatusDropdown] = useState<number | null>(null);
 
 
-  // Load order data using the service
+  // Load order data using the real API
   useEffect(() => {
-    if (finalOrderId) {
-      // Simulate API call
-      setTimeout(() => {
-        const orderData = OrderDataService.generateOrder(finalOrderId);
-        const previousOrdersData = OrderDataService.generatePreviousOrders(orderData.customer.id, finalOrderId);
-        
-        setOrder(orderData);
-        setPreviousOrders(previousOrdersData);
+    const fetchOrderData = async () => {
+      if (finalOrderId) {
+        try {
+          setLoading(true);
+          
+          // Fetch real order data from API
+          const apiResponse = await getOrderById(finalOrderId);
+          
+          // Transform API response to match expected Order interface
+          const orderData: Order = {
+            id: apiResponse.id,
+            orderNumber: apiResponse.orderNumber || `#${apiResponse.id}`,
+            orderDate: apiResponse.orderDate || apiResponse.createdAt,
+            trackingId: apiResponse.trackingId || `TRK${apiResponse.id}`,
+            customer: {
+              id: apiResponse.customer?.id || '',
+              name: apiResponse.customer?.name || 'Unknown Customer',
+              email: apiResponse.customer?.email || '',
+              phone: apiResponse.customer?.phone || '',
+              customerSince: apiResponse.customer?.customerSince || new Date().toISOString(),
+              status: apiResponse.customer?.status || 'Active'
+            },
+            homeAddress: apiResponse.homeAddress || '',
+            billingAddress: apiResponse.billingAddress || '',
+            paymentMethod: apiResponse.paymentMethod || 'Cash',
+            payment: apiResponse.payment || 'Full Payment',
+            paymentAmount: apiResponse.paymentAmount || apiResponse.totalAmount?.toString(),
+            orderType: apiResponse.orderType || 'Pick Up',
+            items: apiResponse.items?.map((item: any) => ({
+              id: item.id || item.productId,
+              productName: item.product?.name || item.productName || 'Unknown Product',
+              productImage: item.product?.image || item.productImage || '',
+              unitPrice: item.unitPrice || 0,
+              quantity: item.quantity || 1,
+              discount: item.discount || 0,
+              orderTotal: item.totalPrice || 0,
+              status: item.status || 'Pending',
+              warehouseNumber: item.warehouseNumber || item.warehouseId
+            })) || [],
+            totalAmount: apiResponse.totalAmount || 0,
+            status: apiResponse.status || 'Pending',
+            statusColor: apiResponse.statusColor
+          };
+          
+          // Fetch real customer order history from API
+          try {
+            const customerSales = await getSalesByCustomer(orderData.customer.id);
+            
+            // Transform API response to match expected Order interface
+            const previousOrdersData: Order[] = customerSales
+              .filter(sale => sale.id !== finalOrderId) // Exclude current order
+              .map(sale => ({
+                id: sale.id,
+                orderNumber: `#${sale.id.slice(-8).toUpperCase()}`,
+                orderDate: new Date(sale.createdAt).toLocaleString(),
+                trackingId: `TRK${sale.id.slice(-6).toUpperCase()}`,
+                customer: orderData.customer,
+                homeAddress: orderData.homeAddress,
+                billingAddress: orderData.billingAddress,
+                paymentMethod: sale.paymentMethod,
+                payment: sale.paymentStatus === 'completed' ? 'Full Payment' : 'Part Payment',
+                paymentAmount: sale.totalAmount.toString(),
+                orderType: 'Pick Up',
+                items: sale.items.map(item => ({
+                  id: item.productId,
+                  productName: item.product?.name || item.productName || 'Unknown Product',
+                  productImage: item.product?.image || '',
+                  unitPrice: item.unitPrice || 0,
+                  quantity: item.quantity,
+                  discount: 0,
+                  orderTotal: item.totalPrice || 0,
+                  status: 'Completed' as any,
+                  warehouseNumber: undefined
+                })),
+                totalAmount: sale.totalAmount,
+                status: sale.status as any,
+                statusColor: sale.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : 
+                           sale.status === 'PENDING' ? 'bg-orange-100 text-orange-800' : 
+                           'bg-blue-100 text-blue-800'
+              }));
+            
+            setOrder(orderData);
+            setPreviousOrders(previousOrdersData);
+          } catch (error) {
+            console.error('Error fetching customer orders:', error);
+            // Fallback to mock data if API fails
+            const previousOrdersData = OrderDataService.generatePreviousOrders(orderData.customer.id, finalOrderId);
+            setOrder(orderData);
+            setPreviousOrders(previousOrdersData);
+          }
+        } catch (error) {
+          console.error('Error fetching order:', error);
+          // Fallback to mock data if API fails
+          const orderData = OrderDataService.generateOrder(finalOrderId);
+          const previousOrdersData = OrderDataService.generatePreviousOrders(orderData.customer.id, finalOrderId);
+          
+          setOrder(orderData);
+          setPreviousOrders(previousOrdersData);
+        } finally {
+          setLoading(false);
+        }
+      } else {
         setLoading(false);
-      }, 1000);
-    } else {
-      setLoading(false);
-    }
+      }
+    };
+
+    fetchOrderData();
   }, [finalOrderId]);
 
   // Close sidebar on escape key

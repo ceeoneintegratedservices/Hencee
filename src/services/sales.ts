@@ -46,11 +46,21 @@ export interface Sale {
   customerId: string;
   customerName: string;
   items: Array<{
+    id: string;
     productId: string;
     productName: string;
     quantity: number;
-    price: number;
-    total: number;
+    unitPrice: number;
+    totalPrice: number;
+    price?: number; // Legacy field
+    total?: number; // Legacy field
+    product?: {
+      id: string;
+      name: string;
+      image?: string;
+      sku?: string;
+      sellingPrice?: number;
+    };
   }>;
   totalAmount: number;
   paymentMethod: string;
