@@ -411,8 +411,8 @@ export default function CustomersPage() {
                                   <span className="text-sm font-medium text-blue-600">#{index + 1}</span>
                                 </div>
                                 <div>
-                                  <p className="font-medium text-gray-900">{customer.name}</p>
-                                  <p className="text-sm text-gray-600">{customer.email}</p>
+                                  <p className="font-medium text-gray-900">{customer.name || 'N/A'}</p>
+                                  <p className="text-sm text-gray-600">{customer.email || 'N/A'}</p>
                                 </div>
                               </div>
                               <div className="text-right">
@@ -441,13 +441,13 @@ export default function CustomersPage() {
                                   </svg>
                                 </div>
                                 <div>
-                                  <p className="font-medium text-gray-900">{customer.name}</p>
-                                  <p className="text-sm text-gray-600">{customer.email}</p>
+                                  <p className="font-medium text-gray-900">{customer.name || 'N/A'}</p>
+                                  <p className="text-sm text-gray-600">{customer.email || 'N/A'}</p>
                                 </div>
                               </div>
                               <div className="text-right">
-                                <p className="font-medium text-red-600">₦{customer.outstandingBalance.toLocaleString()}</p>
-                                <p className="text-sm text-gray-600">Credit: ₦{customer.creditLimit.toLocaleString()}</p>
+                                <p className="font-medium text-red-600">₦{(customer.outstandingBalance || 0).toLocaleString()}</p>
+                                <p className="text-sm text-gray-600">Credit: ₦{(customer.creditLimit || 0).toLocaleString()}</p>
                               </div>
                             </div>
                           ))
@@ -617,11 +617,11 @@ export default function CustomersPage() {
                         />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">{customer.name}</div>
+                        <div className="text-sm font-medium text-gray-900">{customer.name || 'N/A'}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-900">{customer.email}</span>
+                          <span className="text-sm text-gray-900">{customer.email || 'N/A'}</span>
                           <button
                             onClick={() => copyToClipboard(customer.email)}
                             className="p-1 hover:bg-gray-100 rounded transition-colors"
@@ -634,7 +634,7 @@ export default function CustomersPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-900">{customer.phone}</span>
+                          <span className="text-sm text-gray-900">{customer.phone || 'N/A'}</span>
                           <button
                             onClick={() => copyToClipboard(customer.phone)}
                             className="p-1 hover:bg-gray-100 rounded transition-colors"
@@ -646,21 +646,21 @@ export default function CustomersPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {customer.orders}
+                        {customer.orders || 0}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         ₦{(customer.orderTotal || 0).toLocaleString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {customer.customerSince}
+                        {customer.customerSince || 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          customer.status === 'Active' 
+                          (customer.status || 'Inactive') === 'Active' 
                             ? 'bg-green-100 text-green-800' 
                             : 'bg-red-100 text-red-800'
                         }`}>
-                          {customer.status}
+                          {customer.status || 'Inactive'}
                         </span>
                       </td>
                     </tr>
