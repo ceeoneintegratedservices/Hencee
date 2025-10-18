@@ -834,8 +834,10 @@ export default function InventoryPage() {
                         {InventoryDataService.formatCurrency(item.unitPrice)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.inStock < 10 ? (
+                        {item.inStock === 0 ? (
                           <span className="text-red-600 font-medium">Out of Stock</span>
+                        ) : item.inStock < 10 ? (
+                          <span className="text-orange-600 font-medium">Low Stock ({item.inStock})</span>
                         ) : (
                           item.inStock
                         )}
@@ -981,8 +983,14 @@ export default function InventoryPage() {
                             </div>
                             <div className="flex justify-between text-xs">
                               <span className="text-gray-500">Stock:</span>
-                              <span className={item.inStock < 10 ? "text-red-600 font-medium" : "text-gray-900"}>
-                                {item.inStock < 10 ? "Out of Stock" : item.inStock}
+                              <span className={
+                                item.inStock === 0 ? "text-red-600 font-medium" : 
+                                item.inStock < 10 ? "text-orange-600 font-medium" : 
+                                "text-gray-900"
+                              }>
+                                {item.inStock === 0 ? "Out of Stock" : 
+                                 item.inStock < 10 ? `Low Stock (${item.inStock})` : 
+                                 item.inStock}
                               </span>
                             </div>
                             <div className="flex justify-between text-xs">
