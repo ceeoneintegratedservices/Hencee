@@ -7,8 +7,7 @@ export interface Tire {
   description?: string;
   sku: string;
   categoryId: string;
-  warehouseId?: string; // Made optional to support new warehouse creation
-  warehouseName?: string; // Added for new warehouse creation
+  warehouseId?: string;
   purchasePrice: number;
   sellingPrice: number;
   quantity: number;
@@ -18,6 +17,23 @@ export interface Tire {
   status?: 'PUBLISHED' | 'DRAFT';
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface CreateTirePayload {
+  name: string;
+  description?: string;
+  sku: string;
+  categoryId?: string; // Optional for existing categories
+  categoryName?: string; // For new category creation
+  warehouseId?: string; // Optional for existing warehouses
+  warehouseName?: string; // For new warehouse creation
+  purchasePrice: number;
+  sellingPrice: number;
+  quantity: number;
+  brand: string;
+  coverImage?: string;
+  additionalImages?: { url: string }[];
+  status?: 'PUBLISHED' | 'DRAFT';
 }
 
 export interface TireListParams {
@@ -79,7 +95,7 @@ export async function getTire(id: string): Promise<Tire> {
 /**
  * Create a new tire
  */
-export async function createTire(body: Omit<Tire, 'id'>): Promise<Tire> {
+export async function createTire(body: CreateTirePayload): Promise<Tire> {
   try {
     const res = await authFetch(API_ENDPOINTS.tires, { 
       method: "POST", 

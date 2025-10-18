@@ -79,6 +79,10 @@ export default function CreateInventoryPage() {
   // Warehouse creation mode
   const [isCreatingNewWarehouse, setIsCreatingNewWarehouse] = useState(false);
   const [newWarehouseName, setNewWarehouseName] = useState('');
+  
+  // Category creation mode
+  const [isCreatingNewCategory, setIsCreatingNewCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   // Tyre brands list
   const tyreBrands = [
@@ -213,7 +217,8 @@ export default function CreateInventoryPage() {
         name: formData.productName, // Required field
         description: formData.shortDescription,
         sku: formData.sku || `TIRE-${Date.now()}`, // Generate unique SKU if not provided
-        categoryId: selectedCategoryId || "default-category-id",
+        categoryId: isCreatingNewCategory ? undefined : (selectedCategoryId || "default-category-id"),
+        categoryName: isCreatingNewCategory ? newCategoryName : undefined, // Send category name for auto-creation
         warehouseId: isCreatingNewWarehouse ? undefined : (selectedWarehouseId || "default-warehouse-id"),
         warehouseName: isCreatingNewWarehouse ? newWarehouseName : undefined, // Send warehouse name for auto-creation
         purchasePrice: parseFloat(formData.costPrice) || 0, // Backend expects purchasePrice
@@ -244,8 +249,12 @@ export default function CreateInventoryPage() {
       showError('Validation Error', 'Product name is required');
       return;
     }
-    if (!selectedCategoryId) {
-      showError('Validation Error', 'Product category is required');
+    if (!isCreatingNewCategory && !selectedCategoryId) {
+      showError('Validation Error', 'Please select a category');
+      return;
+    }
+    if (isCreatingNewCategory && !newCategoryName.trim()) {
+      showError('Validation Error', 'Please enter a category name');
       return;
     }
     if (!isCreatingNewWarehouse && !selectedWarehouseId) {
@@ -271,7 +280,8 @@ export default function CreateInventoryPage() {
         name: formData.productName, // Required field
         description: formData.shortDescription,
         sku: formData.sku || `TIRE-${Date.now()}`, // Generate unique SKU if not provided
-        categoryId: selectedCategoryId || "default-category-id",
+        categoryId: isCreatingNewCategory ? undefined : (selectedCategoryId || "default-category-id"),
+        categoryName: isCreatingNewCategory ? newCategoryName : undefined, // Send category name for auto-creation
         warehouseId: isCreatingNewWarehouse ? undefined : (selectedWarehouseId || "default-warehouse-id"),
         warehouseName: isCreatingNewWarehouse ? newWarehouseName : undefined, // Send warehouse name for auto-creation
         purchasePrice: parseFloat(formData.costPrice) || 0, // Backend expects purchasePrice
@@ -401,29 +411,79 @@ export default function CreateInventoryPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Tyre Category
                 </label>
-                <div className="relative">
-                <select
-                    value={selectedCategoryId}
-                    onChange={(e) => setSelectedCategoryId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
-                  >
-                    {categories.length > 0 ? (
-                      categories.map((category) => (
-                        <option key={category.id} value={category.id}>
-                          {category.name}
-                        </option>
-                      ))
-                    ) : (
-                      <option value="">Loading categories...</option>
-                    )}
-                </select>
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
+                
+                {/* Category Mode Toggle */}
+                <div className="mb-4">
+                  <div className="flex space-x-4">
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="categoryMode"
+                        checked={!isCreatingNewCategory}
+                        onChange={() => {
+                          setIsCreatingNewCategory(false);
+                          setNewCategoryName('');
+                        }}
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-700">Select Existing Category</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="categoryMode"
+                        checked={isCreatingNewCategory}
+                        onChange={() => {
+                          setIsCreatingNewCategory(true);
+                          setSelectedCategoryId('');
+                        }}
+                        className="mr-2"
+                      />
+                      <span className="text-sm text-gray-700">Create New Category</span>
+                    </label>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Type to search or select from popular tyre categories</p>
+
+                {/* Existing Category Dropdown */}
+                {!isCreatingNewCategory && (
+                  <div className="relative">
+                    <select
+                      value={selectedCategoryId}
+                      onChange={(e) => setSelectedCategoryId(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+                    >
+                      <option value="">Select a category</option>
+                      {categories.length > 0 ? (
+                        categories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="">Loading categories...</option>
+                      )}
+                    </select>
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                      <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                )}
+
+                {/* New Category Input */}
+                {isCreatingNewCategory && (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="Enter new category name"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    <p className="text-xs text-gray-500">Category will be created automatically when you save the product</p>
+                  </div>
+                )}
               </div>
 
               {/* Pricing */}
