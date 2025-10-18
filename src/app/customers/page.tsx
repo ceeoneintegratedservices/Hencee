@@ -5,7 +5,17 @@ import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import Breadcrumb from "@/components/Breadcrumb";
 import CreateCustomerModal from "@/components/CreateCustomerModal";
-import { listCustomers, createCustomer, updateCustomer, deleteCustomer } from "@/services/customers";
+import { 
+  listCustomers, 
+  createCustomer, 
+  updateCustomer, 
+  deleteCustomer,
+  getTopCustomers, 
+  getOutstandingBalanceCustomers,
+  type TopCustomer,
+  type OutstandingBalanceCustomer
+} from "@/services/customers";
+import { getDashboardCustomers, type DashboardCustomers } from "@/services/dashboard";
 import { NotificationContainer, useNotifications } from "@/components/Notification";
 
 interface Customer {
@@ -35,6 +45,13 @@ export default function CustomersPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Summary state management
+  const [showSummary, setShowSummary] = useState(false);
+  const [topCustomers, setTopCustomers] = useState<Customer[]>([]);
+  const [outstandingCustomers, setOutstandingCustomers] = useState<OutstandingBalanceCustomer[]>([]);
+  const [customerMetrics, setCustomerMetrics] = useState<DashboardCustomers | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
   // Fetch customers from API
   const fetchCustomers = async () => {
     setLoading(true);
@@ -50,6 +67,27 @@ export default function CustomersPage() {
       showError('Error', err.message || 'Failed to load customers');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch summary data
+  const fetchSummaryData = async () => {
+    setSummaryLoading(true);
+    try {
+      const [topCustomersData, outstandingData, metricsData] = await Promise.all([
+        getTopCustomers(),
+        getOutstandingBalanceCustomers(),
+        getDashboardCustomers('thisWeek')
+      ]);
+      
+      setTopCustomers(topCustomersData);
+      setOutstandingCustomers(outstandingData);
+      setCustomerMetrics(metricsData);
+    } catch (error: any) {
+      console.error('Error fetching summary data:', error);
+      showError('Error', 'Failed to load summary data');
+    } finally {
+      setSummaryLoading(false);
     }
   };
 
@@ -104,6 +142,17 @@ export default function CustomersPage() {
   // Fetch customers on component mount
   useEffect(() => {
     fetchCustomers();
+    // Fetch customer metrics on page load
+    const fetchCustomerMetrics = async () => {
+      try {
+        const metricsData = await getDashboardCustomers('thisWeek');
+        setCustomerMetrics(metricsData);
+      } catch (error: any) {
+        console.error('Error fetching customer metrics:', error);
+        // Don't show error notification for metrics as it's not critical
+      }
+    };
+    fetchCustomerMetrics();
   }, []);
 
   const handleSelectCustomer = (customerId: string) => {
@@ -152,10 +201,15 @@ export default function CustomersPage() {
               <h2 className="text-xl font-semibold text-gray-900">Customers Summary</h2>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => window.open('/customers/summary', '_blank')}
+                  onClick={() => {
+                    if (!showSummary) {
+                      fetchSummaryData();
+                    }
+                    setShowSummary(!showSummary);
+                  }}
                   className="px-4 py-2 bg-[#02016a] text-white rounded-lg hover:bg-[#03024a] transition-colors text-sm font-medium"
                 >
-                  View Detailed Summary
+                  {showSummary ? 'Hide Summary' : 'View Detailed Summary'}
                 </button>
                 <select
                   value={timeframe}
@@ -178,9 +232,11 @@ export default function CustomersPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                   </div>
-                  <span className="text-xs text-green-600 font-medium">+15.80%</span>
+                  <span className={`text-xs font-medium ${(customerMetrics?.allCustomers?.change || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {(customerMetrics?.allCustomers?.change || 0) >= 0 ? '+' : ''}{(customerMetrics?.allCustomers?.change || 0).toFixed(1)}%
+                  </span>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900">1,250</h3>
+                <h3 className="text-2xl font-bold text-gray-900">{customerMetrics?.allCustomers?.value || 0}</h3>
                 <p className="text-sm text-gray-600">All Customers</p>
               </div>
 
@@ -192,9 +248,11 @@ export default function CustomersPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <span className="text-xs text-green-600 font-medium">+85%</span>
+                  <span className={`text-xs font-medium ${(customerMetrics?.activeCustomers?.change || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {(customerMetrics?.activeCustomers?.change || 0) >= 0 ? '+' : ''}{(customerMetrics?.activeCustomers?.change || 0).toFixed(1)}%
+                  </span>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900">1,180</h3>
+                <h3 className="text-2xl font-bold text-gray-900">{customerMetrics?.activeCustomers?.value || 0}</h3>
                 <p className="text-sm text-gray-600">Active</p>
               </div>
 
@@ -206,9 +264,11 @@ export default function CustomersPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <span className="text-xs text-red-600 font-medium">-10%</span>
+                  <span className={`text-xs font-medium ${(customerMetrics?.inactiveCustomers?.change || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {(customerMetrics?.inactiveCustomers?.change || 0) >= 0 ? '+' : ''}{(customerMetrics?.inactiveCustomers?.change || 0).toFixed(1)}%
+                  </span>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900">70</h3>
+                <h3 className="text-2xl font-bold text-gray-900">{customerMetrics?.inactiveCustomers?.value || 0}</h3>
                 <p className="text-sm text-gray-600">In-Active</p>
               </div>
 
@@ -220,9 +280,11 @@ export default function CustomersPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                     </svg>
                   </div>
-                  <span className="text-xs text-red-600 font-medium">-20%</span>
+                  <span className={`text-xs font-medium ${(customerMetrics?.newCustomers?.change || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {(customerMetrics?.newCustomers?.change || 0) >= 0 ? '+' : ''}{(customerMetrics?.newCustomers?.change || 0).toFixed(1)}%
+                  </span>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900">30</h3>
+                <h3 className="text-2xl font-bold text-gray-900">{customerMetrics?.newCustomers?.value || 0}</h3>
                 <p className="text-sm text-gray-600">New Customers</p>
               </div>
 
@@ -234,8 +296,11 @@ export default function CustomersPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                     </svg>
                   </div>
+                  <span className={`text-xs font-medium ${(customerMetrics?.purchasingCustomers?.change || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {(customerMetrics?.purchasingCustomers?.change || 0) >= 0 ? '+' : ''}{(customerMetrics?.purchasingCustomers?.change || 0).toFixed(1)}%
+                  </span>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900">657</h3>
+                <h3 className="text-2xl font-bold text-gray-900">{customerMetrics?.purchasingCustomers?.value || 0}</h3>
                 <p className="text-sm text-gray-600">Purchasing</p>
               </div>
 
@@ -247,12 +312,156 @@ export default function CustomersPage() {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" />
                     </svg>
                   </div>
+                  <span className={`text-xs font-medium ${(customerMetrics?.abandonedCarts?.change || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {(customerMetrics?.abandonedCarts?.change || 0) >= 0 ? '+' : ''}{(customerMetrics?.abandonedCarts?.change || 0).toFixed(1)}%
+                  </span>
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900">5</h3>
+                <h3 className="text-2xl font-bold text-gray-900">{customerMetrics?.abandonedCarts?.value || 0}</h3>
                 <p className="text-sm text-gray-600">Abandoned Carts</p>
               </div>
             </div>
           </div>
+
+          {/* Detailed Summary Section */}
+          {showSummary && (
+            <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="p-6 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900">Detailed Customer Summary</h2>
+              </div>
+              
+              {summaryLoading ? (
+                <div className="p-6 text-center">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <p className="mt-2 text-gray-600">Loading summary data...</p>
+                </div>
+              ) : (
+                <div className="p-6">
+                  {/* Customer Metrics Cards */}
+                  {customerMetrics && (
+                    <div className="mb-8">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Customer Metrics</h3>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                        {/* Total Customers */}
+                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                          <div className="text-2xl font-bold text-blue-600">{customerMetrics.allCustomers.value}</div>
+                          <div className="text-sm text-blue-600">Total Customers</div>
+                          <div className={`text-xs mt-1 ${customerMetrics.allCustomers.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {customerMetrics.allCustomers.change >= 0 ? '+' : ''}{customerMetrics.allCustomers.change.toFixed(1)}%
+                          </div>
+                        </div>
+
+                        {/* Active Customers */}
+                        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                          <div className="text-2xl font-bold text-green-600">{customerMetrics.activeCustomers.value}</div>
+                          <div className="text-sm text-green-600">Active</div>
+                          <div className={`text-xs mt-1 ${customerMetrics.activeCustomers.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {customerMetrics.activeCustomers.change >= 0 ? '+' : ''}{customerMetrics.activeCustomers.change.toFixed(1)}%
+                          </div>
+                        </div>
+
+                        {/* Inactive Customers */}
+                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                          <div className="text-2xl font-bold text-gray-600">{customerMetrics.inactiveCustomers.value}</div>
+                          <div className="text-sm text-gray-600">Inactive</div>
+                          <div className={`text-xs mt-1 ${customerMetrics.inactiveCustomers.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {customerMetrics.inactiveCustomers.change >= 0 ? '+' : ''}{customerMetrics.inactiveCustomers.change.toFixed(1)}%
+                          </div>
+                        </div>
+
+                        {/* New Customers */}
+                        <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+                          <div className="text-2xl font-bold text-purple-600">{customerMetrics.newCustomers.value}</div>
+                          <div className="text-sm text-purple-600">New This Week</div>
+                          <div className={`text-xs mt-1 ${customerMetrics.newCustomers.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {customerMetrics.newCustomers.change >= 0 ? '+' : ''}{customerMetrics.newCustomers.change.toFixed(1)}%
+                          </div>
+                        </div>
+
+                        {/* Purchasing Customers */}
+                        <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                          <div className="text-2xl font-bold text-orange-600">{customerMetrics.purchasingCustomers.value}</div>
+                          <div className="text-sm text-orange-600">Purchasing</div>
+                          <div className={`text-xs mt-1 ${customerMetrics.purchasingCustomers.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {customerMetrics.purchasingCustomers.change >= 0 ? '+' : ''}{customerMetrics.purchasingCustomers.change.toFixed(1)}%
+                          </div>
+                        </div>
+
+                        {/* Abandoned Carts */}
+                        <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                          <div className="text-2xl font-bold text-red-600">{customerMetrics.abandonedCarts.value}</div>
+                          <div className="text-sm text-red-600">Abandoned Carts</div>
+                          <div className={`text-xs mt-1 ${customerMetrics.abandonedCarts.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {customerMetrics.abandonedCarts.change >= 0 ? '+' : ''}{customerMetrics.abandonedCarts.change.toFixed(1)}%
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Top Customers */}
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Customers</h3>
+                      <div className="space-y-3">
+                        {topCustomers.length > 0 ? (
+                          topCustomers.slice(0, 5).map((customer, index) => (
+                            <div key={customer.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                  <span className="text-sm font-medium text-blue-600">#{index + 1}</span>
+                                </div>
+                                <div>
+                                  <p className="font-medium text-gray-900">{customer.name}</p>
+                                  <p className="text-sm text-gray-600">{customer.email}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-medium text-gray-900">{customer.orders || 0} orders</p>
+                                <p className="text-sm text-gray-600">₦{(customer.orderTotal || 0).toLocaleString()}</p>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-gray-500 text-center py-4">No top customers data available</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Outstanding Balance Customers */}
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Outstanding Balances</h3>
+                      <div className="space-y-3">
+                        {outstandingCustomers.length > 0 ? (
+                          outstandingCustomers.slice(0, 5).map((customer) => (
+                            <div key={customer.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                                  <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                                  </svg>
+                                </div>
+                                <div>
+                                  <p className="font-medium text-gray-900">{customer.name}</p>
+                                  <p className="text-sm text-gray-600">{customer.email}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-medium text-red-600">₦{customer.outstandingBalance.toLocaleString()}</p>
+                                <p className="text-sm text-gray-600">Credit: ₦{customer.creditLimit.toLocaleString()}</p>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-gray-500 text-center py-4">No outstanding balances</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Customers Table */}
           <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200">

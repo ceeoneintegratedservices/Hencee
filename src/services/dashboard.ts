@@ -11,10 +11,29 @@ export interface DashboardOverview {
     };
   };
   customers: {
-    customers: {
+    allCustomers: {
       value: number;
       change: number;
-      active: number;
+    };
+    activeCustomers: {
+      value: number;
+      change: number;
+    };
+    inactiveCustomers: {
+      value: number;
+      change: number;
+    };
+    newCustomers: {
+      value: number;
+      change: number;
+    };
+    purchasingCustomers: {
+      value: number;
+      change: number;
+    };
+    abandonedCarts: {
+      value: number;
+      change: number;
     };
   };
   products: {
@@ -85,10 +104,29 @@ export interface DashboardSales {
 }
 
 export interface DashboardCustomers {
-  customers: {
+  allCustomers: {
     value: number;
     change: number;
-    active: number;
+  };
+  activeCustomers: {
+    value: number;
+    change: number;
+  };
+  inactiveCustomers: {
+    value: number;
+    change: number;
+  };
+  newCustomers: {
+    value: number;
+    change: number;
+  };
+  purchasingCustomers: {
+    value: number;
+    change: number;
+  };
+  abandonedCarts: {
+    value: number;
+    change: number;
   };
 }
 

@@ -287,19 +287,21 @@ export default function AdminDashboard() {
               </div>
               <div className="flex gap-2 sm:gap-4 lg:gap-8 w-full justify-between">
                 <div className="flex flex-col gap-2 flex-1 text-center">
-                  <div className="text-sm text-[#8b8d97]">Customers</div>
+                  <div className="text-sm text-[#8b8d97]">Total Customers</div>
                   <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">{dashboardData?.customers?.customers?.value || 0}</span>
-                    <span className={`text-xs ${(dashboardData?.customers?.customers?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
-                      {(dashboardData?.customers?.customers?.change || 0) >= 0 ? '+' : ''}{(dashboardData?.customers?.customers?.change || 0).toFixed(1)}%
+                    <span className="font-medium text-[20px] text-[#45464e]">{dashboardData?.customers?.allCustomers?.value || 0}</span>
+                    <span className={`text-xs ${(dashboardData?.customers?.allCustomers?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
+                      {(dashboardData?.customers?.allCustomers?.change || 0) >= 0 ? '+' : ''}{(dashboardData?.customers?.allCustomers?.change || 0).toFixed(1)}%
                     </span>
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">Active</div>
                   <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">{dashboardData?.customers?.customers?.active || 0}</span>
-                    <span className="text-xs text-[#519c66]">Active</span>
+                    <span className="font-medium text-[20px] text-[#45464e]">{dashboardData?.customers?.activeCustomers?.value || 0}</span>
+                    <span className={`text-xs ${(dashboardData?.customers?.activeCustomers?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
+                      {(dashboardData?.customers?.activeCustomers?.change || 0) >= 0 ? '+' : ''}{(dashboardData?.customers?.activeCustomers?.change || 0).toFixed(1)}%
+                    </span>
                   </div>
                 </div>
               </div>
