@@ -9,7 +9,7 @@ import Header from '@/components/Header';
 import Breadcrumb from '@/components/Breadcrumb';
 import AddExpenseModal from '@/components/AddExpenseModal';
 import ExpenseDetailsModal from '@/components/ExpenseDetailsModal';
-import { listExpenses, createExpense, updateExpense, deleteExpense, getExpenseCategories, getExpenseDepartments, type Expense as APIExpense } from '@/services/expenses';
+import { listExpenses, createExpense, updateExpense, deleteExpense, getExpenseCategories, getExpenseDepartments, type Expense as APIExpense, type CreateExpensePayload, type ExpenseCategoryCode } from '@/services/expenses';
 
 export default function ExpensesPage() {
   const router = useRouter();
@@ -95,8 +95,10 @@ export default function ExpensesPage() {
         amount: expense.amount,
         currency: '₦', // Default currency
         category: expense.category,
-        department: expense.department,
-        priority: expense.priority,
+        department: expense.department || 'N/A',
+        priority: ((expense as any).priority === 'LOW' || (expense as any).priority === 'MEDIUM' || (expense as any).priority === 'HIGH'
+          ? ({ LOW: 'Low', MEDIUM: 'Medium', HIGH: 'High' } as any)[(expense as any).priority]
+          : (expense as any).priority) as any,
         status: expense.status === 'Paid' ? 'Approved' : expense.status, // Map Paid to Approved for UI
         requestDate: expense.requestDate,
         requestedBy: expense.requester.name,
@@ -104,12 +106,12 @@ export default function ExpensesPage() {
         approvedDate: expense.approvedDate,
         approvedBy: expense.approvedBy,
         receiptImage: expense.receiptUrl,
-        tags: [], // Default empty tags array
+        tags: (expense as any).tags || [],
         // Additional fields that might be needed
         rejectionReason: expense.status === 'Rejected' ? 'Rejected by approver' : undefined,
         decisionDate: expense.approvedDate || expense.updatedAt,
-        vendor: 'Unknown Vendor', // Default vendor
-        invoiceNumber: `INV-${expense.id.slice(-6)}` // Generate invoice number from ID
+        vendor: (expense as any).vendor || 'Unknown Vendor',
+        invoiceNumber: (expense as any).invoiceNumber || `INV-${expense.id.slice(-6)}`
       }));
       
       setExpenseItems(transformedExpenses);
@@ -249,9 +251,56 @@ export default function ExpensesPage() {
     }
   };
 
-  const handleAddExpense = (newExpense: ExpenseItem) => {
-    setExpenseItems(prev => [newExpense, ...prev]);
-    showSuccess('Success', 'Expense created successfully');
+  const handleAddExpense = async (newExpense: ExpenseItem) => {
+    try {
+      const payload: CreateExpensePayload = {
+        title: newExpense.title,
+        description: newExpense.description,
+        amount: newExpense.amount,
+        category: newExpense.category as ExpenseCategoryCode,
+        department: newExpense.department,
+        priority: (newExpense.priority === 'Low' ? 'LOW' : newExpense.priority === 'Medium' ? 'MEDIUM' : 'HIGH'),
+        vendor: newExpense.vendor,
+        invoiceNumber: newExpense.invoiceNumber,
+        tags: newExpense.tags || [],
+        receiptUrl: newExpense.receiptImage,
+        notes: undefined
+      };
+
+      const created = await createExpense(payload);
+      // Normalize and add to list optimistically
+      const createdTransformed: ExpenseItem = {
+        id: created.id,
+        title: created.title,
+        description: created.description,
+        amount: created.amount,
+        currency: '₦',
+        category: created.category,
+        department: created.department || 'N/A',
+        priority: ((created as any).priority === 'LOW' || (created as any).priority === 'MEDIUM' || (created as any).priority === 'HIGH'
+          ? ({ LOW: 'Low', MEDIUM: 'Medium', HIGH: 'High' } as any)[(created as any).priority]
+          : (created as any).priority) as any,
+        status: created.status === 'Paid' ? 'Approved' : created.status,
+        requestDate: created.requestDate,
+        requestedBy: created.requester.name,
+        requestedByEmail: created.requester.email,
+        approvedDate: created.approvedDate,
+        approvedBy: created.approvedBy,
+        receiptImage: (created as any).receiptUrl,
+        tags: (created as any).tags || [],
+        rejectionReason: created.status === 'Rejected' ? 'Rejected by approver' : undefined,
+        decisionDate: created.approvedDate || created.updatedAt,
+        vendor: (created as any).vendor || 'Unknown Vendor',
+        invoiceNumber: (created as any).invoiceNumber || `INV-${created.id.slice(-6)}`
+      };
+
+      setExpenseItems(prev => [createdTransformed, ...prev]);
+      setFilteredItems(prev => [createdTransformed, ...prev]);
+      setSummaryData(prev => (prev ? ExpensesDataService.generateExpenseSummary([createdTransformed, ...expenseItems]) : prev));
+      showSuccess('Success', 'Expense created successfully');
+    } catch (error: any) {
+      showError('Create failed', error?.message || 'Unable to create expense');
+    }
   };
 
   const handleViewDetails = (expense: ExpenseItem) => {
@@ -463,7 +512,7 @@ export default function ExpensesPage() {
                   </button>
                   {showCategoryDropdown && (
                     <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
-                      {['All', ...ExpensesDataService.getExpenseCategories()].map((category) => (
+                      {['All', 'TRAVEL','SUPPLIES','MAINTENANCE','UTILITIES','SALARY','OTHER'].map((category) => (
                         <button
                           key={category}
                           onClick={() => {

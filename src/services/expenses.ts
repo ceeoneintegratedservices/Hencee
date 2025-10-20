@@ -1,13 +1,15 @@
 import { API_ENDPOINTS } from "../config/api";
 import { authFetch } from "./authFetch";
 
+export type ExpenseCategoryCode = 'TRAVEL' | 'SUPPLIES' | 'MAINTENANCE' | 'UTILITIES' | 'SALARY' | 'OTHER';
+
 export interface Expense {
   id: string;
   title: string;
   description: string;
   amount: number;
-  category: string;
-  department: string;
+  category: ExpenseCategoryCode;
+  department?: string;
   priority: 'Low' | 'Medium' | 'High';
   status: 'Pending' | 'Approved' | 'Rejected' | 'Paid';
   requestDate: string;
@@ -16,6 +18,9 @@ export interface Expense {
   approvedBy?: string;
   paidBy?: string;
   receiptUrl?: string;
+  vendor?: string;
+  invoiceNumber?: string;
+  tags?: string[];
   notes?: string;
   createdAt: string;
   updatedAt: string;
@@ -67,10 +72,14 @@ export interface CreateExpensePayload {
   title: string;
   description: string;
   amount: number;
-  category: string;
-  department: string;
-  priority: 'Low' | 'Medium' | 'High';
+  category: ExpenseCategoryCode;
+  department?: string;
+  // Backend expects enum: LOW | MEDIUM | HIGH
+  priority: 'LOW' | 'MEDIUM' | 'HIGH';
   receiptUrl?: string;
+  vendor?: string;
+  invoiceNumber?: string;
+  tags?: string[];
   notes?: string;
 }
 
@@ -78,11 +87,15 @@ export interface UpdateExpensePayload {
   title?: string;
   description?: string;
   amount?: number;
-  category?: string;
+  category?: ExpenseCategoryCode;
   department?: string;
-  priority?: 'Low' | 'Medium' | 'High';
+  // Backend expects enum: LOW | MEDIUM | HIGH
+  priority?: 'LOW' | 'MEDIUM' | 'HIGH';
   status?: 'Pending' | 'Approved' | 'Rejected' | 'Paid';
   receiptUrl?: string;
+  vendor?: string;
+  invoiceNumber?: string;
+  tags?: string[];
   notes?: string;
 }
 

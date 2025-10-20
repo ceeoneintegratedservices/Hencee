@@ -120,8 +120,11 @@ export default function AddExpenseModal({ isOpen, onClose, onSave }: AddExpenseM
       newErrors.description = 'Description is required';
     }
 
+    const allowedCategories = ['TRAVEL','SUPPLIES','MAINTENANCE','UTILITIES','SALARY','OTHER'];
     if (!formData.category) {
-      newErrors.category = 'Category is required';
+      newErrors.category = 'category must be one of the following values: TRAVEL, SUPPLIES, MAINTENANCE, UTILITIES, SALARY, OTHER';
+    } else if (!allowedCategories.includes(formData.category)) {
+      newErrors.category = 'category must be one of the following values: TRAVEL, SUPPLIES, MAINTENANCE, UTILITIES, SALARY, OTHER';
     }
 
     if (!formData.amount.trim()) {
@@ -259,11 +262,12 @@ export default function AddExpenseModal({ isOpen, onClose, onSave }: AddExpenseM
                 }`}
               >
                 <option value="">Select Category</option>
-                {ExpensesDataService.getExpenseCategories().map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
+                <option value="TRAVEL">TRAVEL</option>
+                <option value="SUPPLIES">SUPPLIES</option>
+                <option value="MAINTENANCE">MAINTENANCE</option>
+                <option value="UTILITIES">UTILITIES</option>
+                <option value="SALARY">SALARY</option>
+                <option value="OTHER">OTHER</option>
               </select>
               {errors.category && (
                 <p className="mt-1 text-sm text-red-600">{errors.category}</p>
