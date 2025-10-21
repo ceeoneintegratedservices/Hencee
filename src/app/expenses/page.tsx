@@ -87,8 +87,9 @@ export default function ExpensesPage() {
       });
       
       // Transform API data to match UI format
-      const expensesArray = Array.isArray(response.data) ? response.data : [];
-      const transformedExpenses: ExpenseItem[] = expensesArray.map((expense: APIExpense) => ({
+      // Handle both response formats: { data: [] } and { expenses: [] }
+      const expensesArray = response.expenses || response.data || [];
+      const transformedExpenses: ExpenseItem[] = expensesArray.map((expense: any) => ({
         id: expense.id,
         title: expense.title,
         description: expense.description,
@@ -96,22 +97,24 @@ export default function ExpensesPage() {
         currency: '₦', // Default currency
         category: expense.category,
         department: expense.department || 'N/A',
-        priority: ((expense as any).priority === 'LOW' || (expense as any).priority === 'MEDIUM' || (expense as any).priority === 'HIGH'
-          ? ({ LOW: 'Low', MEDIUM: 'Medium', HIGH: 'High' } as any)[(expense as any).priority]
-          : (expense as any).priority) as any,
-        status: expense.status === 'Paid' ? 'Approved' : expense.status, // Map Paid to Approved for UI
-        requestDate: expense.requestDate,
-        requestedBy: expense.requester.name,
-        requestedByEmail: expense.requester.email,
-        approvedDate: expense.approvedDate,
-        approvedBy: expense.approvedBy,
+        priority: expense.priority === 'LOW' ? 'Low' : 
+                  expense.priority === 'MEDIUM' ? 'Medium' : 
+                  expense.priority === 'HIGH' ? 'High' : expense.priority,
+        status: expense.status === 'PENDING' ? 'Pending' : 
+                expense.status === 'APPROVED' ? 'Approved' : 
+                expense.status === 'REJECTED' ? 'Rejected' : expense.status,
+        requestDate: expense.createdAt,
+        requestedBy: expense.user?.name || 'Unknown User',
+        requestedByEmail: expense.user?.email || 'unknown@example.com',
+        approvedDate: expense.approvedAt,
+        approvedBy: expense.approvedById ? 'Approved by Admin' : undefined,
         receiptImage: expense.receiptUrl,
-        tags: (expense as any).tags || [],
+        tags: expense.tags || [],
         // Additional fields that might be needed
-        rejectionReason: expense.status === 'Rejected' ? 'Rejected by approver' : undefined,
-        decisionDate: expense.approvedDate || expense.updatedAt,
-        vendor: (expense as any).vendor || 'Unknown Vendor',
-        invoiceNumber: (expense as any).invoiceNumber || `INV-${expense.id.slice(-6)}`
+        rejectionReason: expense.rejectionReason,
+        decisionDate: expense.approvedAt || expense.updatedAt,
+        vendor: expense.vendor || 'Unknown Vendor',
+        invoiceNumber: expense.invoiceNumber || `INV-${expense.id.slice(-6)}`
       }));
       
       setExpenseItems(transformedExpenses);
