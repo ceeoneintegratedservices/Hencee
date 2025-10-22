@@ -5,30 +5,30 @@ export type ExpenseCategoryCode = 'TRAVEL' | 'SUPPLIES' | 'MAINTENANCE' | 'UTILI
 
 export interface Expense {
   id: string;
+  userId: string;
   title: string;
   description: string;
   amount: number;
   category: ExpenseCategoryCode;
   department?: string;
-  priority: 'Low' | 'Medium' | 'High';
-  status: 'Pending' | 'Approved' | 'Rejected' | 'Paid';
-  requestDate: string;
-  approvedDate?: string;
-  paidDate?: string;
-  approvedBy?: string;
-  paidBy?: string;
-  receiptUrl?: string;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'PAID';
   vendor?: string;
   invoiceNumber?: string;
   tags?: string[];
-  notes?: string;
+  approvedById?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
+  receiptUrl?: string;
   createdAt: string;
   updatedAt: string;
-  requester: {
+  user: {
     id: string;
     name: string;
     email: string;
+    staffRole: string;
   };
+  approvedBy?: string;
 }
 
 export interface ExpenseCategory {
@@ -50,10 +50,11 @@ export interface ExpenseDepartment {
 }
 
 export interface ExpensesListResponse {
-  data: Expense[];
+  expenses: Expense[];
   total: number;
   page: number;
   limit: number;
+  totalPages: number;
 }
 
 export interface ExpenseParams {

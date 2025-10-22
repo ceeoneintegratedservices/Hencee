@@ -10,7 +10,7 @@ export interface ExpenseItem {
   requestedBy: string;
   requestedByEmail: string;
   department: string;
-  status: "Pending" | "Approved" | "Rejected";
+  status: "Pending" | "Approved" | "Rejected" | "Paid";
   approvedBy?: string;
   approvedDate?: string;
   rejectionReason?: string;
@@ -28,6 +28,7 @@ export interface ExpenseSummary {
   pendingExpenses: number;
   approvedExpenses: number;
   rejectedExpenses: number;
+  paidExpenses: number;
   totalAmount: number;
   monthlyAmount: number;
   departmentBreakdown: Record<string, number>;
@@ -39,7 +40,8 @@ export class ExpensesDataService {
   private static readonly STATUS_COLORS: Record<string, string> = {
     "Pending": "bg-yellow-100 text-yellow-800",
     "Approved": "bg-green-100 text-green-800",
-    "Rejected": "bg-red-100 text-red-800"
+    "Rejected": "bg-red-100 text-red-800",
+    "Paid": "bg-blue-100 text-blue-800"
   };
 
   private static readonly PRIORITY_COLORS: Record<string, string> = {
@@ -212,6 +214,7 @@ export class ExpensesDataService {
     const pendingExpenses = items.filter(item => item.status === "Pending").length;
     const approvedExpenses = items.filter(item => item.status === "Approved").length;
     const rejectedExpenses = items.filter(item => item.status === "Rejected").length;
+    const paidExpenses = items.filter(item => item.status === "Paid").length;
     const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
     
     const currentMonth = new Date().getMonth();
@@ -233,6 +236,7 @@ export class ExpensesDataService {
       pendingExpenses,
       approvedExpenses,
       rejectedExpenses,
+      paidExpenses,
       totalAmount,
       monthlyAmount,
       departmentBreakdown

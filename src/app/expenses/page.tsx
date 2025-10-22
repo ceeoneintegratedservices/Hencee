@@ -87,9 +87,8 @@ export default function ExpensesPage() {
       });
       
       // Transform API data to match UI format
-      // Handle both response formats: { data: [] } and { expenses: [] }
-      const expensesArray = response.expenses || response.data || [];
-      const transformedExpenses: ExpenseItem[] = expensesArray.map((expense: any) => ({
+      const expensesArray = response.expenses || [];
+      const transformedExpenses: ExpenseItem[] = expensesArray.map((expense: APIExpense) => ({
         id: expense.id,
         title: expense.title,
         description: expense.description,
@@ -102,12 +101,13 @@ export default function ExpensesPage() {
                   expense.priority === 'HIGH' ? 'High' : expense.priority,
         status: expense.status === 'PENDING' ? 'Pending' : 
                 expense.status === 'APPROVED' ? 'Approved' : 
-                expense.status === 'REJECTED' ? 'Rejected' : expense.status,
+                expense.status === 'REJECTED' ? 'Rejected' : 
+                expense.status === 'PAID' ? 'Paid' : expense.status,
         requestDate: expense.createdAt,
         requestedBy: expense.user?.name || 'Unknown User',
         requestedByEmail: expense.user?.email || 'unknown@example.com',
         approvedDate: expense.approvedAt,
-        approvedBy: expense.approvedById ? 'Approved by Admin' : undefined,
+        approvedBy: expense.approvedBy || (expense.approvedById ? 'Approved by Admin' : undefined),
         receiptImage: expense.receiptUrl,
         tags: expense.tags || [],
         // Additional fields that might be needed
@@ -283,16 +283,19 @@ export default function ExpensesPage() {
         priority: ((created as any).priority === 'LOW' || (created as any).priority === 'MEDIUM' || (created as any).priority === 'HIGH'
           ? ({ LOW: 'Low', MEDIUM: 'Medium', HIGH: 'High' } as any)[(created as any).priority]
           : (created as any).priority) as any,
-        status: created.status === 'Paid' ? 'Approved' : created.status,
-        requestDate: created.requestDate,
-        requestedBy: created.requester.name,
-        requestedByEmail: created.requester.email,
-        approvedDate: created.approvedDate,
+        status: created.status === 'PAID' ? 'Paid' : 
+                created.status === 'PENDING' ? 'Pending' :
+                created.status === 'APPROVED' ? 'Approved' :
+                created.status === 'REJECTED' ? 'Rejected' : created.status,
+        requestDate: created.createdAt,
+        requestedBy: created.user.name,
+        requestedByEmail: created.user.email,
+        approvedDate: created.approvedAt,
         approvedBy: created.approvedBy,
         receiptImage: (created as any).receiptUrl,
         tags: (created as any).tags || [],
-        rejectionReason: created.status === 'Rejected' ? 'Rejected by approver' : undefined,
-        decisionDate: created.approvedDate || created.updatedAt,
+        rejectionReason: created.status === 'REJECTED' ? 'Rejected by approver' : undefined,
+        decisionDate: created.approvedAt || created.updatedAt,
         vendor: (created as any).vendor || 'Unknown Vendor',
         invoiceNumber: (created as any).invoiceNumber || `INV-${created.id.slice(-6)}`
       };
@@ -486,7 +489,7 @@ export default function ExpensesPage() {
                   </button>
                   {showStatusDropdown === 1 && (
                     <div className="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                      {['All', 'Pending', 'Approved', 'Rejected'].map((status) => (
+                      {['All', 'Pending', 'Approved', 'Rejected', 'Paid'].map((status) => (
                         <button
                           key={status}
                           onClick={() => {
