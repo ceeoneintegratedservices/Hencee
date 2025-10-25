@@ -10,8 +10,12 @@ import TimePeriodSelector from "../../components/TimePeriodSelector";
 import { 
   getDashboardOverview, 
   getDashboardActivities,
+  getDashboardOrders,
+  getDashboardSales,
   type DashboardOverview,
   type DashboardActivities,
+  type DashboardOrders,
+  type DashboardSales,
   type TimeFrame
 } from "../../services/dashboard";
 import { useNotifications } from "../../components/Notification";
@@ -27,7 +31,7 @@ export default function AdminDashboard() {
   const [summaryFilter] = useState("Sales");
   const [dateFilter] = useState("Last 7 Days");
   // Time period selection for cards
-  const [selectedTimePeriod, setSelectedTimePeriod] = useState<"This Week" | "This Month">("This Week");
+  const [selectedTimePeriod, setSelectedTimePeriod] = useState<"This Week" | "This Month" | "All Time">("This Week");
   // Sidebar toggle for mobile
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -35,6 +39,8 @@ export default function AdminDashboard() {
   // API data state
   const [dashboardData, setDashboardData] = useState<DashboardOverview | null>(null);
   const [activities, setActivities] = useState<DashboardActivities | null>(null);
+  const [ordersData, setOrdersData] = useState<DashboardOrders | null>(null);
+  const [salesData, setSalesData] = useState<DashboardSales | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,17 +100,19 @@ export default function AdminDashboard() {
   };
 
   // Handle time period selection
-  const handleTimePeriodChange = (period: "This Week" | "This Month") => {
+  const handleTimePeriodChange = (period: "This Week" | "This Month" | "All Time") => {
     setSelectedTimePeriod(period);
   };
 
   // Convert time period to API timeframe
-  const getTimeFrame = (period: "This Week" | "This Month"): TimeFrame => {
+  const getTimeFrame = (period: "This Week" | "This Month" | "All Time"): TimeFrame => {
     switch (period) {
       case "This Week":
         return "thisWeek";
       case "This Month":
         return "thisMonth";
+      case "All Time":
+        return "allTime";
       default:
         return "thisWeek";
     }
@@ -119,13 +127,17 @@ export default function AdminDashboard() {
     
     try {
       const timeframe = getTimeFrame(selectedTimePeriod);
-      const [overviewData, activitiesData] = await Promise.all([
+      const [overviewData, activitiesData, ordersData, salesData] = await Promise.all([
         getDashboardOverview(timeframe),
-        getDashboardActivities(timeframe)
+        getDashboardActivities(timeframe),
+        getDashboardOrders(timeframe),
+        getDashboardSales(timeframe)
       ]);
       
       setDashboardData(overviewData);
       setActivities(activitiesData);
+      setOrdersData(ordersData);
+      setSalesData(salesData);
     } catch (err: any) {
       setError(err.message || 'Failed to load dashboard data');
       showError('Error', err.message || 'Failed to load dashboard data');
@@ -239,26 +251,28 @@ export default function AdminDashboard() {
                     <path d="M17.1604 7.5431C17.2051 5.01152 14.0955 0.930815 10.306 1.00099C10.0113 1.00625 9.77532 1.25187 9.76216 1.54573C9.66655 3.62731 9.79549 6.32467 9.86742 7.54748C9.88935 7.92818 10.1885 8.22731 10.5683 8.24924C11.8253 8.32117 14.6209 8.41941 16.6727 8.10888C16.9516 8.06678 17.156 7.82467 17.1604 7.5431Z" stroke="#5570F1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </span>
-                <TimePeriodSelector
-                  selectedTimePeriod={selectedTimePeriod}
-                  onTimePeriodChange={handleTimePeriodChange}
-                  textColor="#8b8d97"
-                  iconColor="#8B8D97"
-                />
+                <div onClick={(e) => e.stopPropagation()}>
+                  <TimePeriodSelector
+                    selectedTimePeriod={selectedTimePeriod}
+                    onTimePeriodChange={handleTimePeriodChange}
+                    textColor="#8b8d97"
+                    iconColor="#8B8D97"
+                  />
+                </div>
               </div>
               <div className="flex gap-2 sm:gap-4 lg:gap-8 w-full justify-between">
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">Sales</div>
                   <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">₦{(dashboardData?.sales?.sales?.value || 0).toLocaleString()}</span>
-                    <span className={`text-xs ${(dashboardData?.sales?.sales?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
-                      {(dashboardData?.sales?.sales?.change || 0) >= 0 ? '+' : ''}{(dashboardData?.sales?.sales?.change || 0).toFixed(1)}%
+                    <span className="font-medium text-[20px] text-[#45464e]">₦{(salesData?.sales?.value || 0).toLocaleString()}</span>
+                    <span className={`text-xs ${(salesData?.sales?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
+                      {(salesData?.sales?.change || 0) >= 0 ? '+' : ''}{(salesData?.sales?.change || 0).toFixed(1)}%
                     </span>
                   </div>
                 </div>
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">Volume</div>
-                  <div className="font-medium text-[20px] text-[#45464e]">{dashboardData?.sales?.sales?.volume || 0}</div>
+                  <div className="font-medium text-[20px] text-[#45464e]">{salesData?.sales?.volume || 0}</div>
                 </div>
               </div>
             </div>
@@ -278,12 +292,14 @@ export default function AdminDashboard() {
                     <path d="M14.2049 10.5688C15.4974 10.7613 16.3999 11.2146 16.3999 12.1479C16.3999 12.7904 15.9749 13.2071 15.2883 13.4679" stroke="#1C1D22" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </span>
-                <TimePeriodSelector
-                  selectedTimePeriod={selectedTimePeriod}
-                  onTimePeriodChange={handleTimePeriodChange}
-                  textColor="#8b8d97"
-                  iconColor="#8B8D97"
-                />
+                <div onClick={(e) => e.stopPropagation()}>
+                  <TimePeriodSelector
+                    selectedTimePeriod={selectedTimePeriod}
+                    onTimePeriodChange={handleTimePeriodChange}
+                    textColor="#8b8d97"
+                    iconColor="#8B8D97"
+                  />
+                </div>
               </div>
               <div className="flex gap-2 sm:gap-4 lg:gap-8 w-full justify-between">
                 <div className="flex flex-col gap-2 flex-1 text-center">
@@ -320,28 +336,30 @@ export default function AdminDashboard() {
                     <path d="M14.3499 5.32041C14.3499 2.93433 12.4156 1.00004 10.0295 1.00004V1.00004C8.88053 0.99517 7.77692 1.4482 6.96273 2.25895C6.14854 3.06971 5.69085 4.17139 5.69086 5.32041H5.69086" stroke="#1C1D22" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </span>
-                <TimePeriodSelector
-                  selectedTimePeriod={selectedTimePeriod}
-                  onTimePeriodChange={handleTimePeriodChange}
-                  textColor="#8b8d97"
-                  iconColor="#8B8D97"
-                />
+                <div onClick={(e) => e.stopPropagation()}>
+                  <TimePeriodSelector
+                    selectedTimePeriod={selectedTimePeriod}
+                    onTimePeriodChange={handleTimePeriodChange}
+                    textColor="#8b8d97"
+                    iconColor="#8B8D97"
+                  />
+                </div>
               </div>
               <div className="flex gap-2 sm:gap-4 lg:gap-8 w-full justify-between">
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">All Orders</div>
-                  <div className="font-medium text-[20px] text-[#45464e]">{dashboardData?.orders?.allOrders?.value || 0}</div>
+                  <div className="font-medium text-[20px] text-[#45464e]">{ordersData?.allOrders?.value || 0}</div>
                 </div>
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">Pending</div>
-                  <div className="font-medium text-[20px] text-[#45464e]">{dashboardData?.orders?.pending?.value || 0}</div>
+                  <div className="font-medium text-[20px] text-[#45464e]">{ordersData?.pending?.value || 0}</div>
                 </div>
                 <div className="flex flex-col gap-2 flex-1 text-center">
                   <div className="text-sm text-[#8b8d97]">Completed</div>
                   <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">{dashboardData?.orders?.completed?.value || 0}</span>
-                    <span className={`text-xs ${(dashboardData?.orders?.completed?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
-                      {(dashboardData?.orders?.completed?.change || 0) >= 0 ? '+' : ''}{(dashboardData?.orders?.completed?.change || 0).toFixed(1)}%
+                    <span className="font-medium text-[20px] text-[#45464e]">{ordersData?.completed?.value || 0}</span>
+                    <span className={`text-xs ${(ordersData?.completed?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
+                      {(ordersData?.completed?.change || 0) >= 0 ? '+' : ''}{(ordersData?.completed?.change || 0).toFixed(1)}%
                     </span>
                   </div>
                 </div>
@@ -356,12 +374,14 @@ export default function AdminDashboard() {
                     <path d="M17.1604 7.5431C17.2051 5.01152 14.0955 0.930815 10.306 1.00099C10.0113 1.00625 9.77532 1.25187 9.76216 1.54573C9.66655 3.62731 9.79549 6.32467 9.86742 7.54748C9.88935 7.92818 10.1885 8.22731 10.5683 8.24924C11.8253 8.32117 14.6209 8.41941 16.6727 8.10888C16.9516 8.06678 17.156 7.82467 17.1604 7.5431Z" stroke="#5570F1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </span>
-                <TimePeriodSelector
-                  selectedTimePeriod={selectedTimePeriod}
-                  onTimePeriodChange={handleTimePeriodChange}
-                  textColor="#8b8d97"
-                  iconColor="#8B8D97"
-                />
+                <div onClick={(e) => e.stopPropagation()}>
+                  <TimePeriodSelector
+                    selectedTimePeriod={selectedTimePeriod}
+                    onTimePeriodChange={handleTimePeriodChange}
+                    textColor="#8b8d97"
+                    iconColor="#8B8D97"
+                  />
+                </div>
               </div>
               <div className="flex gap-2 sm:gap-4 lg:gap-8 w-full justify-between">
                 <div className="flex flex-col gap-2 flex-1 text-center">
@@ -389,12 +409,14 @@ export default function AdminDashboard() {
                     <path d="M14.2049 10.5688C15.4974 10.7613 16.3999 11.2146 16.3999 12.1479C16.3999 12.7904 15.9749 13.2071 15.2883 13.4679" stroke="#1C1D22" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </span>
-                <TimePeriodSelector
-                  selectedTimePeriod={selectedTimePeriod}
-                  onTimePeriodChange={handleTimePeriodChange}
-                  textColor="#8b8d97"
-                  iconColor="#8B8D97"
-                />
+                <div onClick={(e) => e.stopPropagation()}>
+                  <TimePeriodSelector
+                    selectedTimePeriod={selectedTimePeriod}
+                    onTimePeriodChange={handleTimePeriodChange}
+                    textColor="#8b8d97"
+                    iconColor="#8B8D97"
+                  />
+                </div>
               </div>
               <div className="flex gap-2 sm:gap-4 lg:gap-8 w-full justify-between">
                 <div className="flex flex-col gap-2 flex-1 text-center">
@@ -427,12 +449,14 @@ export default function AdminDashboard() {
                     <path d="M17.1582 18.3333C17.1582 15.1083 13.9499 12.5 9.99988 12.5C6.04988 12.5 2.84155 15.1083 2.84155 18.3333" stroke="#101828" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </span>
-                <TimePeriodSelector
-                  selectedTimePeriod={selectedTimePeriod}
-                  onTimePeriodChange={handleTimePeriodChange}
-                  textColor="#8b8d97"
-                  iconColor="#8B8D97"
-                />
+                <div onClick={(e) => e.stopPropagation()}>
+                  <TimePeriodSelector
+                    selectedTimePeriod={selectedTimePeriod}
+                    onTimePeriodChange={handleTimePeriodChange}
+                    textColor="#8b8d97"
+                    iconColor="#8B8D97"
+                  />
+                </div>
               </div>
               <div className="flex gap-1 sm:gap-2 lg:gap-4 w-full">
                 <div className="flex flex-col gap-2 flex-1">
@@ -472,12 +496,14 @@ export default function AdminDashboard() {
             <div className="bg-white rounded-xl p-5 flex flex-col gap-6 shadow min-w-0 h-[400px]">
               <div className="flex items-center justify-between">
                 <span className="font-medium text-[#45464e] text-[16px] font-inter">Marketing</span>
-                <TimePeriodSelector
-                  selectedTimePeriod={selectedTimePeriod}
-                  onTimePeriodChange={handleTimePeriodChange}
-                  textColor="#8b8d97"
-                  iconColor="#8B8D97"
-                />
+                <div onClick={(e) => e.stopPropagation()}>
+                  <TimePeriodSelector
+                    selectedTimePeriod={selectedTimePeriod}
+                    onTimePeriodChange={handleTimePeriodChange}
+                    textColor="#8b8d97"
+                    iconColor="#8B8D97"
+                  />
+                </div>
               </div>
               
               {/* Top level: Acquisition, Purchase, Retention evenly spread */}
@@ -549,12 +575,14 @@ export default function AdminDashboard() {
                       <path d="M14.3499 5.32041C14.3499 2.93433 12.4156 1.00004 10.0295 1.00004V1.00004C8.88053 0.99517 7.77692 1.4482 6.96273 2.25895C6.14854 3.06971 5.69085 4.17139 5.69086 5.32041H5.69086" stroke="#1C1D22" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                   </span>
-                  <TimePeriodSelector
-                    selectedTimePeriod={selectedTimePeriod}
-                    onTimePeriodChange={handleTimePeriodChange}
-                    textColor="#bec0ca"
-                    iconColor="#BEC0CA"
-                  />
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <TimePeriodSelector
+                      selectedTimePeriod={selectedTimePeriod}
+                      onTimePeriodChange={handleTimePeriodChange}
+                      textColor="#bec0ca"
+                      iconColor="#BEC0CA"
+                    />
+                  </div>
                 </div>
                 <div className="flex gap-2 sm:gap-4 lg:gap-8 w-full justify-between">
                   <div className="flex flex-col gap-2 flex-1 text-center">

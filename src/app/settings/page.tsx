@@ -6,7 +6,22 @@ import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import Breadcrumb from "@/components/Breadcrumb";
 import { NotificationContainer, useNotifications } from "@/components/Notification";
-import { getSystemSettings, updateSystemSettings, getUserPreferences, updateUserPreferences, type SystemSettings, type UserPreferences } from "@/services/settings";
+import { 
+  getSystemSettings, 
+  updateSystemSettings, 
+  getUserPreferences, 
+  updateUserPreferences,
+  getUserProfile,
+  updateUserProfile,
+  getBusinessProfile,
+  updateBusinessProfile,
+  type SystemSettings, 
+  type UserPreferences,
+  type UserProfile,
+  type BusinessProfile,
+  type UpdateUserProfilePayload,
+  type UpdateBusinessProfilePayload
+} from "@/services/settings";
 import { 
   SessionService, 
   type SessionDto, 
@@ -25,6 +40,7 @@ import {
   type BackupCodesResponse
 } from "@/services/twoFactorAuth";
 import { getCategories, getWarehouses, type Category, type Warehouse } from "@/services/categories";
+import { useCloudinaryUpload } from "@/hooks/useCloudinaryUpload";
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -44,6 +60,8 @@ export default function SettingsPage() {
   // API data states
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
   const [userPreferences, setUserPreferences] = useState<UserPreferences | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   
   // Session states
   const [sessions, setSessions] = useState<SessionDto[]>([]);
@@ -71,6 +89,9 @@ export default function SettingsPage() {
   const [isCreatingNewWarehouse, setIsCreatingNewWarehouse] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newWarehouseName, setNewWarehouseName] = useState('');
+  
+  // Cloudinary upload hook
+  const { uploadImage, uploadProgress, resetUpload } = useCloudinaryUpload();
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "", 
@@ -169,45 +190,109 @@ export default function SettingsPage() {
     setApiError(null);
     
     try {
-      const [systemData, preferencesData] = await Promise.all([
+      const [systemData, preferencesData, profileData, businessData] = await Promise.allSettled([
         getSystemSettings(),
-        getUserPreferences()
+        getUserPreferences(),
+        getUserProfile(),
+        getBusinessProfile()
       ]);
       
-      if (systemData) {
-        setSystemSettings(systemData);
+      // Handle system settings
+      if (systemData.status === 'fulfilled' && systemData.value) {
+        setSystemSettings(systemData.value);
         
         // Populate business form data from API
         setBusinessData(prev => ({
           ...prev,
-          businessName: systemData.businessName || "",
-          businessType: systemData.businessType || "Tyre Retailer",
-          registrationNumber: systemData.registrationNumber || "",
-          taxId: systemData.taxId || "",
-          businessAddress: systemData.businessAddress || "",
-          businessPhone: systemData.businessPhone || "",
-          businessEmail: systemData.businessEmail || "",
-          website: systemData.website || "",
+          businessName: systemData.value.businessName || "",
+          businessType: systemData.value.businessType || "Tyre Retailer",
+          registrationNumber: systemData.value.registrationNumber || "",
+          taxId: systemData.value.taxId || "",
+          businessAddress: systemData.value.businessAddress || "",
+          businessPhone: systemData.value.businessPhone || "",
+          businessEmail: systemData.value.businessEmail || "",
+          website: systemData.value.website || "",
           staffPosition: "Owner/Manager", // Default value
           designation: "" // Default value
         }));
         
         // Set selected category and warehouse from API data
-        if ((systemData as any).primaryCategoryId) {
-          setSelectedCategoryId((systemData as any).primaryCategoryId);
+        if ((systemData.value as any).primaryCategoryId) {
+          setSelectedCategoryId((systemData.value as any).primaryCategoryId);
         }
-        if ((systemData as any).primaryWarehouseId) {
-          setSelectedWarehouseId((systemData as any).primaryWarehouseId);
+        if ((systemData.value as any).primaryWarehouseId) {
+          setSelectedWarehouseId((systemData.value as any).primaryWarehouseId);
         }
+      } else if (systemData.status === 'rejected') {
+        console.error('System settings error:', systemData.reason);
       }
       
-      if (preferencesData) {
-        setUserPreferences(preferencesData);
+      // Handle user preferences
+      if (preferencesData.status === 'fulfilled' && preferencesData.value) {
+        setUserPreferences(preferencesData.value);
+      } else if (preferencesData.status === 'rejected') {
+        console.error('User preferences error:', preferencesData.reason);
+      }
+      
+      // Handle user profile
+      if (profileData.status === 'fulfilled' && profileData.value) {
+        setUserProfile(profileData.value);
+        
+        // Populate personal form data from API
+        setFormData(prev => ({
+          ...prev,
+          firstName: profileData.value.firstName || "",
+          lastName: profileData.value.lastName || "",
+          email: profileData.value.email || "",
+          phoneCode: profileData.value.phoneCode || "+234",
+          phoneNumber: profileData.value.phoneNumber || "",
+          address: profileData.value.address || "",
+          city: profileData.value.city || "",
+          country: profileData.value.country || "Nigeria",
+          state: profileData.value.state || ""
+        }));
+        
+        // Set profile image if available
+        if (profileData.value.profileImage) {
+          setProfileImage(profileData.value.profileImage);
+        }
+      } else if (profileData.status === 'rejected') {
+        console.error('User profile error:', profileData.reason);
+      }
+      
+      // Handle business profile
+      if (businessData.status === 'fulfilled' && businessData.value) {
+        setBusinessProfile(businessData.value);
+        
+        // Populate business form data from API
+        setBusinessData(prev => ({
+          ...prev,
+          businessName: businessData.value.businessName || "",
+          businessType: businessData.value.businessType || "Tyre Retailer",
+          registrationNumber: businessData.value.registrationNumber || "",
+          taxId: businessData.value.taxId || "",
+          businessAddress: businessData.value.businessAddress || "",
+          businessPhone: businessData.value.businessPhone || "",
+          businessEmail: businessData.value.businessEmail || "",
+          website: businessData.value.website || ""
+        }));
+        
+        // Set selected category and warehouse
+        if (businessData.value.primaryCategoryId) {
+          setSelectedCategoryId(businessData.value.primaryCategoryId);
+        }
+        if (businessData.value.primaryWarehouseId) {
+          setSelectedWarehouseId(businessData.value.primaryWarehouseId);
+        }
+      } else if (businessData.status === 'rejected') {
+        console.error('Business profile error:', businessData.reason);
       }
       
     } catch (err: any) {
-      setApiError(err.message || 'Failed to load settings');
-      showError('Error', err.message || 'Failed to load settings');
+      console.error('Settings fetch error:', err);
+      const errorMessage = err.message || 'Failed to load settings';
+      setApiError(errorMessage);
+      showError('Error', errorMessage);
     } finally {
       setApiLoading(false);
     }
@@ -328,13 +413,27 @@ export default function SettingsPage() {
     }));
   };
 
-  const handleImageUpload = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      setProfileImage(result);
-    };
-    reader.readAsDataURL(file);
+  const handleImageUpload = async (file: File) => {
+    try {
+      // Upload to Cloudinary
+      const result = await uploadImage(file, {
+        folder: 'profile-images',
+        transformation: {
+          width: 300,
+          height: 300,
+          crop: 'fill',
+          gravity: 'face',
+          quality: 'auto',
+          format: 'auto'
+        }
+      });
+      
+      // Set the Cloudinary URL instead of base64
+      setProfileImage(result.secure_url);
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      showError('Error', 'Failed to upload image. Please try again.');
+    }
   };
 
   const removeImage = () => {
@@ -362,14 +461,14 @@ export default function SettingsPage() {
     }
   };
 
-  const handleUpdate = async () => {
+  const handleBusinessUpdate = async () => {
     if (!isAuthenticated) return;
     
     setApiLoading(true);
     
     try {
-      // Update system settings via API
-      const systemPayload = {
+      // Update business profile via API only
+      const businessPayload: UpdateBusinessProfilePayload = {
         businessName: businessData.businessName,
         businessType: businessData.businessType,
         registrationNumber: businessData.registrationNumber,
@@ -379,7 +478,44 @@ export default function SettingsPage() {
         businessEmail: businessData.businessEmail,
         website: businessData.website,
         primaryCategoryId: selectedCategoryId || undefined,
-        primaryWarehouseId: selectedWarehouseId || undefined,
+        primaryWarehouseId: selectedWarehouseId || undefined
+      };
+      
+      await updateBusinessProfile(businessPayload);
+      
+      showSuccess('Success', 'Business information updated successfully!');
+      
+    } catch (err: any) {
+      showError('Error', err.message || 'Failed to update business information');
+    } finally {
+      setApiLoading(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (!isAuthenticated) return;
+    
+    setApiLoading(true);
+    
+    try {
+      // Update business profile via API
+      const businessPayload: UpdateBusinessProfilePayload = {
+        businessName: businessData.businessName,
+        businessType: businessData.businessType,
+        registrationNumber: businessData.registrationNumber,
+        taxId: businessData.taxId,
+        businessAddress: businessData.businessAddress,
+        businessPhone: businessData.businessPhone,
+        businessEmail: businessData.businessEmail,
+        website: businessData.website,
+        primaryCategoryId: selectedCategoryId || undefined,
+        primaryWarehouseId: selectedWarehouseId || undefined
+      };
+      
+      await updateBusinessProfile(businessPayload);
+      
+      // Update system settings via API
+      const systemPayload = {
         currency: 'NGN', // Default currency
         timezone: 'Africa/Lagos', // Default timezone
         dateFormat: 'DD/MM/YYYY', // Default date format
@@ -419,6 +555,22 @@ export default function SettingsPage() {
       };
       
       await updateUserPreferences(preferencesPayload);
+      
+      // Update user profile via API
+      const profilePayload: UpdateUserProfilePayload = {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phoneCode: formData.phoneCode,
+        phoneNumber: formData.phoneNumber,
+        address: formData.address,
+        city: formData.city,
+        country: formData.country,
+        state: formData.state,
+        profileImage: profileImage || undefined
+      };
+      
+      await updateUserProfile(profilePayload);
       
       // Also update localStorage for backward compatibility
     const userData = localStorage.getItem('userData');
@@ -652,24 +804,24 @@ export default function SettingsPage() {
     { id: "security", label: "Security" }
   ];
 
-  if (loading || apiLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">
-            {loading ? 'Loading...' : 'Fetching settings data...'}
-          </p>
+  // Show loading only in main content area, keep sidebar visible
+  const renderMainContent = () => {
+    if (loading || apiLoading) {
+      return (
+        <div className="flex-1 bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">
+              {loading ? 'Loading...' : 'Fetching settings data...'}
+            </p>
+          </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  if (apiError) {
-    return (
-      <div className="flex h-screen bg-gray-50">
-        <Sidebar currentPage="settings" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
-        <div className="flex-1 flex items-center justify-center">
+    if (apiError) {
+      return (
+        <div className="flex-1 bg-gray-50 flex items-center justify-center">
           <div className="text-center">
             <div className="text-red-500 text-6xl mb-4">⚠️</div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Failed to Load Settings</h2>
@@ -682,9 +834,11 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
+
+    return null; // No loading or error, show main content
+  };
 
   if (!isAuthenticated) {
     return null;
@@ -694,7 +848,8 @@ export default function SettingsPage() {
     <div className="flex h-screen bg-gray-50">
       <Sidebar currentPage="settings" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
       
-      <div className="flex-1 flex flex-col overflow-hidden">
+      {renderMainContent() || (
+        <div className="flex-1 flex flex-col overflow-hidden">
         <Header title="Settings" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
         
         <main className="flex-1 overflow-y-auto px-5 pt-7">
@@ -901,8 +1056,14 @@ export default function SettingsPage() {
               <div className="lg:col-span-1">
                 <div className="flex flex-col items-center">
                   <div className="relative">
-                    <div className="w-32 h-32 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden">
-                      {profileImage ? (
+                    <div className="w-32 h-32 bg-gray-200 rounded-lg flex items-center justify-center overflow-hidden relative">
+                      {uploadProgress.isUploading ? (
+                        <div className="flex flex-col items-center justify-center text-center">
+                          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-2"></div>
+                          <p className="text-sm text-gray-600">Uploading...</p>
+                          <p className="text-xs text-gray-500">{uploadProgress.progress}%</p>
+                        </div>
+                      ) : profileImage ? (
                         <img
                           src={profileImage}
                           alt="Profile"
@@ -945,9 +1106,9 @@ export default function SettingsPage() {
                     id="profile-image-upload"
                     type="file"
                     accept="image/*"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
-                      if (file) handleImageUpload(file);
+                      if (file) await handleImageUpload(file);
                     }}
                     className="hidden"
                   />
@@ -965,7 +1126,7 @@ export default function SettingsPage() {
             <div className="flex justify-between items-start mb-8">
               <h2 className="text-2xl font-semibold text-gray-900">Business Information</h2>
               <button
-                onClick={handleUpdate}
+                onClick={handleBusinessUpdate}
                 disabled={apiLoading}
                 className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -1530,7 +1691,8 @@ export default function SettingsPage() {
             </div>
           </div>
         </main>
-      </div>
+        </div>
+      )}
       
       {/* 2FA Setup Modal */}
       {showTwoFactorSetup && (

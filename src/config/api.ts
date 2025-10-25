@@ -1,5 +1,5 @@
 // API Configuration
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://ceeone-api.onrender.com';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
 
 // API endpoints
 export const API_ENDPOINTS = {
@@ -132,12 +132,24 @@ export const API_ENDPOINTS = {
   
   // Dashboard endpoints
   dashboard: `${API_BASE_URL}/dashboard`,
+  dashboardOverview: `${API_BASE_URL}/dashboard/overview`,
+  dashboardSales: `${API_BASE_URL}/dashboard/sales`,
+  dashboardCustomers: `${API_BASE_URL}/dashboard/customers`,
+  dashboardProducts: `${API_BASE_URL}/dashboard/products`,
+  dashboardOrders: `${API_BASE_URL}/dashboard/orders`,
+  dashboardMarketing: `${API_BASE_URL}/dashboard/marketing`,
+  dashboardActivities: `${API_BASE_URL}/dashboard/activities`,
+  dashboardSummary: `${API_BASE_URL}/dashboard/summary`,
 
   // Expenses endpoints
   expenses: `${API_BASE_URL}/expenses`,
 
   // Settings endpoints
   settings: `${API_BASE_URL}/settings`,
+  settingsProfile: `${API_BASE_URL}/settings/profile`,
+  settingsPreferences: `${API_BASE_URL}/settings/preferences`,
+  settingsSystem: `${API_BASE_URL}/settings/system`,
+  settingsBusiness: `${API_BASE_URL}/settings/business`,
 
   // Session endpoints
   sessions: `${API_BASE_URL}/sessions`,

@@ -103,14 +103,82 @@ export interface UpdateUserPreferencesPayload {
   };
 }
 
+export interface UserProfile {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneCode: string;
+  phoneNumber: string;
+  address: string;
+  city: string;
+  country: string;
+  state: string;
+  profileImage?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateUserProfilePayload {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phoneCode?: string;
+  phoneNumber?: string;
+  address?: string;
+  city?: string;
+  country?: string;
+  state?: string;
+  profileImage?: string;
+}
+
+export interface BusinessProfile {
+  id: string;
+  businessName: string;
+  businessType: string;
+  registrationNumber: string;
+  taxId: string;
+  businessAddress: string;
+  businessPhone: string;
+  businessEmail: string;
+  website: string;
+  primaryCategoryId?: string;
+  primaryWarehouseId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpdateBusinessProfilePayload {
+  businessName?: string;
+  businessType?: string;
+  registrationNumber?: string;
+  taxId?: string;
+  businessAddress?: string;
+  businessPhone?: string;
+  businessEmail?: string;
+  website?: string;
+  primaryCategoryId?: string;
+  primaryWarehouseId?: string;
+}
+
 /**
  * Get system settings
  */
 export async function getSystemSettings(): Promise<SystemSettings> {
   try {
-    const url = `${API_ENDPOINTS.settings}/system`;
+    const url = `${API_ENDPOINTS.settingsSystem}`;
     const res = await authFetch(url);
-    const data = await res.json();
+    
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    
+    const text = await res.text();
+    if (!text) {
+      throw new Error('Empty response from server');
+    }
+    
+    const data = JSON.parse(text);
     return data;
   } catch (error) {
     throw error;
@@ -122,7 +190,7 @@ export async function getSystemSettings(): Promise<SystemSettings> {
  */
 export async function updateSystemSettings(payload: UpdateSystemSettingsPayload): Promise<SystemSettings> {
   try {
-    const url = `${API_ENDPOINTS.settings}/system`;
+    const url = `${API_ENDPOINTS.settingsSystem}`;
     const res = await authFetch(url, {
       method: "PUT",
       body: JSON.stringify(payload)
@@ -139,8 +207,59 @@ export async function updateSystemSettings(payload: UpdateSystemSettingsPayload)
  */
 export async function getUserPreferences(): Promise<UserPreferences> {
   try {
-    const url = `${API_ENDPOINTS.settings}/preferences`;
+    const url = `${API_ENDPOINTS.settingsPreferences}`;
     const res = await authFetch(url);
+    
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    
+    const text = await res.text();
+    if (!text) {
+      throw new Error('Empty response from server');
+    }
+    
+    const data = JSON.parse(text);
+    return data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Get user profile
+ */
+export async function getUserProfile(): Promise<UserProfile> {
+  try {
+    const url = `${API_ENDPOINTS.settingsProfile}`;
+    const res = await authFetch(url);
+    
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    
+    const text = await res.text();
+    if (!text) {
+      throw new Error('Empty response from server');
+    }
+    
+    const data = JSON.parse(text);
+    return data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Update user profile
+ */
+export async function updateUserProfile(payload: UpdateUserProfilePayload): Promise<UserProfile> {
+  try {
+    const url = `${API_ENDPOINTS.settingsProfile}`;
+    const res = await authFetch(url, {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    });
     const data = await res.json();
     return data;
   } catch (error) {
@@ -153,7 +272,48 @@ export async function getUserPreferences(): Promise<UserPreferences> {
  */
 export async function updateUserPreferences(payload: UpdateUserPreferencesPayload): Promise<UserPreferences> {
   try {
-    const url = `${API_ENDPOINTS.settings}/preferences`;
+    const url = `${API_ENDPOINTS.settingsPreferences}`;
+    const res = await authFetch(url, {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Get business profile
+ */
+export async function getBusinessProfile(): Promise<BusinessProfile> {
+  try {
+    const url = `${API_ENDPOINTS.settingsBusiness}`;
+    const res = await authFetch(url);
+    
+    if (!res.ok) {
+      throw new Error(`HTTP error! status: ${res.status}`);
+    }
+    console.log(res);
+    const text = await res.text();
+    if (!text) {
+      throw new Error('Empty response from server');
+    }
+    
+    const data = JSON.parse(text);
+    return data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Update business profile
+ */
+export async function updateBusinessProfile(payload: UpdateBusinessProfilePayload): Promise<BusinessProfile> {
+  try {
+    const url = `${API_ENDPOINTS.settingsBusiness}`;
     const res = await authFetch(url, {
       method: "PUT",
       body: JSON.stringify(payload)

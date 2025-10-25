@@ -3,8 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 
 interface TimePeriodSelectorProps {
-  selectedTimePeriod: "This Week" | "This Month";
-  onTimePeriodChange: (period: "This Week" | "This Month") => void;
+  selectedTimePeriod: "This Week" | "This Month" | "All Time";
+  onTimePeriodChange: (period: "This Week" | "This Month" | "All Time") => void;
   className?: string;
   textColor?: string;
   iconColor?: string;
@@ -34,12 +34,12 @@ export default function TimePeriodSelector({
     };
   }, []);
 
-  const handleTimePeriodChange = (period: "This Week" | "This Month") => {
+  const handleTimePeriodChange = (period: "This Week" | "This Month" | "All Time") => {
     onTimePeriodChange(period);
     setShowDropdown(false);
   };
 
-  const isSelected = selectedTimePeriod === "This Week" || selectedTimePeriod === "This Month";
+  const isSelected = selectedTimePeriod === "This Week" || selectedTimePeriod === "This Month" || selectedTimePeriod === "All Time";
   const currentTextColor = isSelected ? "#02016a" : textColor;
   const currentIconColor = isSelected ? "#02016a" : iconColor;
 
@@ -94,6 +94,16 @@ export default function TimePeriodSelector({
             onClick={() => handleTimePeriodChange("This Month")}
           >
             This Month
+          </div>
+          <div 
+            className={`px-3 py-2 text-xs cursor-pointer hover:bg-gray-50 ${
+              selectedTimePeriod === "All Time" 
+                ? "bg-[#f4f5fa] text-[#02016a] font-medium" 
+                : "text-[#45464e]"
+            }`}
+            onClick={() => handleTimePeriodChange("All Time")}
+          >
+            All Time
           </div>
         </div>
       )}

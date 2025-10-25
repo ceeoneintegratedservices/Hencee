@@ -7,6 +7,7 @@ export interface SalesReportParams {
   groupBy?: 'day' | 'week' | 'month' | 'year';
   productId?: string;
   categoryId?: string;
+  dateRange?: string; // Backend compatibility
 }
 
 export interface SalesReportItem {
@@ -41,6 +42,7 @@ export interface FinanceReportParams {
   startDate?: string; // YYYY-MM-DD
   endDate?: string; // YYYY-MM-DD
   groupBy?: 'day' | 'week' | 'month' | 'year';
+  dateRange?: string; // Backend compatibility
 }
 
 export interface FinanceReportItem {
@@ -77,8 +79,16 @@ export interface FinanceReportResponse {
 export async function getSalesReport(params: SalesReportParams = {}): Promise<SalesReportResponse> {
   try {
     const qp = new URLSearchParams();
-    if (params.startDate) qp.set("startDate", params.startDate);
-    if (params.endDate) qp.set("endDate", params.endDate);
+    // Use dateRange parameter for backend compatibility
+    if (params.startDate && params.endDate) {
+      qp.set("dateRange", "custom");
+      qp.set("startDate", params.startDate);
+      qp.set("endDate", params.endDate);
+    } else if (params.dateRange) {
+      qp.set("dateRange", params.dateRange);
+    } else {
+      qp.set("dateRange", "this_month"); // Default to this month
+    }
     if (params.groupBy) qp.set("groupBy", params.groupBy);
     if (params.productId) qp.set("productId", params.productId);
     if (params.categoryId) qp.set("categoryId", params.categoryId);
@@ -98,11 +108,89 @@ export async function getSalesReport(params: SalesReportParams = {}): Promise<Sa
 export async function getFinanceReport(params: FinanceReportParams = {}): Promise<FinanceReportResponse> {
   try {
     const qp = new URLSearchParams();
-    if (params.startDate) qp.set("startDate", params.startDate);
-    if (params.endDate) qp.set("endDate", params.endDate);
+    // Use dateRange parameter for backend compatibility
+    if (params.startDate && params.endDate) {
+      qp.set("dateRange", "custom");
+      qp.set("startDate", params.startDate);
+      qp.set("endDate", params.endDate);
+    } else if (params.dateRange) {
+      qp.set("dateRange", params.dateRange);
+    } else {
+      qp.set("dateRange", "this_month"); // Default to this month
+    }
     if (params.groupBy) qp.set("groupBy", params.groupBy);
     
     const url = `${API_ENDPOINTS.reports.finance}${qp.toString() ? `?${qp.toString()}` : ""}`;
+    const res = await authFetch(url);
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Get dashboard overview data
+ */
+export async function getDashboardOverview(timeframe: string = 'thisWeek'): Promise<any> {
+  try {
+    const url = `${API_ENDPOINTS.dashboardOverview}?timeframe=${timeframe}`;
+    const res = await authFetch(url);
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Get dashboard sales data
+ */
+export async function getDashboardSales(timeframe: string = 'thisWeek'): Promise<any> {
+  try {
+    const url = `${API_ENDPOINTS.dashboardSales}?timeframe=${timeframe}`;
+    const res = await authFetch(url);
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Get dashboard customers data
+ */
+export async function getDashboardCustomers(timeframe: string = 'thisWeek'): Promise<any> {
+  try {
+    const url = `${API_ENDPOINTS.dashboardCustomers}?timeframe=${timeframe}`;
+    const res = await authFetch(url);
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Get dashboard products data
+ */
+export async function getDashboardProducts(timeframe: string = 'thisWeek'): Promise<any> {
+  try {
+    const url = `${API_ENDPOINTS.dashboardProducts}?timeframe=${timeframe}`;
+    const res = await authFetch(url);
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Get dashboard orders data
+ */
+export async function getDashboardOrders(timeframe: string = 'thisWeek'): Promise<any> {
+  try {
+    const url = `${API_ENDPOINTS.dashboardOrders}?timeframe=${timeframe}`;
     const res = await authFetch(url);
     const data = await res.json();
     return data;

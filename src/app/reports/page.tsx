@@ -17,7 +17,7 @@ import {
   Filler,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
-import { getSalesReport, getFinanceReport } from "@/services/reports";
+import { getSalesReport, getFinanceReport, getDashboardOverview, getDashboardSales, getDashboardCustomers, getDashboardProducts, getDashboardOrders } from "@/services/reports";
 import { listCustomers } from "@/services/customers";
 import { getInventoryProducts } from "@/services/inventory";
 import { listProducts } from "@/services/products";
@@ -68,7 +68,14 @@ export default function ReportsPage() {
     financeReport: null as any,
     customers: [] as any[],
     inventory: [] as any[],
-    products: [] as any[]
+    products: [] as any[],
+    dashboardData: {
+      overview: null as any,
+      sales: null as any,
+      customers: null as any,
+      products: null as any,
+      orders: null as any
+    }
   });
   const [apiError, setApiError] = useState<string | null>(null);
   
@@ -91,35 +98,30 @@ export default function ReportsPage() {
     setApiError(null);
     
     try {
-      // Calculate date range based on timeframe
-      const endDate = new Date();
-      const startDate = new Date();
-      
-    switch (timeframe) {
-        case 'daily':
-          startDate.setDate(endDate.getDate() - 1);
-          break;
-        case 'weekly':
-          startDate.setDate(endDate.getDate() - 7);
-          break;
-        case 'monthly':
-          startDate.setMonth(endDate.getMonth() - 1);
-          break;
-        case 'yearly':
-          startDate.setFullYear(endDate.getFullYear() - 1);
-          break;
-      }
-
-      const dateParams = {
-        startDate: startDate.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0],
-        groupBy: (timeframe === 'daily' ? 'day' : timeframe === 'weekly' ? 'week' : timeframe === 'monthly' ? 'month' : 'year') as 'day' | 'week' | 'month' | 'year'
+      // Map timeframe to backend format
+      const timeframeMap: { [key: string]: string } = {
+        'daily': 'thisWeek',
+        'weekly': 'thisWeek', 
+        'monthly': 'thisMonth',
+        'yearly': 'allTime'  // Map yearly to allTime for comprehensive data
       };
+      
+      const backendTimeframe = timeframeMap[timeframe] || 'thisWeek';
 
-      // Fetch data from multiple APIs
+      // Map timeframe to dateRange for reports
+      const dateRangeMap: { [key: string]: string } = {
+        'daily': 'this_week',
+        'weekly': 'this_week', 
+        'monthly': 'this_month',
+        'yearly': 'all_time'  // Use all_time for comprehensive data
+      };
+      
+      const dateRange = dateRangeMap[timeframe] || 'this_month';
+
+      // Fetch data from working backend endpoints
       const [salesReport, financeReport, customers, inventory, products] = await Promise.allSettled([
-        getSalesReport(dateParams).catch(() => null),
-        getFinanceReport(dateParams).catch(() => null),
+        getSalesReport({ dateRange }).catch(() => null),
+        getFinanceReport({ dateRange }).catch(() => null),
         listCustomers().catch(() => []),
         getInventoryProducts().catch(() => []),
         listProducts().catch(() => [])
@@ -128,9 +130,16 @@ export default function ReportsPage() {
       setApiData({
         salesReport: salesReport.status === 'fulfilled' ? salesReport.value : null,
         financeReport: financeReport.status === 'fulfilled' ? financeReport.value : null,
-        customers: customers.status === 'fulfilled' ? customers.value : [],
-        inventory: inventory.status === 'fulfilled' ? inventory.value : [],
-        products: products.status === 'fulfilled' ? products.value : []
+        customers: customers.status === 'fulfilled' ? customers.value || [] : [],
+        inventory: inventory.status === 'fulfilled' ? inventory.value || [] : [],
+        products: products.status === 'fulfilled' ? products.value || [] : [],
+        dashboardData: {
+          overview: null,
+          sales: null,
+          customers: null,
+          products: null,
+          orders: null
+        }
       });
 
     } catch (err: any) {
@@ -304,19 +313,16 @@ export default function ReportsPage() {
     
     // Use real API data if available
     if (apiData.salesReport && apiData.financeReport) {
-      const salesData = apiData.salesReport;
-      const financeData = apiData.financeReport;
-      
       // Extract data from API responses
-      if (salesData.data && Array.isArray(salesData.data)) {
-        salesData.data.forEach((item: any) => {
+      if (apiData.salesReport.data && Array.isArray(apiData.salesReport.data)) {
+        apiData.salesReport.data.forEach((item: any) => {
           allLabels.push(item.period || item.date || 'Unknown');
           allRevenueData.push(item.revenue || item.totalSales || 0);
         });
       }
       
-      if (financeData.data && Array.isArray(financeData.data)) {
-        financeData.data.forEach((item: any) => {
+      if (apiData.financeReport.data && Array.isArray(apiData.financeReport.data)) {
+        apiData.financeReport.data.forEach((item: any) => {
           allProfitData.push(item.profit || item.netIncome || 0);
         });
       }
@@ -1020,7 +1026,7 @@ export default function ReportsPage() {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-4">
-                  <h3 className="text-lg font-semibold text-gray-800">Best selling tyre categories</h3>
+                  <h3 className="text-lg font-semibold text-gray-800">Best selling tyres</h3>
                   <button 
                     onClick={() => setShowCategoriesModal(true)}
                     className="text-blue-600 text-sm hover:underline"

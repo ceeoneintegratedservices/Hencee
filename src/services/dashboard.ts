@@ -219,7 +219,7 @@ export interface DashboardSummary {
   };
 }
 
-export type TimeFrame = 'thisWeek' | 'lastWeek' | 'thisMonth' | 'last7days';
+export type TimeFrame = 'thisWeek' | 'lastWeek' | 'thisMonth' | 'last7days' | 'allTime';
 
 // Dashboard API functions
 export async function getDashboardOverview(timeframe: TimeFrame = 'thisWeek'): Promise<DashboardOverview> {
