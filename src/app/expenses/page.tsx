@@ -34,7 +34,7 @@ export default function ExpensesPage() {
   const [priorityFilter, setPriorityFilter] = useState('All');
   const [sortBy, setSortBy] = useState('requestDate');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [selectedTimePeriod, setSelectedTimePeriod] = useState<'This Week' | 'This Month'>('This Week');
+  const [selectedTimePeriod, setSelectedTimePeriod] = useState<'This Week' | 'This Month' | 'All Time'>('This Week');
   
   // Pagination
   const PAGE_SIZE = 50;

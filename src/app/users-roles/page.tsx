@@ -78,7 +78,7 @@ export default function UsersRolesPage() {
   const [userStatusFilter, setUserStatusFilter] = useState<'All' | 'Active' | 'Inactive'>('All');
   const [userPageSize, setUserPageSize] = useState<number>(10);
   const [userPage, setUserPage] = useState<number>(1);
-  const [timePeriod, setTimePeriod] = useState<"This Week" | "This Month">("This Week");
+  const [timePeriod, setTimePeriod] = useState<"This Week" | "This Month" | "All Time">("This Week");
 
   // Per-user permission overrides. If a key exists here, it overrides the role matrix for that user.
   const [userPermissionOverrides, setUserPermissionOverrides] = useState<{

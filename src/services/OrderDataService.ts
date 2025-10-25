@@ -186,7 +186,7 @@ export class OrderDataService {
   /**
    * Get time period data (weekly vs monthly)
    */
-  static getTimePeriodData(orders: Order[], period: "This Week" | "This Month") {
+  static getTimePeriodData(orders: Order[], period: "This Week" | "This Month" | "All Time") {
     const summary = this.getOrderSummary(orders);
     
     if (period === "This Month") {
@@ -199,6 +199,9 @@ export class OrderDataService {
         returnedOrders: Math.floor(summary.returnedOrders * 4.3),
         damagedOrders: Math.floor(summary.damagedOrders * 4.3)
       };
+    } else if (period === "All Time") {
+      // For "All Time", return the full summary data without modifications
+      return summary;
     }
     
     return summary;

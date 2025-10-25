@@ -35,7 +35,7 @@ export default function InventoryPage() {
   const [priceFilter, setPriceFilter] = useState('All');
   const [sortBy, setSortBy] = useState('dateAdded');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [selectedTimePeriod, setSelectedTimePeriod] = useState<'This Week' | 'This Month'>('This Week');
+  const [selectedTimePeriod, setSelectedTimePeriod] = useState<'This Week' | 'This Month' | 'All Time'>('This Week');
   
   // Dropdown states
   const [showStatusDropdown, setShowStatusDropdown] = useState<number | null>(null);
@@ -288,6 +288,9 @@ export default function InventoryPage() {
         expired: Math.floor(summaryData.expired * 0.9),
         oneStarRating: Math.floor(summaryData.oneStarRating * 0.8)
       };
+    } else if (selectedTimePeriod === 'All Time') {
+      // For "All Time", return the full summary data without modifications
+      return summaryData;
     } else {
       return summaryData;
     }

@@ -33,7 +33,7 @@ export default function OrdersPage() {
   const [appliedFilters, setAppliedFilters] = useState<any>({});
   const [showBulkDropdown, setShowBulkDropdown] = useState(false);
   const [showActionDropdown, setShowActionDropdown] = useState<number | null>(null);
-  const [selectedTimePeriod, setSelectedTimePeriod] = useState<"This Week" | "This Month">("This Week");
+  const [selectedTimePeriod, setSelectedTimePeriod] = useState<"This Week" | "This Month" | "All Time">("This Week");
   // Sidebar toggle for mobile
   const [sidebarOpen, setSidebarOpen] = useState(false);
   // Mobile menu state
@@ -87,7 +87,7 @@ export default function OrdersPage() {
   };
 
   // Handle time period selection
-  const handleTimePeriodChange = (period: "This Week" | "This Month") => {
+  const handleTimePeriodChange = (period: "This Week" | "This Month" | "All Time") => {
     setSelectedTimePeriod(period);
   };
 
