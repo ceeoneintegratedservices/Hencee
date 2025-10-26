@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface HeaderProps {
   title: string;
@@ -12,12 +13,11 @@ interface HeaderProps {
 
 export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderProps) {
   const router = useRouter();
-  const [userRole, setUserRole] = useState<string>("Admin");
+  const { hasPermission, hasAnyPermission, getUserRole, getUserPermissions, user, isInitialized } = usePermissions();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showPermissions, setShowPermissions] = useState(false);
   const [userProfileImage, setUserProfileImage] = useState<string>("/icons/profile1.png");
   const [userName, setUserName] = useState<string>("Admin User");
-  const [userPermissions, setUserPermissions] = useState<string[]>([]);
   const notificationRef = useRef<HTMLDivElement>(null);
   const permissionsRef = useRef<HTMLDivElement>(null);
   const [notifications] = useState([
@@ -56,56 +56,27 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
   ]);
 
   useEffect(() => {
-    // Get user role from localStorage or user data
-    const userData = localStorage.getItem('userData');
-    if (userData) {
-      try {
-        const parsed = JSON.parse(userData);
-        // Handle different possible role structures
-        let roleName = "Admin";
-        
-        if (parsed.role) {
-          // If role is an object, get the name property
-          roleName = typeof parsed.role === 'object' ? parsed.role.name || parsed.role.id : parsed.role;
-        } else if (parsed.roleId) {
-          // If roleId is an object, get the name property
-          roleName = typeof parsed.roleId === 'object' ? parsed.roleId.name || parsed.roleId.id : parsed.roleId;
-        }
-        
-        // Check for user profile image
-        if (parsed.profileImage) {
-          setUserProfileImage(parsed.profileImage);
-        } else if (parsed.avatar) {
-          setUserProfileImage(parsed.avatar);
-        }
-        
-        // Check for user name
-        if (parsed.name) {
-          setUserName(parsed.name);
-        } else if (parsed.firstName && parsed.lastName) {
-          setUserName(`${parsed.firstName} ${parsed.lastName}`);
-        } else if (parsed.username) {
-          setUserName(parsed.username);
-        }
-        
-        // Check for user permissions
-        if (parsed.permissions) {
-          setUserPermissions(parsed.permissions);
-        } else if (parsed.role && typeof parsed.role === 'object' && parsed.role.permissions) {
-          setUserPermissions(parsed.role.permissions);
-        } else {
-          // Default permissions based on role
-          const defaultPermissions = getDefaultPermissions(roleName);
-          setUserPermissions(defaultPermissions);
-        }
-        
-        setUserRole(roleName);
-      } catch (error) {
-        console.error('Error parsing user data:', error);
-        setUserRole("Admin");
+    if (isInitialized && user) {
+      // Update user info from permission system
+      const roleName = getUserRole();
+      
+      // Check for user profile image
+      if (user.profileImage) {
+        setUserProfileImage(user.profileImage);
+      } else if (user.avatar) {
+        setUserProfileImage(user.avatar);
+      }
+      
+      // Check for user name
+      if (user.name) {
+        setUserName(user.name);
+      } else if (user.firstName && user.lastName) {
+        setUserName(`${user.firstName} ${user.lastName}`);
+      } else if (user.username) {
+        setUserName(user.username);
       }
     }
-  }, []);
+  }, [isInitialized, user, getUserRole]);
 
   // Get default permissions based on role
   const getDefaultPermissions = (role: string): string[] => {
@@ -195,17 +166,18 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
         <h1 className="text-[20px] font-poppins font-medium text-[#45464e]">{title}</h1>
       </div>
       <div className="flex items-center gap-5">
-        {/* Role Button with Permissions */}
-        <div className="relative" ref={permissionsRef}>
-          <button 
-            onClick={() => setShowPermissions(!showPermissions)}
-            className="bg-[#fef5ea] rounded-lg px-3 py-1 flex items-center gap-2 hover:bg-[#fef0e0] transition-colors cursor-pointer"
-          >
-            <span className="text-[#1c1d22] text-[14px]">{userRole}</span>
-            <svg className={`w-4 h-4 transition-transform ${showPermissions ? 'rotate-180' : ''}`} fill="none">
-              <path d="M6 8l4 4 4-4" stroke="#1c1d22" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
+        {/* Role Button with Permissions - Only show if user has permission to view permissions */}
+        {hasPermission('users.view') && (
+          <div className="relative" ref={permissionsRef}>
+            <button 
+              onClick={() => setShowPermissions(!showPermissions)}
+              className="bg-[#fef5ea] rounded-lg px-3 py-1 flex items-center gap-2 hover:bg-[#fef0e0] transition-colors cursor-pointer"
+            >
+              <span className="text-[#1c1d22] text-[14px]">{getUserRole()}</span>
+              <svg className={`w-4 h-4 transition-transform ${showPermissions ? 'rotate-180' : ''}`} fill="none">
+                <path d="M6 8l4 4 4-4" stroke="#1c1d22" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
           
           {/* Permissions Modal */}
           {showPermissions && (
@@ -224,10 +196,10 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
                 </div>
                 <div className="mb-3">
                   <span className="text-sm text-gray-600">Role: </span>
-                  <span className="text-sm font-medium text-[#02016a]">{userRole}</span>
+                  <span className="text-sm font-medium text-[#02016a]">{getUserRole()}</span>
                 </div>
                 <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {userPermissions.map((permission, index) => (
+                  {getUserPermissions().map((permission, index) => (
                     <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md">
                       <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -247,9 +219,11 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
               </div>
             </div>
           )}
-        </div>
-        {/* Notification Bell */}
-        <div className="relative" ref={notificationRef}>
+          </div>
+        )}
+        {/* Notification Bell - Only show if user has permission to view notifications */}
+        {hasAnyPermission(['dashboard.view', 'sales.view', 'inventory.view']) && (
+          <div className="relative" ref={notificationRef}>
           <button 
             onClick={() => setShowNotifications(!showNotifications)}
             className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
@@ -329,12 +303,14 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
               </div>
             </div>
           )}
-        </div>
-        {/* Profile Icon */}
-        <button 
-          onClick={() => router.push('/settings')}
-          className="w-8 h-8 rounded-full overflow-hidden hover:ring-2 hover:ring-[#02016a] hover:ring-offset-2 transition-all"
-        >
+          </div>
+        )}
+        {/* Profile Icon - Only show if user has permission to view settings */}
+        {hasPermission('settings.view') && (
+          <button 
+            onClick={() => router.push('/settings')}
+            className="w-8 h-8 rounded-full overflow-hidden hover:ring-2 hover:ring-[#02016a] hover:ring-offset-2 transition-all"
+          >
           {userProfileImage && userProfileImage !== "/icons/profile1.png" ? (
             <Image 
               src={userProfileImage} 
@@ -350,7 +326,8 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
               </span>
             </div>
           )}
-        </button>
+          </button>
+        )}
       </div>
     </header>
   );

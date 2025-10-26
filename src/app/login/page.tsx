@@ -2,10 +2,12 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { API_ENDPOINTS } from "../../config/api";
+import { usePermissions } from "@/hooks/usePermissions";
 
 
 export default function LoginPage() {
   const router = useRouter();
+  const { initializePermissions } = usePermissions();
   const [form, setForm] = useState({
     email: "",
     password: "",
@@ -17,11 +19,41 @@ export default function LoginPage() {
   // Check if user is already authenticated
   useEffect(() => {
     const token = localStorage.getItem('authToken');
+    const storedUserData = localStorage.getItem('userData');
+    
     if (token && !loading && !success) {
       // Only redirect if we have a valid token and we're not in the middle of a login process
-      router.push('/dashboard');
+      
+      // Determine where to redirect based on permissions
+      if (storedUserData) {
+        try {
+          const userData = JSON.parse(storedUserData);
+          const permissions = userData?.permissions || userData?.role?.permissions || [];
+          
+          // Initialize permissions with user data
+          initializePermissions(userData);
+          
+          // Redirect based on permissions
+          if (permissions.includes('view_users') || permissions.includes('users.view')) {
+            router.push('/users-roles');
+          } else if (permissions.includes('view_expenses') || permissions.includes('expenses.view')) {
+            router.push('/expenses');
+          } else if (permissions.includes('view_reports') || permissions.includes('reports.view')) {
+            router.push('/reports');
+          } else {
+            // Default fallback
+            router.push('/dashboard');
+          }
+        } catch (e) {
+          // If parsing fails, redirect to dashboard
+          router.push('/dashboard');
+        }
+      } else {
+        // No user data, redirect to dashboard
+        router.push('/dashboard');
+      }
     }
-  }, [router, loading, success]);
+  }, [router, loading, success, initializePermissions]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -75,11 +107,15 @@ export default function LoginPage() {
           const fallbackToken = `auth_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           localStorage.setItem('authToken', fallbackToken);
         }
+        // Store user data in localStorage
         if (data.user) {
           localStorage.setItem('userData', JSON.stringify(data.user));
+          
+          // Initialize permissions with user data
+          initializePermissions(data.user);
         }
         
-        // Show success message and redirect to dashboard
+        // Show success message
         setError(""); // Clear any previous errors
         setSuccess(true); // Show success state
         setLoading(false); // Stop loading
@@ -90,7 +126,21 @@ export default function LoginPage() {
           const storedUserData = localStorage.getItem('userData');
           
           if (storedToken || storedUserData) {
-            router.push('/dashboard');
+            // Redirect based on permissions
+            const userData = storedUserData ? JSON.parse(storedUserData) : null;
+            const permissions = userData?.permissions || userData?.role?.permissions || [];
+            
+            // Determine where to redirect based on permissions
+            if (permissions.includes('view_users') || permissions.includes('users.view')) {
+              router.push('/users-roles');
+            } else if (permissions.includes('view_expenses') || permissions.includes('expenses.view')) {
+              router.push('/expenses');
+            } else if (permissions.includes('view_reports') || permissions.includes('reports.view')) {
+              router.push('/reports');
+            } else {
+              // Default fallback
+              router.push('/dashboard');
+            }
           } else {
             console.error('No authentication data found in localStorage after login');
             // Create a fallback authentication as last resort
@@ -149,7 +199,7 @@ export default function LoginPage() {
           <img src="/icons/google.svg" alt="Google" className="w-5 h-5" /> Sign in with Google
         </button>
         {error && <div className="mt-4 text-red-600 text-center">{error}</div>}
-        {success && <div className="mt-4 text-green-600 text-center">Login successful! Redirecting to dashboard...</div>}
+        {success && <div className="mt-4 text-green-600 text-center">Login successful! Redirecting to your authorized pages...</div>}
         <div className="mt-4 text-center text-sm text-gray-600">
           Don't have an account? <a href="/signup" className="text-blue-600 font-semibold">Sign up</a>
         </div>

@@ -19,10 +19,12 @@ import {
   type TimeFrame
 } from "../../services/dashboard";
 import { useNotifications } from "../../components/Notification";
+import { usePermissions } from "../../hooks/usePermissions";
 
 export default function AdminDashboard() {
   const router = useRouter();
   const { showError, showSuccess } = useNotifications();
+  const { hasPermission, hasAnyPermission } = usePermissions();
   
   // Client-side only state to prevent hydration issues
   const [mounted, setMounted] = useState(false);
@@ -92,13 +94,6 @@ export default function AdminDashboard() {
     };
   }, [sidebarOpen]);
 
-  // Handle logout
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userData');
-    router.push('/login');
-  };
-
   // Handle time period selection
   const handleTimePeriodChange = (period: "This Week" | "This Month" | "All Time") => {
     setSelectedTimePeriod(period);
@@ -147,11 +142,12 @@ export default function AdminDashboard() {
   };
 
   // Load dashboard data when authenticated or time period changes
+  // Only fetch data if user has permission to view dashboard
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && hasPermission('dashboard.view')) {
       fetchDashboardData();
     }
-  }, [isAuthenticated, selectedTimePeriod]);
+  }, [isAuthenticated, selectedTimePeriod, hasPermission]);
 
   // Activity categories for display
   const activityCategories = {
@@ -208,8 +204,6 @@ export default function AdminDashboard() {
     );
   }
 
-  // Note: Removed early return to keep sidebar visible even when no dashboard data
-
   return (
     <div className="flex w-full h-screen bg-[#f4f5fa] overflow-hidden">
       {/* Sidebar */}
@@ -235,551 +229,172 @@ export default function AdminDashboard() {
         ]} />
         
         <div className="px-5 pt-7">
-          {/* Top Section: 2 rows of summary cards with responsive layout */}
-          <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-10 gap-3 sm:gap-4 lg:gap-5 mb-5 items-stretch">
-            {/* Row 1 - Sales Card (27%) */}
-            <div
-              className="bg-white rounded-xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 h-[145px] shadow min-w-0 justify-between items-start col-span-1 sm:col-span-1 lg:col-span-3 overflow-hidden cursor-pointer hover:ring-1 hover:ring-[#5570f1]/30"
-              onClick={() => router.push('/orders')}
-              role="button"
-              tabIndex={0}
-            >
-              <div className="flex items-center justify-between w-full">
-                <span className="w-9 h-9 flex items-center justify-center bg-[rgba(85,112,241,0.12)] rounded-lg">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 18 19">
-                    <path d="M13.4815 10.8244C14.0438 10.8244 14.5158 11.2884 14.4298 11.8437C13.9254 15.1104 11.1289 17.5358 7.75611 17.5358C4.02453 17.5358 0.999967 14.5113 0.999967 10.7806C0.999967 7.70687 3.33506 4.84371 5.964 4.19634C6.52891 4.05687 7.10786 4.45424 7.10786 5.03581C7.10786 8.97617 7.24032 9.99546 7.98856 10.5498C8.73681 11.1042 9.61663 10.8244 13.4815 10.8244Z" stroke="#5570F1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M17.1604 7.5431C17.2051 5.01152 14.0955 0.930815 10.306 1.00099C10.0113 1.00625 9.77532 1.25187 9.76216 1.54573C9.66655 3.62731 9.79549 6.32467 9.86742 7.54748C9.88935 7.92818 10.1885 8.22731 10.5683 8.24924C11.8253 8.32117 14.6209 8.41941 16.6727 8.10888C16.9516 8.06678 17.156 7.82467 17.1604 7.5431Z" stroke="#5570F1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </span>
-                <div onClick={(e) => e.stopPropagation()}>
-                  <TimePeriodSelector
-                    selectedTimePeriod={selectedTimePeriod}
-                    onTimePeriodChange={handleTimePeriodChange}
-                    textColor="#8b8d97"
-                    iconColor="#8B8D97"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2 sm:gap-4 lg:gap-8 w-full justify-between">
-                <div className="flex flex-col gap-2 flex-1 text-center">
-                  <div className="text-sm text-[#8b8d97]">Sales</div>
-                  <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">₦{(salesData?.sales?.value || 0).toLocaleString()}</span>
-                    <span className={`text-xs ${(salesData?.sales?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
-                      {(salesData?.sales?.change || 0) >= 0 ? '+' : ''}{(salesData?.sales?.change || 0).toFixed(1)}%
-                    </span>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 flex-1 text-center">
-                  <div className="text-sm text-[#8b8d97]">Volume</div>
-                  <div className="font-medium text-[20px] text-[#45464e]">{salesData?.sales?.volume || 0}</div>
-                </div>
+          {/* Check if user has dashboard permissions */}
+          {!hasPermission('dashboard.view') ? (
+            <div className="flex items-center justify-center h-96">
+              <div className="text-center">
+                <div className="text-red-500 text-6xl mb-4">🚫</div>
+                <h2 className="text-xl font-semibold text-gray-900 mb-2">Access Restricted</h2>
+                <p className="text-gray-600 mb-4">You don't have permission to view the dashboard.</p>
+                <p className="text-gray-500">Contact your administrator for access.</p>
               </div>
             </div>
-            {/* Row 1 - Customers Card (27%) */}
-            <div
-              className="bg-white rounded-xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 h-[145px] shadow min-w-0 justify-between items-start col-span-1 sm:col-span-1 lg:col-span-3 overflow-hidden cursor-pointer hover:ring-1 hover:ring-[#1C1D22]/20"
-              onClick={() => router.push('/customers')}
-              role="button"
-              tabIndex={0}
-            >
-              <div className="flex items-center justify-between w-full">
-                <span className="w-9 h-9 flex items-center justify-center bg-[rgba(255,204,145,0.16)] rounded-lg">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 18 17">
-                    <path d="M6.70167 10.9643C9.77583 10.9643 12.4033 11.4301 12.4033 13.2909C12.4033 15.1518 9.79334 15.6309 6.70167 15.6309C3.62667 15.6309 1 15.1693 1 13.3076C1 11.4459 3.60917 10.9643 6.70167 10.9643Z" stroke="#1C1D22" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M6.70167 8.30845C4.68334 8.30845 3.04667 6.67262 3.04667 4.65428C3.04667 2.63595 4.68334 1.00011 6.70167 1.00011C8.71917 1.00011 10.3558 2.63595 10.3558 4.65428C10.3633 6.66512 8.73833 8.30095 6.7275 8.30845H6.70167Z" stroke="#1C1D22" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M12.4447 7.35995C13.7788 7.17245 14.8063 6.02745 14.8088 4.64161C14.8088 3.27578 13.813 2.14245 12.5072 1.92828" stroke="#1C1D22" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M14.2049 10.5688C15.4974 10.7613 16.3999 11.2146 16.3999 12.1479C16.3999 12.7904 15.9749 13.2071 15.2883 13.4679" stroke="#1C1D22" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </span>
-                <div onClick={(e) => e.stopPropagation()}>
-                  <TimePeriodSelector
-                    selectedTimePeriod={selectedTimePeriod}
-                    onTimePeriodChange={handleTimePeriodChange}
-                    textColor="#8b8d97"
-                    iconColor="#8B8D97"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2 sm:gap-4 lg:gap-8 w-full justify-between">
-                <div className="flex flex-col gap-2 flex-1 text-center">
-                  <div className="text-sm text-[#8b8d97]">Total Customers</div>
-                  <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">{dashboardData?.customers?.allCustomers?.value || 0}</span>
-                    <span className={`text-xs ${(dashboardData?.customers?.allCustomers?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
-                      {(dashboardData?.customers?.allCustomers?.change || 0) >= 0 ? '+' : ''}{(dashboardData?.customers?.allCustomers?.change || 0).toFixed(1)}%
-                    </span>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 flex-1 text-center">
-                  <div className="text-sm text-[#8b8d97]">Active</div>
-                  <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">{dashboardData?.customers?.activeCustomers?.value || 0}</span>
-                    <span className={`text-xs ${(dashboardData?.customers?.activeCustomers?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
-                      {(dashboardData?.customers?.activeCustomers?.change || 0) >= 0 ? '+' : ''}{(dashboardData?.customers?.activeCustomers?.change || 0).toFixed(1)}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            {/* Row 1 - All Orders Card (46%) */}
-            <div
-              className="bg-white rounded-xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 h-[145px] shadow min-w-0 justify-between items-start col-span-1 sm:col-span-2 lg:col-span-4 overflow-hidden cursor-pointer hover:ring-1 hover:ring-[#ffcc91]/30"
-              onClick={() => router.push('/orders')}
-              role="button"
-              tabIndex={0}
-            >
-              <div className="flex items-center justify-between w-full">
-                <span className="w-9 h-9 flex items-center justify-center bg-[rgba(255,204,145,0.16)] rounded-lg">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 20 21">
-                    <path d="M14.2126 20.222H5.86477C2.79841 20.222 0.446004 19.1145 1.1142 14.6568L1.89223 8.6156C2.30413 6.39134 3.72289 5.54008 4.96774 5.54008H15.1462C16.4094 5.54008 17.7458 6.45542 18.2217 8.6156L18.9998 14.6568C19.5673 18.611 17.279 20.222 14.2126 20.222Z" stroke="#1C1D22" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M14.3499 5.32041C14.3499 2.93433 12.4156 1.00004 10.0295 1.00004V1.00004C8.88053 0.99517 7.77692 1.4482 6.96273 2.25895C6.14854 3.06971 5.69085 4.17139 5.69086 5.32041H5.69086" stroke="#1C1D22" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </span>
-                <div onClick={(e) => e.stopPropagation()}>
-                  <TimePeriodSelector
-                    selectedTimePeriod={selectedTimePeriod}
-                    onTimePeriodChange={handleTimePeriodChange}
-                    textColor="#8b8d97"
-                    iconColor="#8B8D97"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2 sm:gap-4 lg:gap-8 w-full justify-between">
-                <div className="flex flex-col gap-2 flex-1 text-center">
-                  <div className="text-sm text-[#8b8d97]">All Orders</div>
-                  <div className="font-medium text-[20px] text-[#45464e]">{ordersData?.allOrders?.value || 0}</div>
-                </div>
-                <div className="flex flex-col gap-2 flex-1 text-center">
-                  <div className="text-sm text-[#8b8d97]">Pending</div>
-                  <div className="font-medium text-[20px] text-[#45464e]">{ordersData?.pending?.value || 0}</div>
-                </div>
-                <div className="flex flex-col gap-2 flex-1 text-center">
-                  <div className="text-sm text-[#8b8d97]">Completed</div>
-                  <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">{ordersData?.completed?.value || 0}</span>
-                    <span className={`text-xs ${(ordersData?.completed?.change || 0) >= 0 ? 'text-[#519c66]' : 'text-red-500'}`}>
-                      {(ordersData?.completed?.change || 0) >= 0 ? '+' : ''}{(ordersData?.completed?.change || 0).toFixed(1)}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            {/* Row 2 - Total Profit Card (27%) */}
-            <div className="bg-white rounded-xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 h-[145px] shadow min-w-0 justify-between items-start col-span-1 sm:col-span-1 lg:col-span-3 overflow-hidden">
-              <div className="flex items-center justify-between w-full">
-                <span className="w-9 h-9 flex items-center justify-center bg-[rgba(85,112,241,0.12)] rounded-lg">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 18 19">
-                    <path d="M13.4815 10.8244C14.0438 10.8244 14.5158 11.2884 14.4298 11.8437C13.9254 15.1104 11.1289 17.5358 7.75611 17.5358C4.02453 17.5358 0.999967 14.5113 0.999967 10.7806C0.999967 7.70687 3.33506 4.84371 5.964 4.19634C6.52891 4.05687 7.10786 4.45424 7.10786 5.03581C7.10786 8.97617 7.24032 9.99546 7.98856 10.5498C8.73681 11.1042 9.61663 10.8244 13.4815 10.8244Z" stroke="#5570F1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M17.1604 7.5431C17.2051 5.01152 14.0955 0.930815 10.306 1.00099C10.0113 1.00625 9.77532 1.25187 9.76216 1.54573C9.66655 3.62731 9.79549 6.32467 9.86742 7.54748C9.88935 7.92818 10.1885 8.22731 10.5683 8.24924C11.8253 8.32117 14.6209 8.41941 16.6727 8.10888C16.9516 8.06678 17.156 7.82467 17.1604 7.5431Z" stroke="#5570F1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </span>
-                <div onClick={(e) => e.stopPropagation()}>
-                  <TimePeriodSelector
-                    selectedTimePeriod={selectedTimePeriod}
-                    onTimePeriodChange={handleTimePeriodChange}
-                    textColor="#8b8d97"
-                    iconColor="#8B8D97"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2 sm:gap-4 lg:gap-8 w-full justify-between">
-                <div className="flex flex-col gap-2 flex-1 text-center">
-                  <div className="text-sm text-[#8b8d97]">Volume</div>
-                  <div className="font-medium text-[20px] text-[#45464e]">0</div>
-                </div>
-                <div className="flex flex-col gap-2 flex-1 text-center">
-                  <div className="text-sm text-[#8b8d97]">Receivables</div>
-                  <div className="font-medium text-[20px] text-[#45464e]">₦0.00</div>
-                </div>
-                <div className="flex flex-col gap-2 flex-1 text-center">
-                  <div className="text-sm text-[#8b8d97]">Active</div>
-                  <div className="font-medium text-[20px] text-[#45464e]">0</div>
-                </div>
-              </div>
-            </div>
-            {/* Row 2 - Receivables Card (27%) */}
-            <div className="bg-white rounded-xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 h-[145px] shadow min-w-0 justify-between items-start col-span-1 sm:col-span-1 lg:col-span-3 overflow-hidden">
-              <div className="flex items-center justify-between w-full">
-                <span className="w-9 h-9 flex items-center justify-center bg-[rgba(255,204,145,0.16)] rounded-lg">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 18 17">
-                    <path d="M6.70167 10.9643C9.77583 10.9643 12.4033 11.4301 12.4033 13.2909C12.4033 15.1518 9.79334 15.6309 6.70167 15.6309C3.62667 15.6309 1 15.1693 1 13.3076C1 11.4459 3.60917 10.9643 6.70167 10.9643Z" stroke="#1C1D22" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M6.70167 8.30845C4.68334 8.30845 3.04667 6.67262 3.04667 4.65428C3.04667 2.63595 4.68334 1.00011 6.70167 1.00011C8.71917 1.00011 10.3558 2.63595 10.3558 4.65428C10.3633 6.66512 8.73833 8.30095 6.7275 8.30845H6.70167Z" stroke="#1C1D22" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M12.4447 7.35995C13.7788 7.17245 14.8063 6.02745 14.8088 4.64161C14.8088 3.27578 13.813 2.14245 12.5072 1.92828" stroke="#1C1D22" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M14.2049 10.5688C15.4974 10.7613 16.3999 11.2146 16.3999 12.1479C16.3999 12.7904 15.9749 13.2071 15.2883 13.4679" stroke="#1C1D22" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </span>
-                <div onClick={(e) => e.stopPropagation()}>
-                  <TimePeriodSelector
-                    selectedTimePeriod={selectedTimePeriod}
-                    onTimePeriodChange={handleTimePeriodChange}
-                    textColor="#8b8d97"
-                    iconColor="#8B8D97"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2 sm:gap-4 lg:gap-8 w-full justify-between">
-                <div className="flex flex-col gap-2 flex-1 text-center">
-                  <div className="text-sm text-[#8b8d97]">Receivables</div>
-                  <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">0</span>
-                    <span className="text-xs text-[#519c66]">+0.00%</span>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 flex-1 text-center">
-                  <div className="text-sm text-[#8b8d97]">Active</div>
-                  <div className="flex items-center gap-2 justify-center">
-                    <span className="font-medium text-[20px] text-[#45464e]">0</span>
-                    <span className="text-xs text-[#519c66]">+0.00%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-            {/* Row 2 - All Users Card (46%) */}
-            <div
-              className="bg-white rounded-xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 h-[145px] shadow min-w-0 justify-between items-start col-span-1 sm:col-span-2 lg:col-span-4 overflow-hidden cursor-pointer hover:ring-1 hover:ring-[#101828]/20"
-              onClick={() => router.push('/users-roles')}
-              role="button"
-              tabIndex={0}
-            >
-              <div className="flex items-center justify-between w-full">
-                <span className="w-9 h-9 flex items-center justify-center bg-[rgba(255,204,145,0.16)] rounded-lg">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 20 20">
-                    <path d="M9.99992 10C12.3011 10 14.1666 8.13452 14.1666 5.83333C14.1666 3.53215 12.3011 1.66667 9.99992 1.66667C7.69873 1.66667 5.83325 3.53215 5.83325 5.83333C5.83325 8.13452 7.69873 10 9.99992 10Z" stroke="#101828" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M17.1582 18.3333C17.1582 15.1083 13.9499 12.5 9.99988 12.5C6.04988 12.5 2.84155 15.1083 2.84155 18.3333" stroke="#101828" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </span>
-                <div onClick={(e) => e.stopPropagation()}>
-                  <TimePeriodSelector
-                    selectedTimePeriod={selectedTimePeriod}
-                    onTimePeriodChange={handleTimePeriodChange}
-                    textColor="#8b8d97"
-                    iconColor="#8B8D97"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-1 sm:gap-2 lg:gap-4 w-full">
-                <div className="flex flex-col gap-2 flex-1">
-                  <div className="text-xs sm:text-sm text-[#8b8d97]">All Users</div>
-                  <div className="flex items-center gap-1 sm:gap-2">
-                    <span className="font-medium text-lg sm:text-xl text-[#45464e]">0</span>
-                    <span className="text-xs text-[#519c66]">+0.00%</span>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 flex-1">
-                  <div className="text-xs sm:text-sm text-[#8b8d97]">Pending</div>
-                  <div className="flex items-center gap-1 sm:gap-2">
-                    <span className="font-medium text-lg sm:text-xl text-[#45464e]">0</span>
-                    <span className="text-xs text-[#519c66]">+0.00%</span>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 flex-1">
-                  <div className="text-xs sm:text-sm text-[#8b8d97]">Approved</div>
-                  <div className="flex items-center gap-1 sm:gap-2">
-                    <span className="font-medium text-lg sm:text-xl text-[#45464e]">0</span>
-                    <span className="text-xs text-[#519c66]">+0.00%</span>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-2 flex-1">
-                  <div className="text-xs sm:text-sm text-[#8b8d97]">Rejected</div>
-                  <div className="flex items-center gap-1 sm:gap-2">
-                    <span className="font-medium text-lg sm:text-xl text-[#45464e]">0</span>
-                    <span className="text-xs text-[#519c66]">+0.00%</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-          {/* Third Row: Marketing (square), All Products + Abandoned Cart (stacked), Recent Activities (bottom) */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 w-full mt-5 relative">
-            {/* Marketing Card - Square shape */}
-            <div className="bg-white rounded-xl p-5 flex flex-col gap-6 shadow min-w-0 h-[400px]">
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-[#45464e] text-[16px] font-inter">Marketing</span>
-                <div onClick={(e) => e.stopPropagation()}>
-                  <TimePeriodSelector
-                    selectedTimePeriod={selectedTimePeriod}
-                    onTimePeriodChange={handleTimePeriodChange}
-                    textColor="#8b8d97"
-                    iconColor="#8B8D97"
-                  />
-                </div>
-              </div>
-              
-              {/* Top level: Acquisition, Purchase, Retention evenly spread */}
-              <div className="flex justify-between w-full">
-                <div className="flex flex-col items-center gap-2">
-                  <span className="w-3 h-3 rounded bg-[#5570f1]"></span>
-                  <span className="text-xs text-[#45464e] font-medium">Acquisition</span>
-                </div>
-                <div className="flex flex-col items-center gap-2">
-                  <span className="w-3 h-3 rounded bg-[#97a5eb]"></span>
-                  <span className="text-xs text-[#45464e] font-medium">Purchase</span>
-                </div>
-                <div className="flex flex-col items-center gap-2">
-                  <span className="w-3 h-3 rounded bg-[#ffcc91]"></span>
-                  <span className="text-xs text-[#45464e] font-medium">Retention</span>
-                </div>
-              </div>
-              
-              {/* Chart */}
-              <div className="flex-1 flex items-center justify-center">
-                <div className="w-32 h-32 rounded-full bg-[#fef5ea] flex items-center justify-center">
-                  <svg width="110" height="110" viewBox="0 0 36 36">
-                    <circle cx="18" cy="18" r="16" fill="#fff" />
-                    <circle cx="18" cy="18" r="14" fill="none" stroke="#5570f1" strokeWidth="4" strokeDasharray="25,75" strokeDashoffset="0" />
-                    <circle cx="18" cy="18" r="14" fill="none" stroke="#97a5eb" strokeWidth="4" strokeDasharray="20,80" strokeDashoffset="25" />
-                    <circle cx="18" cy="18" r="14" fill="none" stroke="#ffcc91" strokeWidth="4" strokeDasharray="15,85" strokeDashoffset="45" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-
-            {/* Middle Column: All Products + Abandoned Cart stacked */}
-            <div className="flex flex-col gap-5">
-              {/* All Products Card - Top of stack */}
-              <div
-                className="bg-[#11518c] rounded-xl p-4 text-white flex flex-col gap-2.5 min-w-0 h-[190px] cursor-pointer hover:ring-1 hover:ring-white/30"
-                onClick={() => router.push('/inventory')}
-                role="button"
-                tabIndex={0}
-              >
-              <div className="flex items-center justify-between">
-                <span className="w-9 h-9 flex items-center justify-center bg-[rgba(255,255,255,0.16)] rounded-lg">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 18 18">
-                    <path d="M16.9742 12.235C16.9742 15.2166 15.2167 16.9742 12.235 16.9742H5.75002C2.76085 16.9742 1.00002 15.2166 1.00002 12.235V5.73498C1.00002 2.75748 2.09502 0.999983 5.07752 0.999983H6.74418C7.34252 1.00082 7.90585 1.28165 8.26418 1.76082L9.02502 2.77248C9.38502 3.25082 9.94835 3.53248 10.5467 3.53332H12.905C15.8942 3.53332 16.9975 5.05498 16.9975 8.09748L16.9742 12.235Z" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M5.35927 11.1774H12.6384" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </span>
-              </div>
-              <div className="flex gap-4 lg:gap-8 w-full justify-between">
-                <div className="flex flex-col gap-2 flex-1 text-center">
-                  <span className="text-sm font-medium">All Products</span>
-                  <span className="text-[20px] font-medium">0</span>
-                  <span className="text-xs text-[#dbdeee]">+0.00%</span>
-                </div>
-                <div className="flex flex-col gap-2 flex-1 text-center">
-                  <span className="text-sm font-medium">Active</span>
-                  <span className="text-[20px] font-medium">0</span>
-                  <span className="text-xs text-[#dbdeee]">+0.00%</span>
-                </div>
-              </div>
-            </div>
-
-              {/* Abandoned Cart Card - Directly under All Products */}
-              <div className="bg-white rounded-xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-2.5 h-[190px] shadow min-w-0 justify-between items-start overflow-hidden">
-                <div className="flex items-center justify-between w-full">
-                  <span className="w-9 h-9 flex items-center justify-center bg-[rgba(255,204,145,0.16)] rounded-lg">
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 20 21">
-                      <path d="M14.2126 20.222H5.86477C2.79841 20.222 0.446004 19.1145 1.1142 14.6568L1.89223 8.6156C2.30413 6.39134 3.72289 5.54008 4.96774 5.54008H15.1462C16.4094 5.54008 17.7458 6.45542 18.2217 8.6156L18.9998 14.6568C19.5673 18.611 17.279 20.222 14.2126 20.222Z" stroke="#1C1D22" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      <path d="M14.3499 5.32041C14.3499 2.93433 12.4156 1.00004 10.0295 1.00004V1.00004C8.88053 0.99517 7.77692 1.4482 6.96273 2.25895C6.14854 3.06971 5.69085 4.17139 5.69086 5.32041H5.69086" stroke="#1C1D22" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </span>
-                  <div onClick={(e) => e.stopPropagation()}>
-                    <TimePeriodSelector
-                      selectedTimePeriod={selectedTimePeriod}
-                      onTimePeriodChange={handleTimePeriodChange}
-                      textColor="#bec0ca"
-                      iconColor="#BEC0CA"
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-2 sm:gap-4 lg:gap-8 w-full justify-between">
-                  <div className="flex flex-col gap-2 flex-1 text-center">
-                    <div className="text-sm text-[#8b8d97]">Abandoned Cart</div>
-                    <div className="flex items-center gap-2 justify-center">
-                      <span className="font-medium text-[20px] text-[#45464e]">0%</span>
-                      <span className="text-xs text-[#519c66]">+0.00%</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-2 flex-1 text-center">
-                    <div className="text-sm text-[#8b8d97]">Customers</div>
-                    <div className="font-medium text-[20px] text-[#45464e]">0</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Recent Activities - Absolutely positioned to span from Marketing row to Summary row */}
-            <div className="hidden lg:block absolute top-0 right-0 w-[calc(33.333%-1.25rem)] h-[590px] z-10">
-              <div className="bg-white rounded-xl p-5 flex flex-col gap-6 shadow h-full">
-                <div className="flex items-center justify-between">
-                <span className="font-medium text-[#45464e] text-[16px] font-inter">Recent Activities</span>
-                  <button 
-                    onClick={fetchDashboardData}
-                    disabled={loading}
-                    className="p-2 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
-                    title="Refresh activities"
+          ) : (
+            <div className="space-y-6">
+              <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-10 gap-5">
+                {/* Sales Card */}
+                {hasAnyPermission(['sales.view', 'dashboard.view']) && (
+                  <div 
+                    className="bg-white rounded-xl p-4 shadow col-span-1 sm:col-span-1 lg:col-span-3 h-[145px]"
+                    onClick={() => router.push('/orders')}
                   >
-                    <svg 
-                      className={`w-4 h-4 text-[#8b8d97] ${loading ? 'animate-spin' : ''}`} 
-                      fill="none" 
-                      viewBox="0 0 24 24"
-                    >
-                      <path 
-                        stroke="currentColor" 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                        strokeWidth={2} 
-                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
-                      />
-                    </svg>
-                  </button>
-                </div>
-                
-                <div className="flex flex-col gap-3 w-full overflow-y-auto max-h-[400px] pr-2">
-                  {!activities || activities.activities.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center flex-1 py-8">
-                      <div className="w-[120px] h-[120px] rounded-full bg-[#f4f5fa] flex items-center justify-center mb-6">
-                        <div className="w-[50px] h-[50px] flex items-center justify-center">
-                          <svg className="w-full h-full" fill="none" viewBox="0 0 24 24">
-                            <path 
-                              d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.89 1 3 1.89 3 3V21C3 22.11 3.89 23 5 23H19C20.11 23 21 22.11 21 21V9M19 9H14V4L19 9Z" 
-                              fill="#8b8d97"
-                            />
-                          </svg>
-                        </div>
+                    <div className="flex justify-between items-center mb-4">
+                      <div className="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <span>$</span>
                       </div>
-                      <span className="font-poppins text-[18px] text-black mb-2 font-semibold">No Activities Yet</span>
-                      <span className="text-[#8b8d97] text-[13px] text-center mb-4 max-w-[200px]">
-                        Activities from Orders, Inventory, Customers, Approvals, and Users & Roles will appear here automatically.
-                      </span>
-                      {loading && (
-                        <div className="flex items-center gap-2 text-[#8b8d97] text-[12px]">
-                          <div className="w-3 h-3 border border-[#8b8d97] border-t-transparent rounded-full animate-spin"></div>
-                          Loading activities...
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    activities.activities.map((activity) => (
-                      <div key={activity.id} className="bg-[#f4f5fa] rounded-lg px-4 py-3 text-[#45464e] text-sm shadow-sm">
-                        <div className="flex items-start justify-between">
-                          <span className="flex-1">{activity.description}</span>
-                          <span className="text-[10px] text-[#8b8d97] ml-2 whitespace-nowrap">
-                            {new Date(activity.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between mt-1">
-                          <span className="text-[10px] text-[#8b8d97]">
-                            {activityCategories[activity.type] || activity.type}
-                          </span>
-                          {activity.amount && (
-                            <span className="text-[10px] text-[#519c66] font-medium">
-                              ₦{activity.amount.toLocaleString()}
-                            </span>
-                          )}
-                        </div>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <TimePeriodSelector
+                          selectedTimePeriod={selectedTimePeriod}
+                          onTimePeriodChange={handleTimePeriodChange}
+                          textColor="#8b8d97"
+                          iconColor="#8B8D97"
+                        />
                       </div>
-                    ))
-                  )}
-                </div>
-                
-                <div className="flex flex-col gap-2 w-full">
-                  <button 
-                    className="bg-[#02016a] text-white rounded-xl py-2 font-semibold w-full shadow hover:bg-[#03024a] transition-colors"
-                    onClick={(e) => e.stopPropagation()}
-                  >+ New Product</button>
-                  <button 
-                    className="bg-[#02016a] text-white rounded-xl py-2 font-semibold w-full shadow hover:bg-[#03024a] transition-colors"
-                    onClick={(e) => e.stopPropagation()}
-                  >+ Add New User</button>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {/* Summary and Activities Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 w-full mt-5">
-            {/* Summary Section - Takes 2/3 of the row, stops at Abandoned Cart alignment */}
-            <div className="lg:col-span-2">
-              <div className="bg-white rounded-xl p-5 shadow h-[190px]">
-                <div className="flex items-center justify-between mb-6">
-                  <span className="font-medium text-[#45464e] text-[16px] font-inter">Summary</span>
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[#8b8d97] text-sm">Sales</span>
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 10 6">
-                        <path d="M1 1L5 5L9 1" stroke="#8B8D97" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[#8b8d97] text-sm">Last 7 Days</span>
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 10 6">
-                        <path d="M1 1L5 5L9 1" stroke="#8B8D97" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
+                    <div className="flex justify-between">
+                      <div className="text-center">
+                        <div className="text-gray-500 text-sm">Sales</div>
+                        <div className="text-xl font-medium">₦{(salesData?.sales?.value || 0).toLocaleString()}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-gray-500 text-sm">Volume</div>
+                        <div className="text-xl font-medium">{salesData?.sales?.volume || 0}</div>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
                 
-                {/* Bar Chart */}
-                <div className="h-20 w-full">
-                  <BarChart data={[
-                    { label: "Sept 10", value: 0 },
-                    { label: "Sept 11", value: 0 },
-                    { label: "Sept 12", value: 0 },
-                    { label: "Sept 14", value: 0 },
-                    { label: "Sept 16", value: 0 },
-                    { label: "Sept 18", value: 0 }
-                  ]} />
-                </div>
-              </div>
+                {/* Customers Card */}
+                {hasAnyPermission(['customers.view', 'dashboard.view']) && (
+                  <div 
+                    className="bg-white rounded-xl p-4 shadow col-span-1 sm:col-span-1 lg:col-span-3 h-[145px]"
+                    onClick={() => router.push('/customers')}
+                  >
+                    <div className="flex justify-between items-center mb-4">
+                      <div className="w-9 h-9 bg-amber-100 rounded-lg flex items-center justify-center">
+                        <span>👥</span>
+                      </div>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <TimePeriodSelector
+                          selectedTimePeriod={selectedTimePeriod}
+                          onTimePeriodChange={handleTimePeriodChange}
+                          textColor="#8b8d97"
+                          iconColor="#8B8D97"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-between">
+                      <div className="text-center">
+                        <div className="text-gray-500 text-sm">Customers</div>
+                        <div className="text-xl font-medium">{dashboardData?.customers?.allCustomers?.value || 0}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-gray-500 text-sm">Active</div>
+                        <div className="text-xl font-medium">{dashboardData?.customers?.activeCustomers?.value || 0}</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Orders Card */}
+                {hasAnyPermission(['sales.view', 'dashboard.view']) && (
+                  <div 
+                    className="bg-white rounded-xl p-4 shadow col-span-1 sm:col-span-2 lg:col-span-4 h-[145px]"
+                    onClick={() => router.push('/orders')}
+                  >
+                    <div className="flex justify-between items-center mb-4">
+                      <div className="w-9 h-9 bg-amber-100 rounded-lg flex items-center justify-center">
+                        <span>📦</span>
+                      </div>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <TimePeriodSelector
+                          selectedTimePeriod={selectedTimePeriod}
+                          onTimePeriodChange={handleTimePeriodChange}
+                          textColor="#8b8d97"
+                          iconColor="#8B8D97"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-between">
+                      <div className="text-center">
+                        <div className="text-gray-500 text-sm">All Orders</div>
+                        <div className="text-xl font-medium">{ordersData?.allOrders?.value || 0}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-gray-500 text-sm">Pending</div>
+                        <div className="text-xl font-medium">{ordersData?.pending?.value || 0}</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-gray-500 text-sm">Completed</div>
+                        <div className="text-xl font-medium">{ordersData?.completed?.value || 0}</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
+              
+              {/* Second row */}
+              <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-10 gap-5">
+                {/* Additional cards would go here */}
+                {hasAnyPermission(['reports.view', 'dashboard.view']) && (
+                  <div className="bg-white rounded-xl p-4 shadow col-span-1 sm:col-span-1 lg:col-span-3 h-[145px]">
+                    <div className="flex justify-between items-center mb-4">
+                      <div className="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <span>📊</span>
+                      </div>
+                      <div>
+                        <TimePeriodSelector
+                          selectedTimePeriod={selectedTimePeriod}
+                          onTimePeriodChange={handleTimePeriodChange}
+                          textColor="#8b8d97"
+                          iconColor="#8B8D97"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-between">
+                      <div className="text-center">
+                        <div className="text-gray-500 text-sm">Total Profit</div>
+                        <div className="text-xl font-medium">₦0</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
+              
+              {/* Activity feed */}
+              {hasAnyPermission(['dashboard.view', 'audit.view_logs']) && (
+                <section className="bg-white rounded-xl p-4 shadow">
+                  <h2 className="text-lg font-medium mb-4">Recent Activities</h2>
+                  <div className="space-y-2">
+                    {activities && activities.activities.length > 0 ? (
+                      activities.activities.map((activity) => (
+                        <div key={activity.id} className="bg-gray-50 p-3 rounded-lg">
+                          <p>{activity.description}</p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(activity.timestamp).toLocaleString()}
+                          </p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-gray-500">No recent activities</p>
+                    )}
+                  </div>
+                </section>
+              )}
             </div>
-
-            {/* Empty space to maintain grid alignment */}
-            <div className="lg:col-span-1"></div>
-          </div>
+          )}
         </div>
       </main>
     </div>
   );
 }
-
-// SummaryCard component for reuse
-function SummaryCard({ icon, label, value, sub, filter }: { icon: string; label: string; value: string; sub: string; filter: string }) {
-  return (
-            <div className="bg-white rounded-xl p-4 flex flex-col gap-2 shadow min-w-0 min-h-[140px] h-40 justify-between items-start w-full">
-      <div className="flex items-center justify-between w-full">
-        <span className="w-7 h-7 flex items-center justify-center bg-[#eef0fa] rounded-lg">
-          <img src={icon} alt="icon" className="w-5 h-5" />
-        </span>
-        <span className="text-[#8b8d97] text-xs">{filter}</span>
-      </div>
-              <span className="text-[#8b8d97] text-[14px]">{label}</span>
-      <div className="flex items-center gap-2">
-        <span className="text-[#45464e] text-[20px] font-medium">{value}</span>
-        <span className="text-[#519c66] text-[12px]">{sub}</span>
-      </div>
-    </div>
-  );
-}
-
-// BarChart component with Y-axis labels
-function BarChart({ data }: { data: { label: string; value: number }[] }) {
-  const maxValue = 100000; // 100k as shown in reference
-  const yAxisLabels = ['100k', '80k', '60k', '40k', '20k'];
-  
-  return (
-    <div className="flex h-32 w-full">
-      {/* Y-axis labels */}
-      <div className="flex flex-col justify-between h-full pr-3">
-        {yAxisLabels.map((label, i) => (
-          <span key={i} className="text-xs text-[#8b8d97] text-right">{label}</span>
-        ))}
-      </div>
-      
-      {/* Chart area */}
-      <div className="flex-1 flex items-end gap-3 h-full">
-      {data.map((d, i) => (
-          <div key={i} className="flex flex-col items-center flex-1">
-            <div 
-              className="bg-[#5570f1] w-full rounded-full transition-all duration-300" 
-              style={{ height: `${(d.value / maxValue) * 100}%` }}
-            ></div>
-          <span className="text-xs text-[#8b8d97] mt-2">{d.label}</span>
-        </div>
-      ))}
-      </div>
-    </div>
-  );
-} 

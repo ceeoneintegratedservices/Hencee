@@ -41,6 +41,11 @@ import {
 } from "@/services/twoFactorAuth";
 import { getCategories, getWarehouses, type Category, type Warehouse } from "@/services/categories";
 import { useCloudinaryUpload } from "@/hooks/useCloudinaryUpload";
+import { nigerianStates } from "@/data/nigerianStates";
+
+// Debug: Log the states data
+console.log('Nigerian States loaded:', nigerianStates.length, 'states');
+console.log('First 5 states:', nigerianStates.slice(0, 5));
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -1037,10 +1042,16 @@ export default function SettingsPage() {
                         onChange={(e) => handleInputChange('state', e.target.value)}
                         className="block w-full pl-3 pr-8 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
                       >
-                        <option value="Lagos">Lagos</option>
-                        <option value="Abuja">Abuja</option>
-                        <option value="Kano">Kano</option>
-                        <option value="Rivers">Rivers</option>
+                        <option value="">Select a state...</option>
+                        {nigerianStates && nigerianStates.length > 0 ? (
+                          nigerianStates.map((state) => (
+                            <option key={state.code} value={state.name}>
+                              {state.name}
+                            </option>
+                          ))
+                        ) : (
+                          <option value="">Loading states...</option>
+                        )}
                       </select>
                       <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
                         <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1161,11 +1172,11 @@ export default function SettingsPage() {
                   </select>
                 </div>
                 
-                {/* Category Selection */}
+                {/* Primary Category and Primary Warehouse - COMMENTED OUT
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Primary Category</label>
                   <div className="space-y-3">
-                    {/* Category Dropdown */}
+                    Category Dropdown 
                     {!isCreatingNewCategory && (
                       <div className="relative">
                         <select
@@ -1193,7 +1204,6 @@ export default function SettingsPage() {
                       </div>
                     )}
 
-                    {/* New Category Input */}
                     {isCreatingNewCategory && (
                       <div className="space-y-2">
                         <input
@@ -1207,7 +1217,6 @@ export default function SettingsPage() {
                           <button
                             onClick={() => {
                               if (newCategoryName.trim()) {
-                                // Add the new category to the list (you might want to call an API here)
                                 const newCategory: Category = {
                                   id: `temp-${Date.now()}`,
                                   name: newCategoryName.trim(),
@@ -1239,7 +1248,6 @@ export default function SettingsPage() {
                       </div>
                     )}
 
-                    {/* Add New Category Button */}
                     {!isCreatingNewCategory && (
                       <button
                         onClick={() => setIsCreatingNewCategory(true)}
@@ -1251,11 +1259,9 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 
-                {/* Warehouse Selection */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Primary Warehouse</label>
                   <div className="space-y-3">
-                    {/* Warehouse Dropdown */}
                     {!isCreatingNewWarehouse && (
                       <div className="relative">
                         <select
@@ -1283,7 +1289,6 @@ export default function SettingsPage() {
                       </div>
                     )}
 
-                    {/* New Warehouse Input */}
                     {isCreatingNewWarehouse && (
                       <div className="space-y-2">
                         <input
@@ -1297,7 +1302,6 @@ export default function SettingsPage() {
                           <button
                             onClick={() => {
                               if (newWarehouseName.trim()) {
-                                // Add the new warehouse to the list (you might want to call an API here)
                                 const newWarehouse: Warehouse = {
                                   id: `temp-${Date.now()}`,
                                   name: newWarehouseName.trim(),
@@ -1330,7 +1334,6 @@ export default function SettingsPage() {
                       </div>
                     )}
 
-                    {/* Add New Warehouse Button */}
                     {!isCreatingNewWarehouse && (
                       <button
                         onClick={() => setIsCreatingNewWarehouse(true)}
@@ -1341,6 +1344,7 @@ export default function SettingsPage() {
                     )}
                   </div>
                 </div>
+                */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Registration Number</label>
                   <input
