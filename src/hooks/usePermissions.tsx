@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { PermissionService, PERMISSIONS, ROLES } from '@/services/permissions';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { PermissionService, getDefaultPermissions } from '@/services/permissions';
 
+// User interface
 interface User {
   id: string;
   role?: {
@@ -19,15 +20,14 @@ interface User {
   name?: string;
 }
 
+// Permission context interface
 interface PermissionsContextType {
   hasPermission: (permission: string) => boolean;
   hasAnyPermission: (permissions: string[]) => boolean;
   hasAllPermissions: (permissions: string[]) => boolean;
   hasRole: (role: string) => boolean;
   hasAnyRole: (roles: string[]) => boolean;
-  getVisibleComponents: () => string[];
-  getMenuItems: () => { key: string; label: string; permissions: string[]; icon: string }[];
-  getActionButtons: (context: string) => { key: string; label: string; permissions: string[] }[];
+  getMenuItems: () => Array<{ key: string; label: string; permissions: string[]; icon: string }>;
   initializePermissions: (user: User) => void;
   user: User | null;
   getUserRole: () => string;
@@ -35,122 +35,104 @@ interface PermissionsContextType {
   isInitialized: boolean;
 }
 
-const PermissionsContext = React.createContext<PermissionsContextType | undefined>(undefined);
+// Default permission values when no provider is available
+const defaultPermissions: PermissionsContextType = {
+  hasPermission: () => false,
+  hasAnyPermission: () => false,
+  hasAllPermissions: () => false,
+  hasRole: () => false,
+  hasAnyRole: () => false,
+  getMenuItems: () => [],
+  initializePermissions: () => {},
+  user: null,
+  getUserRole: () => '',
+  getUserPermissions: () => [],
+  isInitialized: false
+};
 
-export const PermissionsProvider = ({ children }: { children: React.ReactNode }) => {
-  const [permissionService] = useState(new PermissionService());
+// Create context with default values
+const PermissionsContext = createContext<PermissionsContextType | undefined>(undefined);
+
+// Provider component
+export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Create a single instance of the permission service
+  const [permissionService] = useState(() => new PermissionService());
   const [user, setUser] = useState<User | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
 
+  // Initialize permissions function - memoized to prevent re-renders
   const initializePermissions = useMemo(() => (userData: User) => {
     setUser(userData);
-    let roleName = "Guest";
-    let userPermissions: string[] = [];
-
+    
+    // Determine role name
+    let roleName = "guest";
     if (userData.role) {
-      roleName = typeof userData.role === 'object' ? userData.role.name || 'Guest' : userData.role;
+      roleName = typeof userData.role === 'object' ? userData.role.name || 'guest' : userData.role;
     }
-
+    
+    // Get permissions from user data or default to role-based permissions
+    let userPermissions: string[] = [];
     if (userData.permissions && userData.permissions.length > 0) {
-      // Use permissions directly from the user data
-      // Our enhanced permission checking will handle the format conversion
+      // Use permissions directly from user data
       userPermissions = userData.permissions;
-    } else if (typeof userData.role === 'object' && userData.role.permissions) {
+    } else if (typeof userData.role === 'object' && userData.role.permissions && userData.role.permissions.length > 0) {
       userPermissions = userData.role.permissions;
     } else {
-      // Fallback to default permissions based on role if no explicit permissions are provided
-      userPermissions = getDefaultPermissionsForRole(roleName);
+      // Fallback to default permissions based on role
+      userPermissions = getDefaultPermissions(roleName);
     }
-
+    
+    // Set permissions in the service
     permissionService.setUserPermissions(userPermissions, roleName);
     setIsInitialized(true);
-  }, []);
-
-  const getUserRole = useMemo(() => () => {
-    return permissionService.hasRole('') ? 'Guest' : permissionService.getUserRole();
   }, [permissionService]);
 
+  // Get user role - memoized
+  const getUserRole = useMemo(() => () => {
+    return permissionService.getUserRole();
+  }, [permissionService]);
+
+  // Get user permissions - memoized
   const getUserPermissions = useMemo(() => () => {
     return permissionService.getUserPermissions();
   }, [permissionService]);
 
-  // Define default permissions for roles if not explicitly provided by backend
-  const getDefaultPermissionsForRole = (role: string): string[] => {
-    switch (role.toLowerCase()) {
-      case 'admin':
-        return [
-          'dashboard.view', 'sales.view', 'sales.create', 'sales.edit', 'sales.delete',
-          'customers.view', 'customers.create', 'customers.edit', 'customers.delete',
-          'products.view', 'products.create', 'products.edit', 'products.delete',
-          'inventory.view', 'inventory.create', 'inventory.edit', 'inventory.delete',
-          'reports.view', 'reports.generate',
-          'users.view', 'users.create', 'users.edit', 'users.delete', 'users.manage',
-          'settings.view', 'settings.edit',
-          'audit.view_logs',
-          'expenses.view', 'expenses.create', 'expenses.edit', 'expenses.delete'
-        ];
-      case 'manager':
-        return [
-          'dashboard.view', 'sales.view', 'sales.create', 'sales.edit',
-          'customers.view', 'customers.create', 'customers.edit',
-          'products.view', 'products.create', 'products.edit',
-          'inventory.view', 'inventory.create', 'inventory.edit',
-          'reports.view', 'reports.generate',
-          'settings.view',
-          'expenses.view', 'expenses.create', 'expenses.edit'
-        ];
-      case 'sales_staff':
-        return [
-          'dashboard.view', 'sales.view', 'sales.create', 'sales.edit',
-          'customers.view', 'customers.create', 'customers.edit',
-          'products.view',
-          'inventory.view',
-          'expenses.view'
-        ];
-      case 'viewer':
-        return [
-          'dashboard.view', 'sales.view', 'customers.view', 'products.view',
-          'inventory.view', 'reports.view', 'expenses.view'
-        ];
-      default:
-        return [];
-    }
-  };
-
+  // Load user data from localStorage on mount
   useEffect(() => {
-    // Attempt to initialize permissions from localStorage on mount
-    const storedUserData = localStorage.getItem('userData');
-    if (storedUserData) {
+    const loadUserData = () => {
       try {
-        const parsedUserData: User = JSON.parse(storedUserData);
-        initializePermissions(parsedUserData);
+        const storedUserData = localStorage.getItem('userData');
+        if (storedUserData) {
+          const parsedUserData: User = JSON.parse(storedUserData);
+          initializePermissions(parsedUserData);
+        }
       } catch (error) {
-        console.error("Failed to parse user data from localStorage", error);
-        // Optionally, clear invalid data
+        console.error("Failed to load user data from localStorage", error);
         localStorage.removeItem('userData');
       }
-    }
+    };
+    
+    loadUserData();
   }, [initializePermissions]);
 
+  // Create memoized context value to prevent unnecessary re-renders
   const contextValue = useMemo(() => ({
-    hasPermission: permissionService.hasPermission.bind(permissionService),
-    hasAnyPermission: permissionService.hasAnyPermission.bind(permissionService),
-    hasAllPermissions: permissionService.hasAllPermissions.bind(permissionService),
-    hasRole: permissionService.hasRole.bind(permissionService),
-    hasAnyRole: permissionService.hasAnyRole.bind(permissionService),
-    getVisibleComponents: permissionService.getVisibleComponents.bind(permissionService),
-    getMenuItems: permissionService.getMenuItems.bind(permissionService),
-    getActionButtons: permissionService.getActionButtons.bind(permissionService),
+    hasPermission: (permission: string) => permissionService.hasPermission(permission),
+    hasAnyPermission: (permissions: string[]) => permissionService.hasAnyPermission(permissions),
+    hasAllPermissions: (permissions: string[]) => permissionService.hasAllPermissions(permissions),
+    hasRole: (role: string) => permissionService.hasRole(role),
+    hasAnyRole: (roles: string[]) => permissionService.hasAnyRole(roles),
+    getMenuItems: () => permissionService.getMenuItems(),
     initializePermissions,
     user,
     getUserRole,
     getUserPermissions,
-    isInitialized,
+    isInitialized
   }), [
     permissionService, 
     initializePermissions, 
     user, 
-    getUserRole, 
+    getUserRole,
     getUserPermissions, 
     isInitialized
   ]);
@@ -162,56 +144,16 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
   );
 };
 
+// Custom hook to use the permissions context
 export const usePermissions = () => {
-  const context = React.useContext(PermissionsContext);
-  if (context === undefined) {
-    throw new Error('usePermissions must be used within a PermissionsProvider');
-  }
-  return context;
+  const context = useContext(PermissionsContext);
+  
+  // Return context if available, otherwise return default values
+  // This prevents errors when the hook is used outside the provider
+  return context || defaultPermissions;
 };
 
-// Higher-order component for permission-based rendering
-export function withPermissions<P extends object>(
-  Component: React.ComponentType<P>,
-  requiredPermissions?: string[],
-  requiredRole?: string
-) {
-  function PermissionWrapper(props: P) {
-    const { hasAnyPermission, hasRole, isInitialized } = usePermissions();
-
-    if (!isInitialized) {
-      return <div>Loading...</div>;
-    }
-
-    // Check permissions
-    if (requiredPermissions && !hasAnyPermission(requiredPermissions)) {
-      return (
-        <div className="no-access">
-          <h2>Access Restricted</h2>
-          <p>You don't have permission to view this content.</p>
-          <p>Contact your administrator for access.</p>
-        </div>
-      );
-    }
-
-    // Check role
-    if (requiredRole && !hasRole(requiredRole)) {
-      return (
-        <div className="no-access">
-          <h2>Access Restricted</h2>
-          <p>You don't have the required role to view this content.</p>
-          <p>Contact your administrator for access.</p>
-        </div>
-      );
-    }
-
-    return <Component {...props} />;
-  }
-  
-  return PermissionWrapper;
-}
-
-// Permission guard component
+// Permission guard component for conditional rendering
 interface PermissionGuardProps {
   permissions?: string[];
   roles?: string[];
@@ -225,25 +167,67 @@ export const PermissionGuard: React.FC<PermissionGuardProps> = ({
   children,
   fallback = null
 }) => {
+  try {
   const { hasAnyPermission, hasAnyRole, isInitialized } = usePermissions();
 
   if (!isInitialized) {
-    return null; // Or a loading spinner
+      return null;
   }
 
   if (permissions && !hasAnyPermission(permissions)) {
-    return fallback;
+    return <>{fallback}</>;
   }
 
   if (roles && !hasAnyRole(roles)) {
-    return fallback;
+    return <>{fallback}</>;
   }
 
   return <>{children}</>;
+  } catch (e) {
+    // If there's an error (e.g., provider not available), render nothing
+    return null;
+  }
 };
 
-// Export constants for ease of use
-export {
-  PERMISSIONS,
-  ROLES
+// Higher-order component for permission-based component rendering
+export function withPermissions<P extends object>(
+  Component: React.ComponentType<P>,
+  requiredPermissions?: string[],
+  requiredRole?: string
+) {
+  const WrappedComponent = (props: P) => {
+    try {
+      const { hasAnyPermission, hasRole, isInitialized } = usePermissions();
+
+      if (!isInitialized) {
+        return <div className="loading">Loading permissions...</div>;
+      }
+
+      if (requiredPermissions && !hasAnyPermission(requiredPermissions)) {
+        return (
+          <div className="access-denied">
+            <h2>Access Restricted</h2>
+            <p>You don't have permission to access this content.</p>
+          </div>
+        );
+      }
+
+      if (requiredRole && !hasRole(requiredRole)) {
+        return (
+          <div className="access-denied">
+            <h2>Access Restricted</h2>
+            <p>This content requires {requiredRole} role.</p>
+          </div>
+        );
+      }
+
+      return <Component {...props} />;
+    } catch (e) {
+      // If permissions provider is not available, render a loading state
+      return <div className="loading">Initializing permissions...</div>;
+    }
+  };
+
+  WrappedComponent.displayName = `WithPermissions(${Component.displayName || Component.name || 'Component'})`;
+  return WrappedComponent;
 };
