@@ -14,7 +14,7 @@ interface SidebarProps {
 
 export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true, setSidebarOpen }: SidebarProps) {
   const router = useRouter();
-  const { getMenuItems, isInitialized, getUserPermissions } = usePermissions();
+  const { getMenuItems, isInitialized, getUserPermissions, hasPermission } = usePermissions();
 
   // Handle logout
   const handleLogout = () => {
@@ -164,7 +164,7 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
           
           {/* Settings and Logout moved up */}
           <div className="mt-8 pt-4 border-t border-gray-100">
-            {isInitialized && getUserPermissions().includes('settings.view') && (
+            {isInitialized && hasPermission('settings.view') && (
             <Link className="flex items-center gap-3 px-4 py-3 rounded-xl text-[#101828] font-medium hover:bg-[#02016a] hover:text-white transition-colors" href="/settings">
               <span className="w-5 h-5 flex items-center justify-center">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24">

@@ -42,7 +42,7 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
   const [user, setUser] = useState<User | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
 
-  const initializePermissions = (userData: User) => {
+  const initializePermissions = useMemo(() => (userData: User) => {
     setUser(userData);
     let roleName = "Guest";
     let userPermissions: string[] = [];
@@ -64,15 +64,15 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
 
     permissionService.setUserPermissions(userPermissions, roleName);
     setIsInitialized(true);
-  };
+  }, []);
 
-  const getUserRole = () => {
+  const getUserRole = useMemo(() => () => {
     return permissionService.hasRole('') ? 'Guest' : permissionService.getUserRole();
-  };
+  }, [permissionService]);
 
-  const getUserPermissions = () => {
+  const getUserPermissions = useMemo(() => () => {
     return permissionService.getUserPermissions();
-  };
+  }, [permissionService]);
 
   // Define default permissions for roles if not explicitly provided by backend
   const getDefaultPermissionsForRole = (role: string): string[] => {
@@ -130,26 +130,33 @@ export const PermissionsProvider = ({ children }: { children: React.ReactNode })
         localStorage.removeItem('userData');
       }
     }
-  }, []);
+  }, [initializePermissions]);
+
+  const contextValue = useMemo(() => ({
+    hasPermission: permissionService.hasPermission.bind(permissionService),
+    hasAnyPermission: permissionService.hasAnyPermission.bind(permissionService),
+    hasAllPermissions: permissionService.hasAllPermissions.bind(permissionService),
+    hasRole: permissionService.hasRole.bind(permissionService),
+    hasAnyRole: permissionService.hasAnyRole.bind(permissionService),
+    getVisibleComponents: permissionService.getVisibleComponents.bind(permissionService),
+    getMenuItems: permissionService.getMenuItems.bind(permissionService),
+    getActionButtons: permissionService.getActionButtons.bind(permissionService),
+    initializePermissions,
+    user,
+    getUserRole,
+    getUserPermissions,
+    isInitialized,
+  }), [
+    permissionService, 
+    initializePermissions, 
+    user, 
+    getUserRole, 
+    getUserPermissions, 
+    isInitialized
+  ]);
 
   return (
-    <PermissionsContext.Provider
-      value={{
-        hasPermission: permissionService.hasPermission.bind(permissionService),
-        hasAnyPermission: permissionService.hasAnyPermission.bind(permissionService),
-        hasAllPermissions: permissionService.hasAllPermissions.bind(permissionService),
-        hasRole: permissionService.hasRole.bind(permissionService),
-        hasAnyRole: permissionService.hasAnyRole.bind(permissionService),
-        getVisibleComponents: permissionService.getVisibleComponents.bind(permissionService),
-        getMenuItems: permissionService.getMenuItems.bind(permissionService),
-        getActionButtons: permissionService.getActionButtons.bind(permissionService),
-        initializePermissions,
-        user,
-        getUserRole,
-        getUserPermissions,
-        isInitialized,
-      }}
-    >
+    <PermissionsContext.Provider value={contextValue}>
       {children}
     </PermissionsContext.Provider>
   );
