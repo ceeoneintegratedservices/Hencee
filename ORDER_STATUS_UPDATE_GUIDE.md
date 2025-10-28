@@ -2,7 +2,7 @@
 
 ## 🎯 **Overview**
 
-This guide documents the implementation of the order status update endpoint using the `PATCH` method as requested. The endpoint allows updating order status with proper authentication and permission validation.
+This guide documents the implementation of the order status update endpoint using the `PATCH` method as requested. The endpoint allows updating order status with proper authentication and permission validation
 
 ## 📋 **Endpoint Details**
 
