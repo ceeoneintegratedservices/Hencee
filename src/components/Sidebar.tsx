@@ -77,6 +77,13 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
             <path d="M22.5 22.1499L19.75 19.3999" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         );
+      case 'approvals':
+        return (
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
+          </svg>
+        );
       case 'reports':
         return (
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24">
@@ -121,6 +128,7 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
       'sales': '/orders',
       'customers': '/customers',
       'products': '/inventory',
+      'approvals': '/approvals',
       'inventory': '/inventory',
       'reports': '/reports',
       'users': '/users-roles',
