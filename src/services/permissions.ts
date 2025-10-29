@@ -67,7 +67,8 @@ export class PermissionService {
   getMenuItems() {
     const menuItems = [
       { key: 'dashboard', label: 'Dashboard', icon: 'dashboard', permissions: ['dashboard.view'] },
-      { key: 'sales', label: 'Sales', icon: 'sales', permissions: ['sales.view'] },
+      // Use Orders as the visible label and key, but keep using sales permissions
+      { key: 'orders', label: 'Orders', icon: 'sales', permissions: ['sales.view'] },
       { key: 'customers', label: 'Customers', icon: 'customers', permissions: ['customers.view'] },
       { key: 'approvals', label: 'Approvals', icon: 'approvals', permissions: ['approvals.view'] },
       { key: 'inventory', label: 'Inventory', icon: 'inventory', permissions: ['inventory.view', 'manage_inventory'] },
@@ -154,7 +155,9 @@ export const getDefaultPermissions = (role: string): string[] => {
         PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE,
         PERMISSIONS.CUSTOMERS_VIEW, PERMISSIONS.CUSTOMERS_CREATE,
         PERMISSIONS.PRODUCTS_VIEW,
-        PERMISSIONS.INVENTORY_VIEW
+        PERMISSIONS.INVENTORY_VIEW,
+        // Allow sales staff to access Approvals
+        PERMISSIONS.APPROVALS_VIEW
       ];
     case ROLES.SUPPORT:
       return [

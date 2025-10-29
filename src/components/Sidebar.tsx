@@ -125,7 +125,9 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
   const getHref = (key: string): string => {
     const hrefMap: Record<string, string> = {
       'dashboard': '/dashboard',
+      // Support both legacy 'sales' and new 'orders' keys
       'sales': '/orders',
+      'orders': '/orders',
       'customers': '/customers',
       'products': '/inventory',
       'approvals': '/approvals',
