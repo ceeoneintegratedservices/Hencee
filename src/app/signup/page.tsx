@@ -1,7 +1,14 @@
 "use client";
-import { useState } from "react";
+
+import { useEffect, useRef, useState } from "react";
 import { API_ENDPOINTS } from "../../config/api";
 import { useRouter } from "next/navigation";
+import {
+  createRegistrationDraft,
+  getRegistrationDraft,
+  saveRegistrationDraft,
+  submitRegistrationDraft,
+} from "@/services/authDrafts";
 
 export default function SignupPage() {
   const [form, setForm] = useState({
@@ -16,6 +23,8 @@ export default function SignupPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [showVerifyLink, setShowVerifyLink] = useState(false);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const router = useRouter();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -24,9 +33,55 @@ export default function SignupPage() {
     setSuccess("");
   };
 
+  // Load existing draft on mount
+  useEffect(() => {
+    const existingId = typeof window !== 'undefined' ? localStorage.getItem('registrationDraftId') : null;
+    if (!existingId) return;
+    setDraftId(existingId);
+    (async () => {
+      try {
+        const draft = await getRegistrationDraft(existingId);
+        if (draft?.data) setForm((prev) => ({ ...prev, ...draft.data }));
+      } catch {}
+    })();
+  }, []);
+
+  // Debounced autosave whenever form changes
+  useEffect(() => {
+    if (!form.email) return; // require email as key
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        if (!draftId) {
+          const created = await createRegistrationDraft(form.email, form, 1);
+          setDraftId(created.id);
+          localStorage.setItem('registrationDraftId', created.id);
+        } else {
+          await saveRegistrationDraft(draftId, form.email, form, 1);
+        }
+      } catch {}
+    }, 800);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, [form, draftId]);
+
+  const handleSaveDraftNow = async () => {
+    try {
+      if (!form.email) return;
+      if (!draftId) {
+        const created = await createRegistrationDraft(form.email, form, 1);
+        setDraftId(created.id);
+        localStorage.setItem('registrationDraftId', created.id);
+      } else {
+        await saveRegistrationDraft(draftId, form.email, form, 1);
+      }
+      setSuccess('Draft saved. You can continue later.');
+    } catch {
+      setError('Failed to save draft. Please try again.');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     // Validate password match
     if (form.password !== form.confirmPassword) {
       setError("Passwords do not match. Please try again.");
@@ -38,33 +93,38 @@ export default function SignupPage() {
     setSuccess("");
     setShowVerifyLink(false);
     try {
-      const res = await fetch(API_ENDPOINTS.register, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.name,
-          email: form.email,
-          phone: form.phone,
-          staffRole: form.staffRole,
-          password: form.password,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.message || "Registration failed.");
+      if (draftId) {
+        await submitRegistrationDraft(draftId);
+        localStorage.removeItem('registrationDraftId');
       } else {
-        setSuccess("Account created! Please check your email to verify your account.");
-        // Try to redirect to verify-email page after a short delay
-        setTimeout(() => {
-          try {
-            router.push(`/verify-email?email=${encodeURIComponent(form.email)}`);
-          } catch {
-            setShowVerifyLink(true);
-          }
-        }, 1200);
-        // Also show the link in case redirect fails
-        setShowVerifyLink(true);
+        const res = await fetch(API_ENDPOINTS.register, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: form.name,
+            email: form.email,
+            phone: form.phone,
+            staffRole: form.staffRole,
+            password: form.password,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setError(data.message || "Registration failed.");
+          setLoading(false);
+          return;
+        }
       }
+
+      setSuccess("Account created! Please check your email to verify your account.");
+      setTimeout(() => {
+        try {
+          router.push(`/verify-email?email=${encodeURIComponent(form.email)}`);
+        } catch {
+          setShowVerifyLink(true);
+        }
+      }, 1200);
+      setShowVerifyLink(true);
     } catch (err) {
       setError("An error occurred. Please try again.");
     } finally {
@@ -147,6 +207,13 @@ export default function SignupPage() {
             disabled={loading}
           >
             {loading ? "Creating..." : "Create account"}
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveDraftNow}
+            className="border rounded px-4 py-2 font-semibold"
+          >
+            Save as draft
           </button>
         </form>
         <button className="w-full mt-4 flex items-center justify-center gap-2 border rounded px-4 py-2 bg-white hover:bg-gray-50">
