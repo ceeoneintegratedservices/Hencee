@@ -38,6 +38,8 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
 
   // Get permission-based menu items
   const menuItems = permissions.isInitialized ? permissions.getMenuItems() : [];
+  // Exclude Settings from the main group; render it near Logout instead
+  const mainMenuItems = menuItems.filter((item: any) => item.key !== 'settings');
 
   // Icon mapping function
   const getIcon = (iconName: string) => {
@@ -178,7 +180,7 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
         {/* Menu - Scrollable area */}
         <nav className="flex flex-col gap-4 mt-6 px-6 flex-1 overflow-y-auto">
           {/* Dynamic menu items based on permissions */}
-          {menuItems.map((item) => (
+          {mainMenuItems.map((item) => (
             <Link
               key={item.key}
               href={getHref(item.key)}

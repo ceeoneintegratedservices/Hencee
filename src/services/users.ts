@@ -120,6 +120,51 @@ export async function updateUser(id: string, payload: UpdateUserPayload): Promis
 }
 
 /**
+ * Assign a role to a user (backend: PUT /users/:id/role)
+ */
+export async function assignUserRole(userId: string, roleId: string): Promise<User> {
+  try {
+    const url = `${API_ENDPOINTS.users}/${encodeURIComponent(userId)}/role`;
+    const res = await authFetch(url, {
+      method: "PUT",
+      body: JSON.stringify({ roleId })
+    });
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Activate a user (backend: PUT /users/:id/activate)
+ */
+export async function activateUser(userId: string): Promise<User> {
+  try {
+    const url = `${API_ENDPOINTS.users}/${encodeURIComponent(userId)}/activate`;
+    const res = await authFetch(url, { method: "PUT" });
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Deactivate a user (backend: PUT /users/:id/deactivate)
+ */
+export async function deactivateUser(userId: string): Promise<User> {
+  try {
+    const url = `${API_ENDPOINTS.users}/${encodeURIComponent(userId)}/deactivate`;
+    const res = await authFetch(url, { method: "PUT" });
+    const data = await res.json();
+    return data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
  * Delete a user
  */
 export async function deleteUser(id: string): Promise<void> {

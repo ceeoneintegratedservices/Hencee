@@ -6,7 +6,8 @@ import Header from '@/components/Header';
 import Breadcrumb from '@/components/Breadcrumb';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import TimePeriodSelector from '@/components/TimePeriodSelector';
-import { listUsers, createUser, updateUser, deleteUser, type User as APIUser } from '@/services/users';
+import { listUsers, createUser, updateUser, deleteUser, assignUserRole, activateUser, deactivateUser, type User as APIUser } from '@/services/users';
+import { listRoles as apiListRoles, saveUserPermissions, type RoleSummary } from '@/services/permissions';
 
 interface Role {
   id: string;
@@ -173,10 +174,24 @@ export default function UsersRolesPage() {
     }
   };
 
+  // Fetch roles from API
+  const fetchRoles = async () => {
+    try {
+      const apiRoles: RoleSummary[] = await apiListRoles();
+      if (apiRoles && apiRoles.length) {
+        const mapped: Role[] = apiRoles.map(r => ({ id: r.id, name: r.name, description: r.description }));
+        setRoles(mapped);
+        // Default selected role = first API role
+        setSelectedRoleId(mapped[0]?.id || '');
+      }
+    } catch {}
+  };
+
   // Load users when authenticated
   useEffect(() => {
     if (isAuthenticated) {
       fetchUsers();
+      fetchRoles();
     }
   }, [isAuthenticated]);
 
@@ -325,9 +340,14 @@ export default function UsersRolesPage() {
     }));
   };
 
-  const handleAssignRole = (userId: string, roleId: string) => {
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, roleId } : u));
-    showSuccess('Updated', 'User role updated');
+  const handleAssignRole = async (userId: string, roleId: string) => {
+    try {
+      await assignUserRole(userId, roleId);
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, roleId } : u));
+      showSuccess('Updated', 'User role updated');
+    } catch (e: any) {
+      // no-op; you could show an error toast if desired
+    }
   };
 
   // Bulk permission helpers
@@ -555,9 +575,19 @@ export default function UsersRolesPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <button
-                          onClick={() => {
-                            setUsers(prev => prev.map(x => x.id === u.id ? { ...x, status: x.status === 'Active' ? 'Inactive' : 'Active' } : x));
-                            showSuccess('Updated', 'User status changed');
+                          onClick={async () => {
+                            const isCurrentlyActive = u.status === 'Active';
+                            try {
+                              if (isCurrentlyActive) {
+                                await deactivateUser(u.id);
+                                setUsers(prev => prev.map(x => x.id === u.id ? { ...x, status: 'Inactive' } : x));
+                                showSuccess('Updated', 'User deactivated');
+                              } else {
+                                await activateUser(u.id);
+                                setUsers(prev => prev.map(x => x.id === u.id ? { ...x, status: 'Active' } : x));
+                                showSuccess('Updated', 'User activated');
+                              }
+                            } catch (e: any) {}
                           }}
                           className="px-3 py-1.5 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
                         >
@@ -597,6 +627,16 @@ export default function UsersRolesPage() {
                 <h3 className="text-lg font-semibold text-gray-900">{selectedUser.name}</h3>
               </div>
               <div className="flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    const overrides = userPermissionOverrides[selectedUser.id] || {};
+                    await saveUserPermissions(selectedUser.id, overrides);
+                    showSuccess('Saved', 'Permissions updated');
+                  }}
+                  className="px-3 py-1.5 text-sm border border-blue-600 text-blue-600 rounded hover:bg-blue-50"
+                >
+                  Save
+                </button>
                 <button onClick={() => resetUserPermissionsToRole(selectedUser)} className="px-3 py-1.5 text-sm border border-gray-300 rounded hover:bg-gray-50">Reset to role</button>
                 <button onClick={() => setShowUserPermissions(false)} className="p-2 rounded hover:bg-gray-100" aria-label="Close">
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>

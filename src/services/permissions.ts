@@ -1,3 +1,5 @@
+import { API_ENDPOINTS } from "@/config/api";
+import { authFetch } from "./authFetch";
 // Permission service for handling role-based access control
 export class PermissionService {
   private userPermissions: string[] = [];
@@ -83,6 +85,37 @@ export class PermissionService {
   }
 }
 
+// ===== Roles API helpers =====
+export interface RoleSummary {
+  id: string;
+  name: string;
+  description?: string;
+  roleType?: string;
+}
+
+export async function listRoles(): Promise<RoleSummary[]> {
+  try {
+    const res = await authFetch(API_ENDPOINTS.permissionsRoles);
+    const data = await res.json();
+    if (Array.isArray(data)) return data as RoleSummary[];
+    if (Array.isArray((data as any)?.roles)) return (data as any).roles as RoleSummary[];
+    return [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export async function saveUserPermissions(userId: string, permissions: Record<string, boolean>): Promise<void> {
+  try {
+    await authFetch(API_ENDPOINTS.permissionsUserPermissions, {
+      method: 'PUT',
+      body: JSON.stringify({ userId, permissions })
+    });
+  } catch (e) {
+    // swallow to avoid breaking UI; caller may show error
+  }
+}
+
 // Permission constants
 export const PERMISSIONS = {
   DASHBOARD_VIEW: 'dashboard.view',
@@ -115,6 +148,7 @@ export const PERMISSIONS = {
 export const ROLES = {
   ADMIN: 'admin',
   MANAGER: 'manager',
+  MANAGING_DIRECTOR: 'managing_director',
   SALES: 'sales_staff',
   SUPPORT: 'technical_support',
   VIEWER: 'viewer'
@@ -138,6 +172,19 @@ export const getDefaultPermissions = (role: string): string[] => {
         PERMISSIONS.EXPENSES_VIEW
       ];
     case ROLES.MANAGER:
+      return [
+        PERMISSIONS.DASHBOARD_VIEW,
+        PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_EDIT,
+        PERMISSIONS.CUSTOMERS_VIEW, PERMISSIONS.CUSTOMERS_CREATE, PERMISSIONS.CUSTOMERS_EDIT,
+        PERMISSIONS.APPROVALS_VIEW,
+        PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT,
+        PERMISSIONS.INVENTORY_VIEW,
+        PERMISSIONS.REPORTS_VIEW,
+        PERMISSIONS.SETTINGS_VIEW,
+        PERMISSIONS.EXPENSES_VIEW
+      ];
+    case ROLES.MANAGING_DIRECTOR:
+      // Mirror manager defaults to ensure access to Expenses page
       return [
         PERMISSIONS.DASHBOARD_VIEW,
         PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_EDIT,

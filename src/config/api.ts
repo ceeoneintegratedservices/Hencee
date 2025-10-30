@@ -13,6 +13,10 @@ export const API_ENDPOINTS = {
   passwordReset: `${API_BASE_URL}/auth/password-reset`,
   passwordResetConfirm: `${API_BASE_URL}/auth/password-reset/confirm`,
   changePassword: `${API_BASE_URL}/auth/change-password`,
+  // Registration drafts
+  registrationDrafts: `${API_BASE_URL}/auth/registration-drafts`,
+  registrationDraftById: (id: string) => `${API_BASE_URL}/auth/registration-drafts/${id}`,
+  registrationDraftSubmit: (id: string) => `${API_BASE_URL}/auth/registration-drafts/${id}/submit`,
   deactivateUser: (id: string) => `${API_BASE_URL}/auth/users/${id}/deactivate`,
   deleteUser: (id: string) => `${API_BASE_URL}/auth/users/${id}`,
   

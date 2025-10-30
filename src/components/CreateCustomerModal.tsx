@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { nigerianStates } from "@/data/nigerianStates";
 
 interface CreateCustomerModalProps {
   isOpen: boolean;
@@ -215,12 +216,9 @@ export default function CreateCustomerModal({ isOpen, onClose, onCreate }: Creat
                   className="block w-full pl-3 pr-8 py-3 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
                 >
                   <option value="">Select State</option>
-                  <option value="Lagos">Lagos</option>
-                  <option value="Abuja">Abuja</option>
-                  <option value="Kano">Kano</option>
-                  <option value="Rivers">Rivers</option>
-                  <option value="Ogun">Ogun</option>
-                  <option value="Oyo">Oyo</option>
+                  {nigerianStates.map((s) => (
+                    <option key={s.code} value={s.name}>{s.name}</option>
+                  ))}
                 </select>
                 <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
                   <svg className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
