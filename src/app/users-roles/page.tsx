@@ -179,7 +179,11 @@ export default function UsersRolesPage() {
     try {
       const apiRoles: RoleSummary[] = await apiListRoles();
       if (apiRoles && apiRoles.length) {
-        const mapped: Role[] = apiRoles.map(r => ({ id: r.id, name: r.name, description: r.description }));
+        const mapped: Role[] = apiRoles.map((r: any) => {
+          const id = r?.id || r?.roleId || r?.type || r?.roleType || r?.name;
+          const name = r?.roleType || r?.type || r?.name || id;
+          return { id: String(id), name: String(name), description: r?.description } as Role;
+        }).filter(r => !!r.id && !!r.name);
         setRoles(mapped);
         // Default selected role = first API role
         setSelectedRoleId(mapped[0]?.id || '');

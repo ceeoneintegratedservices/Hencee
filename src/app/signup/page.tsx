@@ -9,6 +9,7 @@ import {
   saveRegistrationDraft,
   submitRegistrationDraft,
 } from "@/services/authDrafts";
+import { listRoles as apiListRoles, type RoleSummary } from "@/services/permissions";
 
 export default function SignupPage() {
   const [form, setForm] = useState({
@@ -19,6 +20,8 @@ export default function SignupPage() {
     password: "",
     confirmPassword: "",
   });
+  const [roleOptions, setRoleOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [rolesLoading, setRolesLoading] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -43,6 +46,29 @@ export default function SignupPage() {
         const draft = await getRegistrationDraft(existingId);
         if (draft?.data) setForm((prev) => ({ ...prev, ...draft.data }));
       } catch {}
+    })();
+  }, []);
+
+  // Fetch roles for dropdown
+  useEffect(() => {
+    (async () => {
+      setRolesLoading(true);
+      try {
+        const apiRoles: RoleSummary[] = await apiListRoles();
+        const mapped = (apiRoles || []).map((r: any) => {
+          const type = r?.type || r?.roleType || r?.name;
+          const name = r?.name || type;
+          return { id: String(type), name };
+        }).filter(r => !!r.id && !!r.name);
+        setRoleOptions(mapped);
+        // If no role preselected, default to first
+        if (!form.staffRole && mapped[0]) {
+          setForm(prev => ({ ...prev, staffRole: mapped[0].id }));
+        }
+      } catch {}
+      finally {
+        setRolesLoading(false);
+      }
     })();
   }, []);
 
@@ -171,15 +197,10 @@ export default function SignupPage() {
             onChange={handleChange}
             required
           >
-            <option value="">Select role of staff</option>
-            <option value="managing_director">Managing Director</option>
-            <option value="sales_representative">Sales Representative</option>
-            <option value="general_manager">General Manager</option>
-            <option value="book_storekeeper">Book/storekeeper</option>
-            <option value="technical_support">Technical Support</option>
-            <option value="auditor">Auditor</option>
-            <option value="human_resources">Human Resources</option>
-            <option value="accountant">Accountant</option>
+            <option value="">{rolesLoading ? 'Loading roles...' : 'Select role of staff'}</option>
+            {roleOptions.map(r => (
+              <option key={r.id} value={r.id}>{r.name}</option>
+            ))}
           </select>
           <input
             name="password"
