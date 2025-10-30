@@ -27,7 +27,11 @@ interface AppUser {
   name: string;
   email: string;
   status: 'Active' | 'Inactive';
-  roleId: string;
+  roleId: string; // value used by <select>
+  // raw role info from API for reconciliation
+  roleUuid?: string;
+  roleSlug?: string;
+  roleType?: string;
 }
 
 const PERMISSION_ENTITIES = [
@@ -151,7 +155,10 @@ export default function UsersRolesPage() {
         name: user.name, // API already provides name field
         email: user.email,
         status: user.isActive ? 'Active' : 'Inactive',
-        roleId: user.role?.id || 'admin' // Use role.id from the role object
+        roleId: (user as any)?.role?.id || (user as any)?.role?.name || 'admin',
+        roleUuid: (user as any)?.role?.id,
+        roleSlug: (user as any)?.role?.name,
+        roleType: (user as any)?.role?.roleType
       }));
       
       setUsers(transformedUsers);
@@ -199,6 +206,31 @@ export default function UsersRolesPage() {
     }
   }, [isAuthenticated]);
 
+  // Reconcile user.roleId with loaded roles once roles arrive
+  useEffect(() => {
+    if (!roles.length || !users.length) return;
+    setUsers(prev => prev.map(u => {
+      // If current roleId matches an option, keep it
+      if (roles.some(r => r.id === u.roleId)) return u;
+      // Prefer UUID match
+      if (u.roleUuid) {
+        const matchByUuid = roles.find(r => r.id === u.roleUuid);
+        if (matchByUuid) return { ...u, roleId: matchByUuid.id };
+      }
+      // Try roleType (e.g., "HR", "Admin", "GM")
+      if (u.roleType) {
+        const matchByType = roles.find(r => r.name === u.roleType || r.name?.toLowerCase() === u.roleType?.toLowerCase());
+        if (matchByType) return { ...u, roleId: matchByType.id };
+      }
+      // Try slug (e.g., "human_resources")
+      if (u.roleSlug) {
+        const matchBySlug = roles.find(r => r.name?.toLowerCase() === u.roleSlug?.toLowerCase());
+        if (matchBySlug) return { ...u, roleId: matchBySlug.id };
+      }
+      return u;
+    }));
+  }, [roles, users.length]);
+
   // Load saved state
   useEffect(() => {
     const raw = localStorage.getItem('usersRolesState');
@@ -210,13 +242,6 @@ export default function UsersRolesPage() {
           const filteredRoles = parsed.roles.filter((r: Role) => r.id !== 'viewer');
           setRoles(filteredRoles);
         }
-        if (parsed.users) {
-          // Reassign any users with viewer roleId to admin
-          const updatedUsers = parsed.users.map((u: AppUser) => 
-            u.roleId === 'viewer' ? { ...u, roleId: 'admin' } : u
-          );
-          setUsers(updatedUsers);
-        }
         if (parsed.permissionMatrix) setPermissionMatrix(parsed.permissionMatrix);
         if (parsed.userPermissionOverrides) setUserPermissionOverrides(parsed.userPermissionOverrides);
       } catch {}
@@ -225,7 +250,8 @@ export default function UsersRolesPage() {
 
   // Persist
   useEffect(() => {
-    localStorage.setItem('usersRolesState', JSON.stringify({ roles, users, permissionMatrix, userPermissionOverrides }));
+    // Do not persist users to avoid stale roleIds overriding API values
+    localStorage.setItem('usersRolesState', JSON.stringify({ roles, permissionMatrix, userPermissionOverrides }));
   }, [roles, users, permissionMatrix, userPermissionOverrides]);
 
   // Role management actions (still available for admin use via creation/clone/delete; hidden from main layout)
