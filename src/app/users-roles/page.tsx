@@ -181,24 +181,33 @@ export default function UsersRolesPage() {
     }
   };
 
-  // Fetch roles from API
+  // Fetch roles from API - now includes UUID id field
   const fetchRoles = async () => {
     try {
       const apiRoles: RoleSummary[] = await apiListRoles();
       if (apiRoles && apiRoles.length) {
+        // Map roles using UUID id from the API response
+        // The API now provides id (UUID), type, name, and description
         const mapped: Role[] = apiRoles.map((r: any) => {
-          const id = r?.id || r?.roleId || r?.type || r?.roleType || r?.name;
-          const name = r?.roleType || r?.type || r?.name || id;
-          return { id: String(id), name: String(name), description: r?.description } as Role;
-        }).filter(r => !!r.id && !!r.name);
-        setRoles(mapped);
-        // Default selected role = first API role
-        setSelectedRoleId(mapped[0]?.id || '');
+          const id = r?.id; // UUID from API
+          const name = r?.type || r?.roleType || r?.name || 'Unknown Role'; // Display name
+          
+          // Ensure we have a valid UUID
+          if (id && typeof id === 'string') {
+            return { id: String(id), name: String(name), description: r?.description } as Role;
+          }
+          return null;
+        }).filter((r): r is Role => r !== null && !!r.id && !!r.name);
+        
+        if (mapped.length > 0) {
+          setRoles(mapped);
+          setSelectedRoleId(mapped[0]?.id || '');
+        }
       }
     } catch {}
   };
 
-  // Load users when authenticated
+  // Load users and roles when authenticated
   useEffect(() => {
     if (isAuthenticated) {
       fetchUsers();
