@@ -8,6 +8,8 @@ import { OrderDataService, Order } from "@/services/OrderDataService";
 import { NotificationContainer, useNotifications } from "@/components/Notification";
 import { updateOrderStatus, getOrderById } from "@/services/orders";
 import { getSalesByCustomer, Sale } from "@/services/sales";
+import CreateRefundRequestDialog from "@/components/sales/CreateRefundRequestDialog";
+import { usePermissions } from "@/hooks/usePermissions";
 
 function ViewOrderContent() {
   const router = useRouter();
@@ -34,6 +36,11 @@ function ViewOrderContent() {
   const [loading, setLoading] = useState(true);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showItemStatusDropdown, setShowItemStatusDropdown] = useState<number | null>(null);
+  const [refundDialogOpen, setRefundDialogOpen] = useState(false);
+  const { hasPermission } = usePermissions();
+  
+  // Check if user can create refund requests
+  const canCreateRefund = hasPermission('create_sales') || hasPermission('sales.create') || hasPermission('refund.create');
 
 
   // Load order data using the real API
@@ -463,9 +470,20 @@ function ViewOrderContent() {
                     </svg>
                   </button>
                 )}
-                {(order.status === "Completed" || order.status === "Cancelled") && (
+                {order.status === "Completed" && canCreateRefund && (
+                  <button
+                    onClick={() => setRefundDialogOpen(true)}
+                    className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2"
+                  >
+                    Request Refund
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1h-2m2 0h2" />
+                    </svg>
+                  </button>
+                )}
+                {order.status === "Cancelled" && (
                   <div className="text-sm text-gray-500 italic">
-                    {order.status === "Completed" ? "Order completed" : "Order cancelled"}
+                    Order cancelled
                   </div>
                 )}
               </div>
@@ -869,6 +887,20 @@ function ViewOrderContent() {
             </div>
           )}
         </div>
+        
+        {/* Refund Request Dialog */}
+        {order && (
+          <CreateRefundRequestDialog
+            saleId={order.id}
+            saleAmount={order.totalAmount}
+            open={refundDialogOpen}
+            onOpenChange={setRefundDialogOpen}
+            onSuccess={() => {
+              // Refresh order data or show success message
+              showSuccess('Success', 'Refund request submitted successfully');
+            }}
+          />
+        )}
       </main>
     </div>
   );

@@ -72,7 +72,7 @@ export class PermissionService {
       // Use Orders as the visible label and key, but keep using sales permissions
       { key: 'orders', label: 'Orders', icon: 'sales', permissions: ['sales.view'] },
       { key: 'customers', label: 'Customers', icon: 'customers', permissions: ['customers.view'] },
-      { key: 'approvals', label: 'Approvals', icon: 'approvals', permissions: ['approvals.view'] },
+      { key: 'approvals', label: 'Approvals', icon: 'approvals', permissions: ['approvals.view', 'approval.view_requests', 'approve.payment_request', 'approve.invoice_request', 'approve.refund', 'approve.user_accounts', 'approve.daily_expense', 'approve.void'] },
       { key: 'inventory', label: 'Inventory', icon: 'inventory', permissions: ['inventory.view', 'manage_inventory'] },
       { key: 'reports', label: 'Reports', icon: 'reports', permissions: ['reports.view'] },
       { key: 'users', label: 'Users & Roles', icon: 'users', permissions: ['users.view'] },

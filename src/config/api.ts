@@ -97,6 +97,18 @@ export const API_ENDPOINTS = {
   approvalApprove: (id: string) => `${API_BASE_URL}/approvals/${id}/approve`,
   approvalReject: (id: string) => `${API_BASE_URL}/approvals/${id}/reject`,
   approvalMarkPaid: (id: string) => `${API_BASE_URL}/approvals/${id}/mark-paid`,
+  // Account approval endpoints
+  accountApprovals: `${API_BASE_URL}/approvals/accounts`,
+  accountApprovalsPending: `${API_BASE_URL}/approvals/accounts/pending`,
+  accountApprovalApprove: (userId: string) => `${API_BASE_URL}/approvals/accounts/${userId}/approve`,
+  accountApprovalReject: (userId: string) => `${API_BASE_URL}/approvals/accounts/${userId}/reject`,
+  // Refund approval endpoints
+  refundApprovals: `${API_BASE_URL}/approvals/refunds`,
+  refundApprovalsPending: `${API_BASE_URL}/approvals/refunds/pending`,
+  refundApprovalById: (id: string) => `${API_BASE_URL}/approvals/refunds/${id}`,
+  refundApprovalApprove: (id: string) => `${API_BASE_URL}/approvals/refunds/${id}/approve`,
+  refundApprovalReject: (id: string) => `${API_BASE_URL}/approvals/refunds/${id}/reject`,
+  refundApprovalMarkProcessed: (id: string) => `${API_BASE_URL}/approvals/refunds/${id}/mark-processed`,
   
   // Permission endpoints
   permissionsTest: `${API_BASE_URL}/permissions/test`,

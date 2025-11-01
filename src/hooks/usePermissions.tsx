@@ -70,9 +70,31 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
       roleName = typeof userData.role === 'object' ? userData.role.name || 'guest' : userData.role;
     }
     
+    // Try to get permissions from JWT token first (most up-to-date)
+    let tokenPermissions: string[] = [];
+    try {
+      const token = localStorage.getItem('authToken');
+      if (token) {
+        // Decode JWT token to get permissions
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          const payload = JSON.parse(atob(parts[1]));
+          if (payload.permissions && Array.isArray(payload.permissions)) {
+            tokenPermissions = payload.permissions;
+          }
+        }
+      }
+    } catch (e) {
+      // If JWT decode fails, continue with other methods
+      console.warn('Failed to decode JWT token for permissions:', e);
+    }
+    
     // Get permissions from user data or default to role-based permissions
     let userPermissions: string[] = [];
-    if (userData.permissions && userData.permissions.length > 0) {
+    // Prefer JWT token permissions as they're most current, then user permissions, then role permissions
+    if (tokenPermissions.length > 0) {
+      userPermissions = tokenPermissions;
+    } else if (userData.permissions && userData.permissions.length > 0) {
       // Use permissions directly from user data
       userPermissions = userData.permissions;
     } else if (typeof userData.role === 'object' && userData.role.permissions && userData.role.permissions.length > 0) {
@@ -80,6 +102,25 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     } else {
       // Fallback to default permissions based on role
       userPermissions = getDefaultPermissions(roleName);
+    }
+    
+    // For admin users, ensure they have approval permissions even if not in the list
+    // This handles cases where the backend hasn't included all admin permissions
+    if (roleName.toLowerCase() === 'admin' && !userPermissions.some(p => 
+      p.includes('approval') || p.includes('approve') || p === 'approvals.view'
+    )) {
+      // Add approval permissions for admin if missing
+      userPermissions = [
+        ...userPermissions,
+        'approval.view_requests',
+        'approve.payment_request',
+        'approve.invoice_request',
+        'approve.refund',
+        'approve.user_accounts',
+        'approve.daily_expense',
+        'approve.void',
+        'approvals.view'
+      ];
     }
     
     // Set permissions in the service
