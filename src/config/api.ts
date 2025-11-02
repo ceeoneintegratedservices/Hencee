@@ -16,6 +16,7 @@ export const API_ENDPOINTS = {
   // Registration drafts
   registrationDrafts: `${API_BASE_URL}/auth/registration-drafts`,
   registrationDraftById: (id: string) => `${API_BASE_URL}/auth/registration-drafts/${id}`,
+  registrationDraftByEmail: (email: string) => `${API_BASE_URL}/auth/registration-drafts?email=${encodeURIComponent(email)}`,
   registrationDraftSubmit: (id: string) => `${API_BASE_URL}/auth/registration-drafts/${id}/submit`,
   deactivateUser: (id: string) => `${API_BASE_URL}/auth/users/${id}/deactivate`,
   deleteUser: (id: string) => `${API_BASE_URL}/auth/users/${id}`,

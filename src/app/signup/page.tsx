@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   createRegistrationDraft,
   getRegistrationDraft,
+  getRegistrationDraftByEmail,
   saveRegistrationDraft,
   submitRegistrationDraft,
 } from "@/services/authDrafts";
@@ -26,6 +27,10 @@ export default function SignupPage() {
   const [success, setSuccess] = useState("");
   const [showVerifyLink, setShowVerifyLink] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
+  const [showContinueModal, setShowContinueModal] = useState(false);
+  const [continueEmail, setContinueEmail] = useState("");
+  const [continueLoading, setContinueLoading] = useState(false);
+  const [continueError, setContinueError] = useState("");
   const saveTimerRef = useRef<NodeJS.Timeout | null>(null);
   const router = useRouter();
 
@@ -35,7 +40,7 @@ export default function SignupPage() {
     setSuccess("");
   };
 
-  // Load existing draft on mount
+  // Load existing draft on mount from localStorage
   useEffect(() => {
     const existingId = typeof window !== 'undefined' ? localStorage.getItem('registrationDraftId') : null;
     if (!existingId) return;
@@ -47,6 +52,7 @@ export default function SignupPage() {
       } catch {}
     })();
   }, []);
+
 
   // Fetch roles for dropdown or use default roles if API fails
   useEffect(() => {
@@ -69,7 +75,7 @@ export default function SignupPage() {
               id: String(r.id),  // Use the actual UUID from the API
               name: displayName  // Display name (roleType preferred, fallback to name)
             };
-          }).filter(r => !!r.id && !!r.name);
+          }).filter((r: { id: string; name: string }) => !!r.id && !!r.name);
           
           if (mapped.length > 0) {
             setRoleOptions(mapped);
@@ -145,6 +151,34 @@ export default function SignupPage() {
     }
   };
 
+  const handleContinueRegistration = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setContinueLoading(true);
+    setContinueError("");
+    
+    try {
+      const draft = await getRegistrationDraftByEmail(continueEmail);
+      
+      if (draft && !draft.isSubmitted) {
+        // Draft found - load it
+        setDraftId(draft.id);
+        localStorage.setItem('registrationDraftId', draft.id);
+        if (draft.data) {
+          setForm((prev) => ({ ...prev, ...draft.data }));
+        }
+        setShowContinueModal(false);
+        setContinueEmail("");
+        setSuccess('Draft loaded! Continue where you left off.');
+      } else {
+        setContinueError('No draft found for this email address.');
+      }
+    } catch (err) {
+      setContinueError('Failed to fetch draft. Please try again.');
+    } finally {
+      setContinueLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     // Validate password match
@@ -208,7 +242,19 @@ export default function SignupPage() {
     <div className="min-h-screen flex items-center justify-center bg-[#f7f7f8]">
       <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-md">
         <h2 className="text-2xl font-bold mb-2 text-center">Create an account</h2>
-        <p className="text-center mb-6 text-gray-600">Welcome! Select a method to Start:</p>
+        <p className="text-center mb-4 text-gray-600">Welcome! Select a method to Start:</p>
+        
+        {/* Continue Registration Button */}
+        <button
+          type="button"
+          onClick={() => setShowContinueModal(true)}
+          className="w-full mb-4 flex items-center justify-center gap-2 border-2 border-blue-600 text-blue-600 rounded px-4 py-2 bg-white hover:bg-blue-50 font-semibold"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          Continue Registration
+        </button>
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
           <input
             name="name"
@@ -286,6 +332,7 @@ export default function SignupPage() {
         <button className="w-full mt-4 flex items-center justify-center gap-2 border rounded px-4 py-2 bg-white hover:bg-gray-50">
           <img src="/icons/google.svg" alt="Google" className="w-5 h-5" /> Sign up with Google
         </button>
+        
         {error && <div className="mt-4 text-red-600 text-center">{error}</div>}
         {success && (
           <div className="mt-4 text-green-600 text-center">
@@ -301,6 +348,71 @@ export default function SignupPage() {
           Already have an account? <a href="/login" className="text-blue-600 font-semibold">Log in</a>
         </div>
       </div>
+
+      {/* Continue Registration Modal */}
+      {showContinueModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Continue Registration</h3>
+              <button
+                onClick={() => {
+                  setShowContinueModal(false);
+                  setContinueEmail("");
+                  setContinueError("");
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <p className="text-gray-600 mb-4">
+              Enter the email address you used to start your registration. We'll fetch your saved progress.
+            </p>
+            
+            <form onSubmit={handleContinueRegistration}>
+              <input
+                type="email"
+                placeholder="Enter your email"
+                className="w-full border rounded px-3 py-2 mb-4"
+                value={continueEmail}
+                onChange={(e) => setContinueEmail(e.target.value)}
+                required
+              />
+              
+              {continueError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-600 text-sm">
+                  {continueError}
+                </div>
+              )}
+              
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  disabled={continueLoading}
+                  className="flex-1 bg-blue-600 text-white rounded px-4 py-2 font-semibold hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {continueLoading ? 'Loading...' : 'Fetch Draft'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowContinueModal(false);
+                    setContinueEmail("");
+                    setContinueError("");
+                  }}
+                  className="flex-1 border border-gray-300 text-gray-700 rounded px-4 py-2 font-semibold hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

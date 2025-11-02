@@ -25,6 +25,17 @@ export async function getRegistrationDraft(id: string): Promise<RegistrationDraf
   return res.json();
 }
 
+export async function getRegistrationDraftByEmail(email: string): Promise<RegistrationDraft | null> {
+  const res = await authFetch(API_ENDPOINTS.registrationDraftByEmail(email));
+  if (!res.ok) return null;
+  const data = await res.json();
+  // API returns an array of drafts, get the most recent one
+  if (Array.isArray(data) && data.length > 0) {
+    return data[0];
+  }
+  return null;
+}
+
 export async function saveRegistrationDraft(id: string, email: string, data: any, step: number): Promise<RegistrationDraft> {
   const res = await authFetch(API_ENDPOINTS.registrationDraftById(id), {
     method: "PUT",
