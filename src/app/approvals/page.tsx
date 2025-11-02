@@ -43,6 +43,9 @@ export default function ApprovalsPage() {
   const canViewRefunds = hasPermission('approve.refund') || hasPermission('approval.view_requests');
   const canViewExpenses = hasPermission('approve.daily_expense') || hasPermission('approval.view_requests') || hasPermission('expenses.view');
   
+  // Check if user can approve expenses (for action buttons)
+  const canApproveExpenses = hasPermission('approve.daily_expense') || hasPermission('approve_expenses');
+  
   // Authentication check
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -98,13 +101,21 @@ export default function ApprovalsPage() {
     setApiError(null);
     try {
       const data = await getApprovals({ limit: 100 });
-      // Handle both array response and { data: [] } response formats
-      const approvalsArray = Array.isArray(data) ? data : ((data as any).data || []);
+      // Handle both array response and paginated response formats { items: [], total: 0 }
+      const approvalsArray = Array.isArray(data) ? data : ((data as any).items || (data as any).data || []);
       
       // Debug: Log the actual structure of the API response
       if (process.env.NODE_ENV === 'development') {
+        console.log('Approvals API Response:', data);
+        console.log('Approvals Array Length:', approvalsArray.length);
       }
       
+      // Helper function to capitalize status for UI consistency
+      const capitalizeStatus = (status: string): string => {
+        const normalized = status.toLowerCase();
+        return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+      };
+
       // Map API response to ApprovalItem format
       const mappedItems = approvalsArray.map((item: any) => ({
         id: String(item.id || ''),
@@ -113,7 +124,7 @@ export default function ApprovalsPage() {
         description: String(item.description || ''),
         amount: Number(item.amount || 0),
         currency: String(item.currency || 'NGN'),
-        status: String(item.status || 'pending'),
+        status: capitalizeStatus(String(item.status || 'pending')),
         requesterId: String(item.userId || item.requesterId || ''),
         requesterName: String(item.userName || item.requesterName || 'Unknown Requester'),
         approverId: item.approvedById ? String(item.approvedById) : undefined,
@@ -248,6 +259,8 @@ export default function ApprovalsPage() {
         return 'bg-green-100 text-green-800';
       case 'Rejected':
         return 'bg-red-100 text-red-800';
+      case 'Paid':
+        return 'bg-purple-100 text-purple-800';
       case 'Under Review':
         return 'bg-blue-100 text-blue-800';
       default:
@@ -503,6 +516,12 @@ export default function ApprovalsPage() {
                               Rejected
                             </button>
                             <button 
+                              onClick={() => { setStatusFilter('Paid'); setShowFilterDropdown(false); }}
+                              className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              Paid
+                            </button>
+                            <button 
                               onClick={() => { setStatusFilter('Under Review'); setShowFilterDropdown(false); }}
                               className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                             >
@@ -653,7 +672,7 @@ export default function ApprovalsPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.status === 'Pending' && (
+                        {item.status === 'Pending' && canApproveExpenses && (
                           <div className="flex gap-2">
                             <button
                               onClick={() => handleApprove(item.id)}
@@ -668,6 +687,9 @@ export default function ApprovalsPage() {
                               Reject
                             </button>
                           </div>
+                        )}
+                        {item.status === 'Pending' && !canApproveExpenses && (
+                          <span className="text-xs text-gray-500 italic">View Only</span>
                         )}
                         {item.status !== 'Pending' && (
                           <span className="text-xs text-gray-500">Completed</span>
@@ -732,7 +754,7 @@ export default function ApprovalsPage() {
                           <span className={`px-2 py-1 text-xs rounded-full font-medium ${getStatusColor(item.status)}`}>
                             {item.status}
                           </span>
-                          {item.status === 'Pending' && (
+                          {item.status === 'Pending' && canApproveExpenses && (
                             <div className="flex gap-1">
                               <button
                                 onClick={() => handleApprove(item.id)}
@@ -747,6 +769,9 @@ export default function ApprovalsPage() {
                                 Reject
                               </button>
                             </div>
+                          )}
+                          {item.status === 'Pending' && !canApproveExpenses && (
+                            <span className="text-xs text-gray-500 italic">View Only</span>
                           )}
                         </div>
                       </div>

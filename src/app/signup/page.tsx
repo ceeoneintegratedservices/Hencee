@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { API_ENDPOINTS } from "../../config/api";
+import { API_ENDPOINTS, API_BASE_URL } from "../../config/api";
 import { useRouter } from "next/navigation";
 import {
   createRegistrationDraft,
@@ -9,7 +9,6 @@ import {
   saveRegistrationDraft,
   submitRegistrationDraft,
 } from "@/services/authDrafts";
-import { listRoles as apiListRoles, type RoleSummary } from "@/services/permissions";
 
 export default function SignupPage() {
   const [form, setForm] = useState({
@@ -49,26 +48,66 @@ export default function SignupPage() {
     })();
   }, []);
 
-  // Fetch roles for dropdown
+  // Fetch roles for dropdown or use default roles if API fails
   useEffect(() => {
     (async () => {
       setRolesLoading(true);
       try {
-        const apiRoles: RoleSummary[] = await apiListRoles();
-        const mapped = (apiRoles || []).map((r: any) => {
-          const type = r?.type || r?.roleType || r?.name;
-          const name = r?.name || type;
-          return { id: String(type), name };
-        }).filter(r => !!r.id && !!r.name);
-        setRoleOptions(mapped);
-        // If no role preselected, default to first
-        if (!form.staffRole && mapped[0]) {
-          setForm(prev => ({ ...prev, staffRole: mapped[0].id }));
+        // Try to fetch roles from API without authentication
+        const response = await fetch(`${API_BASE_URL}/roles`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const apiRoles = Array.isArray(data) ? data : (data?.roles || []);
+          const mapped = (apiRoles || []).map((r: any) => {
+            // Use the UUID id from the API, and roleType or name for display
+            const displayName = r?.roleType || r?.name || 'Unknown Role';
+            return { 
+              id: String(r.id),  // Use the actual UUID from the API
+              name: displayName  // Display name (roleType preferred, fallback to name)
+            };
+          }).filter(r => !!r.id && !!r.name);
+          
+          if (mapped.length > 0) {
+            setRoleOptions(mapped);
+            // If no role preselected, default to first
+            if (!form.staffRole && mapped[0]) {
+              setForm(prev => ({ ...prev, staffRole: mapped[0].id }));
+            }
+            
+            if (process.env.NODE_ENV === 'development') {
+              console.log('Loaded roles from API:', mapped.length);
+              console.log('Roles:', mapped);
+            }
+            
+            setRolesLoading(false);
+            return;
+          }
         }
-      } catch {}
-      finally {
-        setRolesLoading(false);
+      } catch (error) {
+        console.log('Could not fetch roles from API, using defaults');
       }
+      
+      // Fallback to default roles if API fails or returns empty
+      const defaultRoles = [
+        { id: 'MANAGER', name: 'Manager' },
+        { id: 'ACCOUNTANT', name: 'Accountant' },
+        { id: 'SALES_REP', name: 'Sales Representative' },
+        { id: 'INVENTORY_CLERK', name: 'Inventory Clerk' },
+        { id: 'ADMIN', name: 'Administrator' },
+        { id: 'CASHIER', name: 'Cashier' },
+        { id: 'AUDITOR', name: 'Auditor' }
+      ];
+      
+      setRoleOptions(defaultRoles);
+      // If no role preselected, default to first
+      if (!form.staffRole) {
+        setForm(prev => ({ ...prev, staffRole: defaultRoles[0].id }));
+      }
+      setRolesLoading(false);
     })();
   }, []);
 
@@ -123,16 +162,23 @@ export default function SignupPage() {
         await submitRegistrationDraft(draftId);
         localStorage.removeItem('registrationDraftId');
       } else {
+        const payload = {
+          name: form.name,
+          email: form.email,
+          phone: form.phone,
+          staffRole: form.staffRole,  // Now sends role UUID instead of role type
+          password: form.password,
+        };
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Registration payload:', payload);
+          console.log('Selected role ID:', form.staffRole);
+        }
+        
         const res = await fetch(API_ENDPOINTS.register, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: form.name,
-            email: form.email,
-            phone: form.phone,
-            staffRole: form.staffRole,
-            password: form.password,
-          }),
+          body: JSON.stringify(payload),
         });
         const data = await res.json();
         if (!res.ok) {

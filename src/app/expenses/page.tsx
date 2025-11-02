@@ -10,10 +10,15 @@ import Breadcrumb from '@/components/Breadcrumb';
 import AddExpenseModal from '@/components/AddExpenseModal';
 import ExpenseDetailsModal from '@/components/ExpenseDetailsModal';
 import { listExpenses, createExpense, updateExpense, deleteExpense, getExpenseCategories, getExpenseDepartments, type Expense as APIExpense, type CreateExpensePayload, type ExpenseCategoryCode } from '@/services/expenses';
+import { usePermissions } from '@/hooks/usePermissions';
 
 export default function ExpensesPage() {
   const router = useRouter();
   const { notifications, removeNotification, showSuccess, showError } = useNotifications();
+  const { hasPermission } = usePermissions();
+  
+  // Check if user can approve expenses
+  const canApproveExpenses = hasPermission('approve.daily_expense') || hasPermission('approve_expenses');
   
   // Authentication check
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -730,7 +735,7 @@ export default function ExpensesPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center gap-2">
-                          {item.status === 'Pending' && (
+                          {item.status === 'Pending' && canApproveExpenses && (
                             <>
                               <button
                                 onClick={() => handleApproveExpense(item.id)}
@@ -751,6 +756,9 @@ export default function ExpensesPage() {
                                 </svg>
                               </button>
                             </>
+                          )}
+                          {item.status === 'Pending' && !canApproveExpenses && (
+                            <span className="text-xs text-gray-500 italic">View Only</span>
                           )}
                           <button
                             onClick={() => handleViewDetails(item)}
@@ -831,7 +839,7 @@ export default function ExpensesPage() {
                       {new Date(item.requestDate).toLocaleDateString()}
                     </span>
                     <div className="flex items-center gap-2">
-                      {item.status === 'Pending' && (
+                      {item.status === 'Pending' && canApproveExpenses && (
                         <>
                           <button
                             onClick={() => handleApproveExpense(item.id)}
