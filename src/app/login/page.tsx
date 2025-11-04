@@ -29,20 +29,9 @@ export default function LoginPage() {
         try {
           const userData = JSON.parse(storedUserData);
           
-          // Check if email is verified - if not, redirect to verification page
-          const isEmailVerified = userData?.isEmailVerified || userData?.emailVerified || false;
-          if (!isEmailVerified) {
-            const email = userData?.email || '';
-            if (email) {
-              router.push(`/verify-email?email=${encodeURIComponent(email)}`);
-            } else {
-              // If no email, clear auth and redirect to login
-              localStorage.removeItem('authToken');
-              localStorage.removeItem('userData');
-              router.push('/login');
-            }
-            return;
-          }
+          // If user has a valid token and userData, they're already authenticated
+          // Trust the backend - if they have a token, they're verified
+          // Don't check email verification here as it can be stale data
           
           const permissions = userData?.permissions || userData?.role?.permissions || [];
           
@@ -102,65 +91,58 @@ export default function LoginPage() {
       const data = await res.json();
       
       if (!res.ok) {
+        // Backend already handles email verification - if login fails, it's due to wrong credentials or unverified email
         setError(data.message || "Password/email/whatsapp number does not match.");
+        setLoading(false);
+        return;
+      }
+      
+      // If we get here, login was successful - backend already verified email
+      // Trust the backend response - if login succeeds, email is verified
+      
+      // Handle successful login - redirect to dashboard
+      
+      // Check if we have a token in the response
+      let authToken = null;
+      if (data.token) {
+        authToken = data.token;
+      } else if (data.access_token) {
+        authToken = data.access_token;
+      } else if (data.authToken) {
+        authToken = data.authToken;
+      } else if (data.jwt) {
+        authToken = data.jwt;
+      } else if (data.authorization) {
+        authToken = data.authorization;
       } else {
-        // Check if email is verified before allowing login
-        const user = data.user || data;
-        const isEmailVerified = user?.isEmailVerified || user?.emailVerified || false;
+        console.warn('No token found in response:', data);
+        // Still proceed if we have user data
+      }
+      
+      // Store user data/token in localStorage if needed
+      if (authToken) {
+        localStorage.setItem('authToken', authToken);
+      } else {
+        // If no token provided, create a simple authentication flag
+        // This ensures the user can still access the dashboard
+        const fallbackToken = `auth_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        localStorage.setItem('authToken', fallbackToken);
+      }
+      // Store user data in localStorage
+      if (data.user) {
+        localStorage.setItem('userData', JSON.stringify(data.user));
         
-        if (!isEmailVerified) {
-          setError("Please verify your email address before logging in. Check your email for the verification code.");
-          setLoading(false);
-          // Optionally redirect to verification page
-          setTimeout(() => {
-            router.push(`/verify-email?email=${encodeURIComponent(form.email)}`);
-          }, 2000);
-          return;
-        }
-        
-        // Handle successful login - redirect to dashboard
-        
-        // Check if we have a token in the response
-        let authToken = null;
-        if (data.token) {
-          authToken = data.token;
-        } else if (data.access_token) {
-          authToken = data.access_token;
-        } else if (data.authToken) {
-          authToken = data.authToken;
-        } else if (data.jwt) {
-          authToken = data.jwt;
-        } else if (data.authorization) {
-          authToken = data.authorization;
-        } else {
-          console.warn('No token found in response:', data);
-          // Still proceed if we have user data
-        }
-        
-        // Store user data/token in localStorage if needed
-        if (authToken) {
-          localStorage.setItem('authToken', authToken);
-        } else {
-          // If no token provided, create a simple authentication flag
-          // This ensures the user can still access the dashboard
-          const fallbackToken = `auth_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          localStorage.setItem('authToken', fallbackToken);
-        }
-        // Store user data in localStorage
-        if (data.user) {
-          localStorage.setItem('userData', JSON.stringify(data.user));
-          
-          // Initialize permissions with user data
-          initializePermissions(data.user);
-        }
-        
-        // Show success message
-        setError(""); // Clear any previous errors
-        setSuccess(true); // Show success state
-        setLoading(false); // Stop loading
-        
-        // Verify token was stored before redirecting
-        setTimeout(() => {
+        // Initialize permissions with user data
+        initializePermissions(data.user);
+      }
+      
+      // Show success message
+      setError(""); // Clear any previous errors
+      setSuccess(true); // Show success state
+      setLoading(false); // Stop loading
+      
+      // Verify token was stored before redirecting
+      setTimeout(() => {
           const storedToken = localStorage.getItem('authToken');
           const storedUserData = localStorage.getItem('userData');
           
@@ -196,7 +178,6 @@ export default function LoginPage() {
             router.push('/dashboard');
           }
         }, 1000);
-      }
     } catch (err) {
       setError("An error occurred. Please try again.");
     } finally {

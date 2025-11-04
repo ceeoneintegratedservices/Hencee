@@ -20,7 +20,7 @@ export default function SignupPage() {
     password: "",
     confirmPassword: "",
   });
-  const [roleOptions, setRoleOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [roleOptions, setRoleOptions] = useState<Array<{ id: string; name: string; roleType: string }>>([]);
   const [rolesLoading, setRolesLoading] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -54,6 +54,51 @@ export default function SignupPage() {
   }, []);
 
 
+  // Map display names to backend role types
+  const mapRoleNameToBackendType = (displayName: string): string => {
+    const name = displayName.toLowerCase().trim();
+    
+    // Map common display names to backend role types
+    const roleMap: Record<string, string> = {
+      'sales representative': 'sales_representative',
+      'sales rep': 'sales_representative',
+      'sales_rep': 'sales_representative',
+      'manager': 'general_manager',
+      'general manager': 'general_manager',
+      'accountant': 'accountant',
+      'auditor': 'auditor',
+      'inventory clerk': 'book_storekeeper',
+      'book storekeeper': 'book_storekeeper',
+      'storekeeper': 'book_storekeeper',
+      'it support': 'technical_support',
+      'technical support': 'technical_support',
+      'tech support': 'technical_support',
+      'support': 'technical_support',
+      'human resources': 'human_resources',
+      'hr': 'human_resources',
+      'managing director': 'managing_director',
+      'cashier': 'cashier',
+      'admin': 'admin',
+      'administrator': 'admin',
+    };
+    
+    // Check exact match first
+    if (roleMap[name]) {
+      return roleMap[name];
+    }
+    
+    // Check partial matches
+    for (const [key, value] of Object.entries(roleMap)) {
+      if (name.includes(key) || key.includes(name)) {
+        return value;
+      }
+    }
+    
+    // If no match, try to normalize the name (replace spaces with underscores, lowercase)
+    const normalized = name.replace(/\s+/g, '_');
+    return normalized;
+  };
+
   // Fetch roles for dropdown or use default roles if API fails
   useEffect(() => {
     (async () => {
@@ -71,11 +116,21 @@ export default function SignupPage() {
           const mapped = (apiRoles || []).map((r: any) => {
             // Use the UUID id from the API, and roleType or name for display
             const displayName = r?.roleType || r?.name || 'Unknown Role';
+            // Map display name to backend role type
+            const roleType = mapRoleNameToBackendType(displayName);
             return { 
-              id: String(r.id),  // Use the actual UUID from the API
-              name: displayName  // Display name (roleType preferred, fallback to name)
+              id: String(r.id),  // Use the actual UUID from the API (for selection)
+              name: displayName,  // Display name (roleType preferred, fallback to name)
+              roleType: roleType  // Backend role name to send in registration
             };
-          }).filter((r: { id: string; name: string }) => !!r.id && !!r.name);
+          }).filter((r: { id: string; name: string; roleType: string }) => {
+            // Filter out admin roles
+            const roleName = r.name?.toLowerCase() || '';
+            const roleId = r.id?.toLowerCase() || '';
+            return !!r.id && !!r.name && 
+                   !roleName.includes('admin') && 
+                   !roleId.includes('admin');
+          });
           
           if (mapped.length > 0) {
             setRoleOptions(mapped);
@@ -98,14 +153,18 @@ export default function SignupPage() {
       }
       
       // Fallback to default roles if API fails or returns empty
+      // Admin role is excluded - should only be created by existing admins
+      // Map display names to backend role names
       const defaultRoles = [
-        { id: 'MANAGER', name: 'Manager' },
-        { id: 'ACCOUNTANT', name: 'Accountant' },
-        { id: 'SALES_REP', name: 'Sales Representative' },
-        { id: 'INVENTORY_CLERK', name: 'Inventory Clerk' },
-        { id: 'ADMIN', name: 'Administrator' },
-        { id: 'CASHIER', name: 'Cashier' },
-        { id: 'AUDITOR', name: 'Auditor' }
+        { id: 'MANAGER', name: 'Manager', roleType: 'general_manager' },
+        { id: 'ACCOUNTANT', name: 'Accountant', roleType: 'accountant' },
+        { id: 'SALES_REP', name: 'Sales Representative', roleType: 'sales_representative' },
+        { id: 'INVENTORY_CLERK', name: 'Inventory Clerk', roleType: 'book_storekeeper' },
+        { id: 'IT_SUPPORT', name: 'IT Support', roleType: 'technical_support' },
+        { id: 'HR', name: 'Human Resources', roleType: 'human_resources' },
+        { id: 'MANAGING_DIRECTOR', name: 'Managing Director', roleType: 'managing_director' },
+        { id: 'CASHIER', name: 'Cashier', roleType: 'cashier' },
+        { id: 'AUDITOR', name: 'Auditor', roleType: 'auditor' }
       ];
       
       setRoleOptions(defaultRoles);
@@ -192,45 +251,59 @@ export default function SignupPage() {
     setSuccess("");
     setShowVerifyLink(false);
     try {
+      // Find the role name from the selected role ID
+      const selectedRole = roleOptions.find(r => r.id === form.staffRole);
+      let roleName = selectedRole?.roleType || selectedRole?.name || form.staffRole;
+      
+      // Double-check: if roleName looks like a display name, map it to backend type
+      // This ensures we always send the correct backend role name
+      if (roleName && !roleName.includes('_')) {
+        // Likely a display name (has spaces or is camelCase), map it
+        roleName = mapRoleNameToBackendType(roleName);
+      }
+      
+      // Always use the regular register endpoint
+      const payload = {
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        staffRole: roleName,  // Send role name (roleType) instead of UUID
+        password: form.password,
+      };
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Registration payload:', payload);
+        console.log('Selected role ID:', form.staffRole);
+        console.log('Selected role object:', selectedRole);
+        console.log('Final mapped role name:', roleName);
+      }
+      
+      const res = await fetch(API_ENDPOINTS.register, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.message || "Registration failed.");
+        setLoading(false);
+        return;
+      }
+      
+      // If there was a draft, clean it up after successful registration
       if (draftId) {
-        await submitRegistrationDraft(draftId);
-        localStorage.removeItem('registrationDraftId');
-      } else {
-        const payload = {
-          name: form.name,
-          email: form.email,
-          phone: form.phone,
-          staffRole: form.staffRole,  // Now sends role UUID instead of role type
-          password: form.password,
-        };
-        
-        if (process.env.NODE_ENV === 'development') {
-          console.log('Registration payload:', payload);
-          console.log('Selected role ID:', form.staffRole);
-        }
-        
-        const res = await fetch(API_ENDPOINTS.register, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          setError(data.message || "Registration failed.");
-          setLoading(false);
-          return;
+        try {
+          localStorage.removeItem('registrationDraftId');
+          // Optionally delete the draft from backend (but not critical)
+          // The draft will be cleaned up by backend eventually
+        } catch (e) {
+          // Ignore cleanup errors
         }
       }
 
-      setSuccess("Account created! Please check your email to verify your account.");
-      setTimeout(() => {
-        try {
-          router.push(`/verify-email?email=${encodeURIComponent(form.email)}`);
-        } catch {
-          setShowVerifyLink(true);
-        }
-      }, 1200);
+      setSuccess("Account created! Please check your email to verify your account before logging in.");
       setShowVerifyLink(true);
+      // Don't auto-redirect - let user read the message and click to verify when ready
     } catch (err) {
       setError("An error occurred. Please try again.");
     } finally {
@@ -339,7 +412,7 @@ export default function SignupPage() {
             {success}
             {showVerifyLink && (
               <div className="mt-2">
-                Didn't get redirected? <a href={`/verify-email?email=${encodeURIComponent(form.email)}`} className="text-blue-600 font-semibold">Click here to verify your email</a>
+                <a href={`/verify-email?email=${encodeURIComponent(form.email)}`} className="text-blue-600 font-semibold underline">Click here to verify your email</a>
               </div>
             )}
           </div>
