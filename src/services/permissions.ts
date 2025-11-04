@@ -141,7 +141,10 @@ export const PERMISSIONS = {
   REPORTS_VIEW: 'reports.view',
   SETTINGS_VIEW: 'settings.view',
   AUDIT_VIEW_LOGS: 'audit.view_logs',
-  EXPENSES_VIEW: 'expenses.view'
+  EXPENSES_VIEW: 'expenses.view',
+  EXPENSES_CREATE: 'expenses.create',
+  EXPENSES_EDIT: 'expenses.edit',
+  EXPENSES_DELETE: 'expenses.delete'
 };
 
 // Role constants
@@ -169,7 +172,7 @@ export const getDefaultPermissions = (role: string): string[] => {
         PERMISSIONS.REPORTS_VIEW,
         PERMISSIONS.SETTINGS_VIEW,
         PERMISSIONS.AUDIT_VIEW_LOGS,
-        PERMISSIONS.EXPENSES_VIEW
+        PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE, PERMISSIONS.EXPENSES_EDIT, PERMISSIONS.EXPENSES_DELETE
       ];
     case ROLES.MANAGER:
       return [
@@ -181,7 +184,7 @@ export const getDefaultPermissions = (role: string): string[] => {
         PERMISSIONS.INVENTORY_VIEW,
         PERMISSIONS.REPORTS_VIEW,
         PERMISSIONS.SETTINGS_VIEW,
-        PERMISSIONS.EXPENSES_VIEW
+        PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE, PERMISSIONS.EXPENSES_EDIT
       ];
     case ROLES.MANAGING_DIRECTOR:
       // Mirror manager defaults to ensure access to Expenses page
@@ -194,7 +197,7 @@ export const getDefaultPermissions = (role: string): string[] => {
         PERMISSIONS.INVENTORY_VIEW,
         PERMISSIONS.REPORTS_VIEW,
         PERMISSIONS.SETTINGS_VIEW,
-        PERMISSIONS.EXPENSES_VIEW
+        PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE, PERMISSIONS.EXPENSES_EDIT
       ];
     case ROLES.SALES:
       return [
@@ -204,7 +207,9 @@ export const getDefaultPermissions = (role: string): string[] => {
         PERMISSIONS.PRODUCTS_VIEW,
         PERMISSIONS.INVENTORY_VIEW,
         // Allow sales staff to access Approvals
-        PERMISSIONS.APPROVALS_VIEW
+        PERMISSIONS.APPROVALS_VIEW,
+        // Sales reps should be able to create expense requests (travel, meals, etc.)
+        PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE
       ];
     case ROLES.SUPPORT:
       return [
@@ -212,7 +217,9 @@ export const getDefaultPermissions = (role: string): string[] => {
         PERMISSIONS.PRODUCTS_VIEW,
         PERMISSIONS.SALES_VIEW,
         PERMISSIONS.CUSTOMERS_VIEW, PERMISSIONS.CUSTOMERS_EDIT,
-        PERMISSIONS.REPORTS_VIEW
+        PERMISSIONS.REPORTS_VIEW,
+        // Support staff may have occasional expenses
+        PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE
       ];
     case ROLES.VIEWER:
       return [

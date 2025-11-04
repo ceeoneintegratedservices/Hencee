@@ -28,13 +28,38 @@ export default function LoginPage() {
       if (storedUserData) {
         try {
           const userData = JSON.parse(storedUserData);
+          
+          // Check if email is verified - if not, redirect to verification page
+          const isEmailVerified = userData?.isEmailVerified || userData?.emailVerified || false;
+          if (!isEmailVerified) {
+            const email = userData?.email || '';
+            if (email) {
+              router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+            } else {
+              // If no email, clear auth and redirect to login
+              localStorage.removeItem('authToken');
+              localStorage.removeItem('userData');
+              router.push('/login');
+            }
+            return;
+          }
+          
           const permissions = userData?.permissions || userData?.role?.permissions || [];
           
           // Initialize permissions with user data
           initializePermissions(userData);
           
-          // Redirect based on permissions
-          if (permissions.includes('view_users') || permissions.includes('users.view')) {
+          const roleType = userData?.role?.roleType || userData?.roleType || userData?.role?.name || '';
+          const roleTypeLower = roleType?.toLowerCase() || '';
+          
+          // Sales rep should go to orders page by default - check multiple variations
+          if (roleType === 'SALES_REP' || 
+              roleType === 'sales_staff' || 
+              roleTypeLower === 'sales rep' || 
+              roleTypeLower === 'sales_rep' ||
+              roleTypeLower.includes('sales')) {
+            router.push('/orders');
+          } else if (permissions.includes('view_users') || permissions.includes('users.view')) {
             router.push('/users-roles');
           } else if (permissions.includes('view_expenses') || permissions.includes('expenses.view')) {
             router.push('/expenses');
@@ -79,6 +104,20 @@ export default function LoginPage() {
       if (!res.ok) {
         setError(data.message || "Password/email/whatsapp number does not match.");
       } else {
+        // Check if email is verified before allowing login
+        const user = data.user || data;
+        const isEmailVerified = user?.isEmailVerified || user?.emailVerified || false;
+        
+        if (!isEmailVerified) {
+          setError("Please verify your email address before logging in. Check your email for the verification code.");
+          setLoading(false);
+          // Optionally redirect to verification page
+          setTimeout(() => {
+            router.push(`/verify-email?email=${encodeURIComponent(form.email)}`);
+          }, 2000);
+          return;
+        }
+        
         // Handle successful login - redirect to dashboard
         
         // Check if we have a token in the response
@@ -126,12 +165,20 @@ export default function LoginPage() {
           const storedUserData = localStorage.getItem('userData');
           
           if (storedToken || storedUserData) {
-            // Redirect based on permissions
+            // Redirect based on permissions and role
             const userData = storedUserData ? JSON.parse(storedUserData) : null;
             const permissions = userData?.permissions || userData?.role?.permissions || [];
+            const roleType = userData?.role?.roleType || userData?.roleType || userData?.role?.name || '';
+            const roleTypeLower = roleType?.toLowerCase() || '';
             
-            // Determine where to redirect based on permissions
-            if (permissions.includes('view_users') || permissions.includes('users.view')) {
+            // Sales rep should go to orders page by default - check multiple variations
+            if (roleType === 'SALES_REP' || 
+                roleType === 'sales_staff' || 
+                roleTypeLower === 'sales rep' || 
+                roleTypeLower === 'sales_rep' ||
+                roleTypeLower.includes('sales')) {
+              router.push('/orders');
+            } else if (permissions.includes('view_users') || permissions.includes('users.view')) {
               router.push('/users-roles');
             } else if (permissions.includes('view_expenses') || permissions.includes('expenses.view')) {
               router.push('/expenses');
