@@ -23,13 +23,43 @@ export class PermissionService {
       // Convert from internal format (entity.action) to JWT format (action_entity)
       const [entity, action] = permission.split('.');
       const jwtFormat = `${action}_${entity}`;
-      return this.userPermissions.includes(jwtFormat);
+      if (this.userPermissions.includes(jwtFormat)) {
+        return true;
+      }
+      
+      // Special handling: inventory.view should also check for view_products
+      // and products.view should also check for view_inventory
+      if (entity === 'inventory' && action === 'view') {
+        if (this.userPermissions.includes('view_products') || this.userPermissions.includes('products.view')) {
+          return true;
+        }
+      }
+      if (entity === 'products' && action === 'view') {
+        if (this.userPermissions.includes('view_inventory') || this.userPermissions.includes('inventory.view')) {
+          return true;
+        }
+      }
     } else if (permission.includes('_')) {
       // Convert from JWT format (action_entity) to internal format (entity.action)
       const [action, ...entityParts] = permission.split('_');
       const entity = entityParts.join('_');
       const internalFormat = `${entity}.${action}`;
-      return this.userPermissions.includes(internalFormat);
+      if (this.userPermissions.includes(internalFormat)) {
+        return true;
+      }
+      
+      // Special handling: view_products should also grant inventory.view
+      // and view_inventory should also grant products.view
+      if (action === 'view' && entity === 'products') {
+        if (this.userPermissions.includes('view_inventory') || this.userPermissions.includes('inventory.view')) {
+          return true;
+        }
+      }
+      if (action === 'view' && entity === 'inventory') {
+        if (this.userPermissions.includes('view_products') || this.userPermissions.includes('products.view')) {
+          return true;
+        }
+      }
     }
 
     return false;
@@ -73,7 +103,7 @@ export class PermissionService {
       { key: 'orders', label: 'Orders', icon: 'sales', permissions: ['sales.view'] },
       { key: 'customers', label: 'Customers', icon: 'customers', permissions: ['customers.view'] },
       { key: 'approvals', label: 'Approvals', icon: 'approvals', permissions: ['approvals.view', 'approval.view_requests', 'approve.payment_request', 'approve.invoice_request', 'approve.refund', 'approve.user_accounts', 'approve.daily_expense', 'approve.void'] },
-      { key: 'inventory', label: 'Inventory', icon: 'inventory', permissions: ['inventory.view', 'manage_inventory'] },
+      { key: 'inventory', label: 'Inventory', icon: 'inventory', permissions: ['inventory.view', 'manage_inventory', 'view_products', 'products.view', 'view_inventory'] },
       { key: 'reports', label: 'Reports', icon: 'reports', permissions: ['reports.view'] },
       { key: 'users', label: 'Users & Roles', icon: 'users', permissions: ['users.view'] },
       { key: 'settings', label: 'Settings', icon: 'settings', permissions: ['settings.view'] },
