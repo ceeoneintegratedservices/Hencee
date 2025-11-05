@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [approvalStatus, setApprovalStatus] = useState<'pending' | 'approved' | 'rejected' | null>(null);
 
   // Check if user is already authenticated
   useEffect(() => {
@@ -28,6 +29,14 @@ export default function LoginPage() {
       if (storedUserData) {
         try {
           const userData = JSON.parse(storedUserData);
+          
+          // Check approval status - if pending or rejected, show message instead of redirecting
+          const userApprovalStatus = userData?.approvalStatus || 'approved';
+          if (userApprovalStatus === 'pending' || userApprovalStatus === 'rejected') {
+            setApprovalStatus(userApprovalStatus);
+            setLoading(false);
+            return; // Don't redirect, show approval message
+          }
           
           // If user has a valid token and userData, they're already authenticated
           // Trust the backend - if they have a token, they're verified
@@ -132,16 +141,27 @@ export default function LoginPage() {
       if (data.user) {
         localStorage.setItem('userData', JSON.stringify(data.user));
         
+        // Check approval status
+        const userApprovalStatus = data.user.approvalStatus || 'approved'; // Default to approved if not provided
+        setApprovalStatus(userApprovalStatus);
+        
         // Initialize permissions with user data
         initializePermissions(data.user);
+        
+        // If user is pending or rejected, don't redirect - show approval message instead
+        if (userApprovalStatus === 'pending' || userApprovalStatus === 'rejected') {
+          setLoading(false);
+          setSuccess(false); // Don't show success message, show approval message instead
+          return; // Don't redirect, stay on login page to show approval message
+        }
       }
       
-      // Show success message
+      // Show success message (only for approved users)
       setError(""); // Clear any previous errors
       setSuccess(true); // Show success state
       setLoading(false); // Stop loading
       
-      // Verify token was stored before redirecting
+      // Verify token was stored before redirecting (only for approved users)
       setTimeout(() => {
           const storedToken = localStorage.getItem('authToken');
           const storedUserData = localStorage.getItem('userData');
@@ -228,6 +248,64 @@ export default function LoginPage() {
         </button>
         {error && <div className="mt-4 text-red-600 text-center">{error}</div>}
         {success && <div className="mt-4 text-green-600 text-center">Login successful! Redirecting to your authorized pages...</div>}
+        
+        {/* Approval Status Message */}
+        {approvalStatus === 'pending' && (
+          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-yellow-800 mb-1">Account Pending Approval</h3>
+                <p className="text-sm text-yellow-700 mb-3">
+                  Your account is pending approval from an administrator. You will be able to access all features once your account has been approved.
+                </p>
+                <button
+                  onClick={() => {
+                    // Clear auth and stay on login page
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('userData');
+                    setApprovalStatus(null);
+                    setSuccess(false);
+                  }}
+                  className="text-sm text-yellow-800 hover:text-yellow-900 font-semibold underline"
+                >
+                  Log out
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {approvalStatus === 'rejected' && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-red-800 mb-1">Account Not Approved</h3>
+                <p className="text-sm text-red-700 mb-3">
+                  Your account approval request has been rejected. Please contact an administrator for more information.
+                </p>
+                <button
+                  onClick={() => {
+                    // Clear auth and stay on login page
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('userData');
+                    setApprovalStatus(null);
+                    setSuccess(false);
+                  }}
+                  className="text-sm text-red-800 hover:text-red-900 font-semibold underline"
+                >
+                  Log out
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className="mt-4 text-center text-sm text-gray-600">
           Don't have an account? <a href="/signup" className="text-blue-600 font-semibold">Sign up</a>
         </div>

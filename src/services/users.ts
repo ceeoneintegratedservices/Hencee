@@ -8,6 +8,7 @@ export interface User {
   phone: string;
   isActive: boolean;
   isEmailVerified: boolean;
+  approvalStatus?: 'pending' | 'approved' | 'rejected';
   lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;

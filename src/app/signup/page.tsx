@@ -301,7 +301,17 @@ export default function SignupPage() {
         }
       }
 
-      setSuccess("Account created! Please check your email to verify your account before logging in.");
+      // Check approval status in response
+      const approvalStatus = data.user?.approvalStatus || data.approvalStatus || 'pending';
+      
+      let successMessage = "Account created! Please check your email to verify your account before logging in.";
+      if (approvalStatus === 'pending') {
+        successMessage += " Your account is pending approval from an administrator. You will receive a notification once your account has been approved.";
+      } else if (approvalStatus === 'approved') {
+        successMessage += " Your account has been approved.";
+      }
+
+      setSuccess(successMessage);
       setShowVerifyLink(true);
       // Don't auto-redirect - let user read the message and click to verify when ready
     } catch (err) {

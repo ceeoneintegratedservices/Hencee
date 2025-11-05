@@ -18,6 +18,7 @@ interface User {
   avatar?: string;
   username?: string;
   name?: string;
+  approvalStatus?: 'pending' | 'approved' | 'rejected';
 }
 
 // Permission context interface
