@@ -19,7 +19,7 @@ export async function listProducts(params: { page?: number; limit?: number; sear
 
 export async function getProduct(id: string) {
   try {
-    const url = `${API_ENDPOINTS.products}/${encodeURIComponent(id)}`;
+    const url = API_ENDPOINTS.productById(id);
     const res = await authFetch(url);
     const data = await res.json();
     return data;
@@ -43,7 +43,7 @@ export async function createProduct(body: any) {
 
 export async function updateProduct(id: string, body: any) {
   try {
-    const url = `${API_ENDPOINTS.products}/${encodeURIComponent(id)}`;
+    const url = API_ENDPOINTS.productById(id);
     const res = await authFetch(url, { 
       method: "PUT", 
       body: JSON.stringify(body) 

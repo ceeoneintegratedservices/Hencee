@@ -17,9 +17,14 @@ export interface Payment {
 export interface CreatePayment {
   saleId: string;
   amount: number;
-  method: string;
+  method: string; // 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'CHEQUE' | 'MOBILE_MONEY' | 'CREDIT'
   reference?: string;
   notes?: string;
+  // Pharma-specific payment fields
+  senderName?: string; // For BANK_TRANSFER
+  transactionReference?: string; // For BANK_TRANSFER
+  chequeNumber?: string; // For CHEQUE
+  accountName?: string; // For CHEQUE
 }
 
 export interface UpdatePaymentStatus {

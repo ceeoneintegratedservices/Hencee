@@ -247,3 +247,175 @@ export async function getProductPurchaseHistory(id: string, limit: number = 20):
     throw error;
   }
 }
+
+// Pharma-specific Inventory Types
+export interface ExpiringProduct {
+  id: string;
+  name: string;
+  sku: string;
+  expiryDate: string;
+  expiryWarehouse: string;
+  expiryWarehouseName: string;
+  daysUntilExpiry: number;
+  quantity: number;
+  isExpired: boolean;
+  isExpiringSoon: boolean;
+  isCritical: boolean;
+}
+
+export interface ExpiringProductsResponse {
+  products: ExpiringProduct[];
+  total: number;
+  critical: number;
+  warning: number;
+  page: number;
+  limit: number;
+}
+
+export interface ExpiringProductsParams {
+  days?: number;
+  warehouseId?: string;
+  includeExpired?: boolean;
+  page?: number;
+  limit?: number;
+}
+
+export interface ProductDamage {
+  id: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  reason: string;
+  inspectionDate: string;
+  action: 'discard' | 'return' | 'repair';
+  inspectorNotes?: string;
+  warehouseId?: string;
+  warehouseName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDamagePayload {
+  quantity: number;
+  reason: string;
+  inspectionDate: string;
+  action: 'discard' | 'return' | 'repair';
+  inspectorNotes?: string;
+  warehouseId?: string;
+}
+
+export interface DamageListParams {
+  productId?: string;
+  warehouseId?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface DamageListResponse {
+  damages: ProductDamage[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+/**
+ * Get expiring products (Pharma-specific)
+ */
+export async function getExpiringProducts(params: ExpiringProductsParams = {}): Promise<ExpiringProductsResponse> {
+  try {
+    const qp = new URLSearchParams();
+    if (params.days != null) qp.set('days', String(params.days));
+    if (params.warehouseId) qp.set('warehouseId', params.warehouseId);
+    if (params.includeExpired != null) qp.set('includeExpired', String(params.includeExpired));
+    if (params.page != null) qp.set('page', String(params.page));
+    if (params.limit != null) qp.set('limit', String(params.limit));
+
+    const url = `${API_ENDPOINTS.inventoryExpiring}${qp.toString() ? `?${qp.toString()}` : ''}`;
+    const response = await authFetch(url);
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching expiring products:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get expiring products by warehouse (Pharma-specific)
+ */
+export async function getExpiringProductsByWarehouse(warehouseId: string, days: number = 30): Promise<ExpiringProductsResponse> {
+  try {
+    const url = `${API_ENDPOINTS.inventoryExpiringByWarehouse(warehouseId)}?days=${days}`;
+    const response = await authFetch(url);
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching expiring products by warehouse:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get all product damages (Pharma-specific)
+ */
+export async function getProductDamages(params: DamageListParams = {}): Promise<DamageListResponse> {
+  try {
+    const qp = new URLSearchParams();
+    if (params.productId) qp.set('productId', params.productId);
+    if (params.warehouseId) qp.set('warehouseId', params.warehouseId);
+    if (params.startDate) qp.set('startDate', params.startDate);
+    if (params.endDate) qp.set('endDate', params.endDate);
+    if (params.page != null) qp.set('page', String(params.page));
+    if (params.limit != null) qp.set('limit', String(params.limit));
+
+    const url = `${API_ENDPOINTS.inventoryDamages}${qp.toString() ? `?${qp.toString()}` : ''}`;
+    const response = await authFetch(url);
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching product damages:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get damage history for a specific product (Pharma-specific)
+ */
+export async function getProductDamageHistory(productId: string): Promise<ProductDamage[]> {
+  try {
+    const response = await authFetch(API_ENDPOINTS.inventoryDamagesByProduct(productId));
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error fetching product damage history:', error);
+    throw error;
+  }
+}
+
+/**
+ * Record product damage (Pharma-specific)
+ */
+export async function recordProductDamage(productId: string, damageData: CreateDamagePayload): Promise<ProductDamage> {
+  try {
+    const response = await authFetch(API_ENDPOINTS.inventoryRecordDamage(productId), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(damageData),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to record product damage');
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error recording product damage:', error);
+    throw error;
+  }
+}

@@ -156,13 +156,13 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
         <div className="flex items-center justify-between px-5 py-6 border-b border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-3">
             <Image 
-              src="/Ceeone Asset/Ceeonewheels _logo_2.png" 
+              src="/Ceeone Asset/removehencee.png" 
               alt="Ceeone Wheels Logo" 
               width={60} 
               height={60} 
               className="w-15 h-15 object-contain" 
             />
-            <span className="font-bold text-[20px] text-black font-['Work_Sans']">Ceeone Wheels</span>
+            <span className="font-bold text-[20px] text-black font-['Work_Sans']">Hencee Pharmaceuticals</span>
           </div>
           {/* Mobile Close Button */}
           {setSidebarOpen && (

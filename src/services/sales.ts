@@ -35,9 +35,16 @@ export interface CreateSalePayload {
     productId: string;
     quantity: number;
     price: number;
+    // Pharma-specific fields
+    selectedUnit?: 'PIECE' | 'CARTON' | 'ROLL';
+    unitPrice?: number;
+    originalPrice?: number;
+    discountAmount?: number;
   }>;
   paymentMethod: string;
   paymentStatus: string;
+  outstandingBalance?: number;
+  showDiscountOnInvoice?: boolean;
   notes?: string;
 }
 
@@ -54,12 +61,21 @@ export interface Sale {
     totalPrice: number;
     price?: number; // Legacy field
     total?: number; // Legacy field
+    // Pharma-specific fields
+    selectedUnit?: 'PIECE' | 'CARTON' | 'ROLL';
+    originalPrice?: number;
+    discountAmount?: number;
     product?: {
       id: string;
       name: string;
       image?: string;
       sku?: string;
       sellingPrice?: number;
+      pricePerPiece?: number;
+      pricePerCarton?: number;
+      pricePerRoll?: number;
+      piecesPerCarton?: number;
+      piecesPerRoll?: number;
     };
   }>;
   totalAmount: number;
