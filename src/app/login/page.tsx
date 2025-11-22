@@ -111,31 +111,25 @@ export default function LoginPage() {
       
       // Handle successful login - redirect to dashboard
       
-      // Check if we have a token in the response
-      let authToken = null;
-      if (data.token) {
-        authToken = data.token;
-      } else if (data.access_token) {
-        authToken = data.access_token;
-      } else if (data.authToken) {
-        authToken = data.authToken;
-      } else if (data.jwt) {
-        authToken = data.jwt;
-      } else if (data.authorization) {
-        authToken = data.authorization;
-      } else {
-        console.warn('No token found in response:', data);
-        // Still proceed if we have user data
+      // Extract tokens from response (support multiple response formats)
+      const accessToken = data.accessToken || data.token || data.access_token || data.authToken || data.jwt || data.authorization;
+      const refreshToken = data.refreshToken || data.refresh_token;
+      
+      if (!accessToken) {
+        console.warn('No access token found in response:', data);
+        setError('Login successful but no token received. Please try again.');
+        setLoading(false);
+        return;
       }
       
-      // Store user data/token in localStorage if needed
-      if (authToken) {
-        localStorage.setItem('authToken', authToken);
-      } else {
-        // If no token provided, create a simple authentication flag
-        // This ensures the user can still access the dashboard
-        const fallbackToken = `auth_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        localStorage.setItem('authToken', fallbackToken);
+      // Store tokens in localStorage
+      localStorage.setItem('accessToken', accessToken);
+      // Also store in authToken for backward compatibility
+      localStorage.setItem('authToken', accessToken);
+      
+      // Store refresh token if provided
+      if (refreshToken) {
+        localStorage.setItem('refreshToken', refreshToken);
       }
       // Store user data in localStorage
       if (data.user) {

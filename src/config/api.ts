@@ -1,28 +1,34 @@
 // API Configuration
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000';
 
 // Pharma App (CeeOne) API prefix
 const CEEONE_PREFIX = '/api/ceeone';
 
 // API endpoints
 export const API_ENDPOINTS = {
-  // Auth endpoints (no prefix needed)
-  register: `${API_BASE_URL}/auth/register`,
-  login: `${API_BASE_URL}/auth/login`,
-  verifyEmail: `${API_BASE_URL}/auth/verify-email`,
-  resendVerification: `${API_BASE_URL}/auth/resend-verification`,
-  forgotPassword: `${API_BASE_URL}/auth/forgot-password`,
-  resetPassword: `${API_BASE_URL}/auth/reset-password`,
-  passwordReset: `${API_BASE_URL}/auth/password-reset`,
-  passwordResetConfirm: `${API_BASE_URL}/auth/password-reset/confirm`,
-  changePassword: `${API_BASE_URL}/auth/change-password`,
-  // Registration drafts
-  registrationDrafts: `${API_BASE_URL}/auth/registration-drafts`,
-  registrationDraftById: (id: string) => `${API_BASE_URL}/auth/registration-drafts/${id}`,
-  registrationDraftByEmail: (email: string) => `${API_BASE_URL}/auth/registration-drafts?email=${encodeURIComponent(email)}`,
-  registrationDraftSubmit: (id: string) => `${API_BASE_URL}/auth/registration-drafts/${id}/submit`,
-  deactivateUser: (id: string) => `${API_BASE_URL}/auth/users/${id}/deactivate`,
-  deleteUser: (id: string) => `${API_BASE_URL}/auth/users/${id}`,
+  // Auth endpoints (Pharma/CeeOne)
+  register: `${API_BASE_URL}${CEEONE_PREFIX}/auth/register`,
+  login: `${API_BASE_URL}/auth/login`, // Login endpoint is shared (no prefix)
+  verifyEmail: `${API_BASE_URL}${CEEONE_PREFIX}/auth/verify-email`,
+  resendVerification: `${API_BASE_URL}${CEEONE_PREFIX}/auth/resend-verification`,
+  forgotPassword: `${API_BASE_URL}${CEEONE_PREFIX}/auth/password/forgot`,
+  resetPassword: `${API_BASE_URL}${CEEONE_PREFIX}/auth/password/reset`,
+  passwordReset: `${API_BASE_URL}${CEEONE_PREFIX}/auth/password-reset`,
+  passwordResetConfirm: `${API_BASE_URL}${CEEONE_PREFIX}/auth/password-reset/confirm`,
+  changePassword: `${API_BASE_URL}${CEEONE_PREFIX}/auth/change-password`,
+  refresh: `${API_BASE_URL}${CEEONE_PREFIX}/auth/refresh`,
+  // Public endpoints (Pharma/CeeOne)
+  roles: `${API_BASE_URL}${CEEONE_PREFIX}/roles`,
+  
+  // Registration drafts (Pharma/CeeOne - tenant-specific)
+  registrationDrafts: `${API_BASE_URL}${CEEONE_PREFIX}/auth/registration-drafts`,
+  registrationDraftById: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/auth/registration-drafts/${id}`,
+  registrationDraftByEmail: (email: string) => `${API_BASE_URL}${CEEONE_PREFIX}/auth/registration-drafts?email=${encodeURIComponent(email)}`,
+  registrationDraftSubmit: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/auth/registration-drafts/${id}/submit`,
+  
+  // User management (Pharma/CeeOne - tenant-specific)
+  deactivateUser: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/users/${id}/deactivate`,
+  deleteUser: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/users/${id}`,
   
   // Customer endpoints (Pharma/CeeOne)
   customers: `${API_BASE_URL}${CEEONE_PREFIX}/customers`,
@@ -60,12 +66,12 @@ export const API_ENDPOINTS = {
   salesMonthlyReport: `${API_BASE_URL}${CEEONE_PREFIX}/sales/monthly-report`,
   salesDashboard: `${API_BASE_URL}${CEEONE_PREFIX}/sales/dashboard`,
   
-  // Tire endpoints (keeping for backward compatibility, but these should be removed if not used)
-  tires: `${API_BASE_URL}/tires`,
-  tireById: (id: string) => `${API_BASE_URL}/tires/id/${id}`,
-  tireDrafts: `${API_BASE_URL}/tires/drafts`,
-  tirePublish: (id: string) => `${API_BASE_URL}/tires/${id}/publish`,
-  tireDraft: `${API_BASE_URL}/tires/draft`,
+  // Tire endpoints (Pharma/CeeOne - keeping for backward compatibility)
+  tires: `${API_BASE_URL}${CEEONE_PREFIX}/tires`,
+  tireById: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/tires/id/${id}`,
+  tireDrafts: `${API_BASE_URL}${CEEONE_PREFIX}/tires/drafts`,
+  tirePublish: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/tires/${id}/publish`,
+  tireDraft: `${API_BASE_URL}${CEEONE_PREFIX}/tires/draft`,
   
   // Order endpoints (Pharma/CeeOne) - Note: Orders are typically handled through sales
   orders: `${API_BASE_URL}${CEEONE_PREFIX}/sales`, // Using sales endpoint for orders
@@ -140,11 +146,11 @@ export const API_ENDPOINTS = {
   permissionsAvailablePermissions: `${API_BASE_URL}${CEEONE_PREFIX}/permissions/available-permissions`,
   permissionsRoleComparison: `${API_BASE_URL}${CEEONE_PREFIX}/permissions/role-comparison`,
   
-  // Compatibility test endpoints
-  compatibilityTestStatus: `${API_BASE_URL}/compatibility-test/status`,
-  compatibilityTestOldPermissions: `${API_BASE_URL}/compatibility-test/test-old-permissions`,
-  compatibilityTestPermissionMapping: `${API_BASE_URL}/compatibility-test/test-permission-mapping`,
-  compatibilityTestRoleMapping: `${API_BASE_URL}/compatibility-test/test-role-mapping`,
+  // Compatibility test endpoints (Pharma/CeeOne)
+  compatibilityTestStatus: `${API_BASE_URL}${CEEONE_PREFIX}/compatibility-test/status`,
+  compatibilityTestOldPermissions: `${API_BASE_URL}${CEEONE_PREFIX}/compatibility-test/test-old-permissions`,
+  compatibilityTestPermissionMapping: `${API_BASE_URL}${CEEONE_PREFIX}/compatibility-test/test-permission-mapping`,
+  compatibilityTestRoleMapping: `${API_BASE_URL}${CEEONE_PREFIX}/compatibility-test/test-role-mapping`,
   
   // Users endpoints (Pharma/CeeOne)
   users: `${API_BASE_URL}${CEEONE_PREFIX}/users`,
@@ -189,6 +195,6 @@ export const API_ENDPOINTS = {
   sessionsStats: `${API_BASE_URL}${CEEONE_PREFIX}/sessions/stats`,
   sessionsOthers: `${API_BASE_URL}${CEEONE_PREFIX}/sessions/others`,
 
-  // API documentation
-  apiDocs: `${API_BASE_URL}/api/docs`,
+  // API documentation (Pharma/CeeOne)
+  apiDocs: `${API_BASE_URL}${CEEONE_PREFIX}/api/docs`,
 }; 

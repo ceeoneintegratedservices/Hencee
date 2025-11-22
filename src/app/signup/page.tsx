@@ -105,7 +105,7 @@ export default function SignupPage() {
       setRolesLoading(true);
       try {
         // Try to fetch roles from API without authentication
-        const response = await fetch(`${API_BASE_URL}/roles`, {
+        const response = await fetch(API_ENDPOINTS.roles, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' }
         });

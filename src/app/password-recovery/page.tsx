@@ -19,7 +19,7 @@ export default function PasswordRecoveryPage() {
     setError("");
     
     try {
-      const res = await fetch(API_ENDPOINTS.passwordReset, {
+      const res = await fetch(API_ENDPOINTS.forgotPassword, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -44,7 +44,7 @@ export default function PasswordRecoveryPage() {
   const handleResend = async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_ENDPOINTS.passwordReset, {
+      const res = await fetch(API_ENDPOINTS.forgotPassword, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

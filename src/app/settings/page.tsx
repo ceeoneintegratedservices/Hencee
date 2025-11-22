@@ -6,6 +6,7 @@ import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import Breadcrumb from "@/components/Breadcrumb";
 import { NotificationContainer, useNotifications } from "@/components/Notification";
+import { API_ENDPOINTS } from "@/config/api";
 import { 
   getSystemSettings, 
   updateSystemSettings, 
@@ -636,11 +637,11 @@ export default function SettingsPage() {
     setApiLoading(true);
     
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://ceeone-api.onrender.com'}/auth/change-password`, {
+      const response = await fetch(API_ENDPOINTS.changePassword, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          'Authorization': `Bearer ${localStorage.getItem('accessToken') || localStorage.getItem('authToken')}`
         },
         body: JSON.stringify({
           currentPassword: securityData.currentPassword,
