@@ -4,8 +4,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { InventoryDataService, InventoryItem, Purchase } from '@/services/InventoryDataService';
-import { getProduct, updateProduct } from '@/services/products';
-import { getProductPurchaseHistory } from '@/services/inventory';
+import {
+  getInventoryProductById,
+  updateInventoryProduct,
+  getProductPurchaseHistory,
+  type InventoryStatus,
+} from '@/services/inventory';
 import { getWarehouse } from '@/services/warehouses';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import FilterByDateModal from '@/components/FilterByDateModal';
@@ -74,101 +78,93 @@ function ViewInventoryContent() {
           showError('Error', 'No product ID provided');
           return;
         }
-        const p = await getProduct(itemId);
-        
-        // Don't update state if component unmounted
+        const product = await getInventoryProductById(itemId);
+
         if (!mounted) return;
-        
-        if (!p || !p.id) {
+
+        if (!product || !product.id) {
           setInventoryItem(null);
           showError('Error', 'Product not found');
           return;
         }
-        
-        // Map API response to UI model
+
+        const piecesInStock =
+          product.inventoryUnits?.piecesInStock ?? product.quantity ?? 0;
+
         const item: InventoryItem = {
-          id: p.id,
-          productName: p.name || 'Product',
-          category: p.category?.name || p.category || 'General',
-          unitPrice: p.sellingPrice ?? p.price ?? 0,
-          inStock: p.quantity ?? p.stock ?? 0,
+          id: product.id,
+          productName: product.name || 'Product',
+          category: product.category ?? product.categoryName ?? 'General',
+          unitPrice: product.sellingPrice ?? 0,
+          inStock: piecesInStock,
           discount: 0,
-          totalValue: (p.quantity ?? 0) * (p.sellingPrice ?? p.price ?? 0),
+          totalValue: piecesInStock * (product.sellingPrice ?? 0),
           status: 'Published',
-          description: p.description || '',
-          dateAdded: p.createdAt || new Date().toISOString(),
-          // Required fields for InventoryItem
-          costPrice: p.purchasePrice ?? p.costPrice ?? 0,
-          image: p.coverImage || p.image || '',
-          views: p.views || 0,
-          favorites: p.favorites || 0,
-          lastOrder: p.lastOrderDate || p.lastOrder || undefined,
-          warehouseNumber: p.warehouse?.name || p.warehouseName || p.warehouse || 'N/A',
-          brand: p.brand || '',
-          longDescription: p.longDescription || p.description || '',
-          additionalImages: p.additionalImages || []
-        } as any;
-        
+          description: product.description || '',
+          dateAdded: product.createdAt || new Date().toISOString(),
+          costPrice: product.purchasePrice ?? 0,
+          image: '',
+          views: 0,
+          favorites: 0,
+          lastOrder: product.updatedAt || undefined,
+          warehouseNumber: product.warehouse ?? 'N/A',
+          brand: '',
+          longDescription: product.description || '',
+          additionalImages: [],
+        } as InventoryItem;
+
         setInventoryItem(item);
-        
-        // Fetch warehouse information if warehouse ID is available
-        if (p.warehouse?.id || p.warehouseId) {
+
+        if (product.warehouseId) {
           try {
-            const warehouseId = p.warehouse?.id || p.warehouseId;
-            const warehouse = await getWarehouse(warehouseId);
+            const warehouse = await getWarehouse(product.warehouseId);
             setWarehouseInfo({ id: warehouse.id, name: warehouse.name });
           } catch (error) {
             console.error('Failed to fetch warehouse info:', error);
-            // Keep the warehouse ID as fallback
-            setWarehouseInfo({ 
-              id: p.warehouse?.id || p.warehouseId || '', 
-              name: p.warehouse?.name || 'Unknown Warehouse' 
+            setWarehouseInfo({
+              id: product.warehouseId,
+              name: product.warehouse ?? 'Unknown Warehouse',
             });
           }
         }
-        
-        // Fetch real purchase data from the API
+
         try {
           const purchaseHistory = await getProductPurchaseHistory(itemId as string, 20);
-          
-          // Ensure we have a valid response with purchases array
           if (!purchaseHistory || !Array.isArray(purchaseHistory.purchases)) {
-            console.warn('Invalid purchase history response:', purchaseHistory);
             setPurchases([]);
             setFilteredPurchases([]);
             return;
           }
-          
-          const purchases: Purchase[] = purchaseHistory.purchases.map(p => ({
-            id: p.id || '',
-            date: p.date || new Date().toISOString(),
-            price: p.price || 0,
-            quantity: p.quantity || 0,
-            totalAmount: p.totalAmount || 0,
-            status: p.status || 'PENDING',
-            orderType: p.orderType || 'Standard',
-            customerName: p.customerName || 'Unknown Customer',
-            customerPhone: p.customerPhone || '',
-            saleReference: p.saleReference || '',
+
+          const purchases: Purchase[] = purchaseHistory.purchases.map((purchase) => ({
+            id: purchase.id || '',
+            date: purchase.date || new Date().toISOString(),
+            price: purchase.price || 0,
+            quantity: purchase.quantity || 0,
+            totalAmount: purchase.totalAmount || 0,
+            status: purchase.status || 'PENDING',
+            orderType: purchase.orderType || 'Standard',
+            customerName: purchase.customerName || 'Unknown Customer',
+            customerPhone: purchase.customerPhone || '',
+            saleReference: purchase.saleReference || '',
           }));
-          
-          // Sort purchases by date to get the most recent order
-          const sortedPurchases = purchases.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+          const sortedPurchases = purchases.sort(
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
           setPurchases(sortedPurchases);
           setFilteredPurchases(sortedPurchases);
-          
-          // Update the inventory item with the last order date
+
           if (sortedPurchases.length > 0) {
-            const lastOrderDate = sortedPurchases[0].date;
-            setInventoryItem(prev => prev ? { ...prev, lastOrder: lastOrderDate } : null);
+            setInventoryItem((prev) =>
+              prev ? { ...prev, lastOrder: sortedPurchases[0].date } : null
+            );
           }
         } catch (error) {
           console.error('Failed to fetch purchase history:', error);
-          // Fallback to empty array if API fails
           setPurchases([]);
           setFilteredPurchases([]);
         }
-        
       } catch (error) {
         if (mounted) {
           setInventoryItem(null);
@@ -267,23 +263,25 @@ function ViewInventoryContent() {
   const handleSaveProduct = async (formData: any, mainImage: string | null, additionalImages: string[]) => {
     if (inventoryItem) {
       try {
-        // Prepare the update payload for the API
+        const normalizedStatus: InventoryStatus =
+          inventoryItem.status === 'Published'
+            ? 'PUBLISHED'
+            : inventoryItem.status === 'Draft'
+            ? 'DRAFT'
+            : 'UNPUBLISHED';
+
         const updatePayload = {
           name: formData.productName,
-          category: formData.category,
           sellingPrice: parseFloat(formData.sellingPrice) || inventoryItem.unitPrice,
           purchasePrice: parseFloat(formData.costPrice) || inventoryItem.costPrice,
-          quantity: parseInt(formData.quantityInStock) || inventoryItem.inStock,
-          brand: formData.productBrand,
+          inventoryUnits: {
+            piecesInStock: parseInt(formData.quantityInStock) || inventoryItem.inStock,
+          },
           description: formData.shortDescription,
-          longDescription: formData.longDescription,
-          coverImage: mainImage || inventoryItem.image,
-          additionalImages: additionalImages.length > 0 ? additionalImages : inventoryItem.additionalImages,
-          warehouse: formData.warehouseNumber || inventoryItem.warehouseNumber
+          status: normalizedStatus,
         };
 
-        // Call the API to update the product
-        await updateProduct(inventoryItem.id, updatePayload);
+        await updateInventoryProduct(inventoryItem.id, updatePayload);
 
         // Update the local state with new data
         const updatedItem = {

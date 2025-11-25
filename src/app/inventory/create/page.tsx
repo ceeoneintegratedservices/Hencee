@@ -1,116 +1,117 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { InventoryDataService } from '@/services/InventoryDataService';
-import { NotificationContainer, useNotifications } from '@/components/Notification';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
-import { createTire } from '@/services/tires';
-import { useCloudinaryUpload } from '@/hooks/useCloudinaryUpload';
-import { getCategories, getWarehouses, type Category, type Warehouse } from '@/services/categories';
+import { NotificationContainer, useNotifications } from '@/components/Notification';
+import {
+  createInventoryProduct,
+  type CreateInventoryProduct,
+} from '@/services/inventory';
+import {
+  getCategories,
+  type Category,
+} from '@/services/categories';
+import {
+  getWarehouses,
+  createWarehouse,
+  type Warehouse,
+} from '@/services/warehouses';
+
+const SIZE_UNITS = ['mg', 'g', 'kg', 'ml', 'l', 'capsule', 'tablet', 'sachet', 'vial'];
+const STATUS_OPTIONS = [
+  { label: 'Published', value: 'PUBLISHED' as const },
+  { label: 'Draft', value: 'DRAFT' as const },
+];
 
 interface FormData {
-  productName: string;
-  category: string;
-  sellingPrice: string;
-  costPrice: string;
-  quantityInStock: string;
-  productBrand: string;
-  warehouseNumber: string;
-  addDiscount: boolean;
-  discountType: string;
-  discountValue: string;
-  addExpiryDate: boolean;
-  expiryDate: string;
-  shortDescription: string;
-  longDescription: string;
-  addReturnPolicy: boolean;
-  returnPolicyDate: string;
-  returnPolicyTime: string;
+  name: string;
   sku: string;
+  barcode: string;
+  description: string;
+  categoryName: string;
+  warehouseId: string;
+  expiryWarehouseId: string;
+  purchasePrice: string;
+  sellingPrice: string;
+  pricePerPiece: string;
+  pricePerCarton: string;
+  pricePerRoll: string;
+  piecesPerCarton: string;
+  piecesPerRoll: string;
+  productSize: string;
+  productSizeUnit: string;
+  expiryDate: string;
+  piecesInStock: string;
+  cartonsInStock: string;
+  rollsInStock: string;
+  reorderPoint: string;
+  expiryAlertThreshold: string;
+  isOutsourced: boolean;
+  supplierName: string;
+  sourceCostPrice: string;
+  liveSellingPrice: string;
+  outsourcedNotes: string;
+  status: 'PUBLISHED' | 'DRAFT';
 }
+
+const DEFAULT_FORM: FormData = {
+  name: '',
+  sku: '',
+  barcode: '',
+  description: '',
+  categoryName: '',
+  warehouseId: '',
+  expiryWarehouseId: '',
+  purchasePrice: '',
+    sellingPrice: '',
+  pricePerPiece: '',
+  pricePerCarton: '',
+  pricePerRoll: '',
+  piecesPerCarton: '',
+  piecesPerRoll: '',
+  productSize: '',
+  productSizeUnit: 'mg',
+    expiryDate: '',
+  piecesInStock: '',
+  cartonsInStock: '',
+  rollsInStock: '',
+  reorderPoint: '',
+  expiryAlertThreshold: '30',
+  isOutsourced: false,
+  supplierName: '',
+  sourceCostPrice: '',
+  liveSellingPrice: '',
+  outsourcedNotes: '',
+  status: 'PUBLISHED',
+};
+
+const numberValue = (value: string) =>
+  value.trim() === '' ? undefined : Number(value);
 
 export default function CreateInventoryPage() {
   const router = useRouter();
-  const { notifications, removeNotification, showSuccess, showError } = useNotifications();
-  
-  // Authentication check
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [showSidebar, setShowSidebar] = useState(false);
-  const [showMobileMenu, setShowMobileMenu] = useState(false);
-  
-  // Form data
-  const [formData, setFormData] = useState<FormData>({
-    productName: '',
-    category: '',
-    sellingPrice: '',
-    costPrice: '',
-    quantityInStock: '1',
-    productBrand: '',
-    warehouseNumber: '',
-    addDiscount: false,
-    discountType: 'percentage',
-    discountValue: '',
-    addExpiryDate: false,
-    expiryDate: '',
-    shortDescription: '',
-    longDescription: '',
-    addReturnPolicy: false,
-    returnPolicyDate: '',
-    returnPolicyTime: '12:00 PM',
-    sku: ''
-  });
+  const { notifications, removeNotification, showError, showSuccess } = useNotifications();
 
-  // Image states
-  const [mainImage, setMainImage] = useState<string | null>(null);
-  const [additionalImages, setAdditionalImages] = useState<string[]>([]);
-  
-  // Cloudinary upload hook
-  const { uploadImage, uploadProgress, resetUpload } = useCloudinaryUpload();
-  
-  // Categories and warehouses state
+  const [formData, setFormData] = useState<FormData>(DEFAULT_FORM);
   const [categories, setCategories] = useState<Category[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('');
-  
-  // Warehouse creation mode
-  const [isCreatingNewWarehouse, setIsCreatingNewWarehouse] = useState(false);
-  const [newWarehouseName, setNewWarehouseName] = useState('');
-  
-  // Category creation mode
-  const [isCreatingNewCategory, setIsCreatingNewCategory] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
+  const [useSameExpiryWarehouse, setUseSameExpiryWarehouse] = useState(true);
+  const [showWarehouseForm, setShowWarehouseForm] = useState(false);
+  const [warehouseSaving, setWarehouseSaving] = useState(false);
+  const [newWarehouse, setNewWarehouse] = useState({
+    name: '',
+    address: '',
+    capacity: '',
+  });
 
-  // Tyre brands list
-  const tyreBrands = [
-    'Michelin',
-    'Bridgestone',
-    'Continental',
-    'Pirelli',
-    'Goodyear',
-    'Dunlop',
-    'Hankook',
-    'Yokohama',
-    'Maxxis',
-    'Firestone',
-    'Cooper',
-    'Falken',
-    'Nexen',
-    'Kumho',
-    'Toyo',
-    'Nitto',
-    'BFGoodrich',
-    'General',
-    'Uniroyal',
-    'Vredestein'
-  ];
-
-  // Authentication check
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
+    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
     if (token) {
       setIsAuthenticated(true);
     } else {
@@ -119,190 +120,172 @@ export default function CreateInventoryPage() {
     setLoading(false);
   }, [router]);
 
-  // Fetch categories and warehouses
   useEffect(() => {
-    const fetchData = async () => {
+    if (!isAuthenticated) return;
+
+    const fetchDependencies = async () => {
       try {
-        const [categoriesData, warehousesData] = await Promise.all([
+        const [fetchedCategories, fetchedWarehouses] = await Promise.all([
           getCategories(),
-          getWarehouses()
+          getWarehouses(),
         ]);
-        setCategories(categoriesData);
-        setWarehouses(warehousesData);
-        
-        // Debug logging
-        
-        // Set default selections if available
-        if (categoriesData.length > 0) {
-          setSelectedCategoryId(categoriesData[0].id);
-        }
-        if (warehousesData.length > 0) {
-          setSelectedWarehouseId(warehousesData[0].id);
-        }
+        setCategories(fetchedCategories);
+        setWarehouses(fetchedWarehouses);
+
+        setFormData((prev) => ({
+          ...prev,
+          categoryName: fetchedCategories[0]?.name || '',
+          warehouseId: fetchedWarehouses[0]?.id || '',
+          expiryWarehouseId: fetchedWarehouses[0]?.id || '',
+        }));
       } catch (error) {
-        console.error('Error fetching categories and warehouses:', error);
-        // Set fallback values
-        setSelectedCategoryId('default-category-id');
-        setSelectedWarehouseId('default-warehouse-id');
+        console.error(error);
+        showError('Error', 'Failed to load categories or warehouses');
       }
     };
-    
-    if (isAuthenticated) {
-      fetchData();
+
+    fetchDependencies();
+  }, [isAuthenticated, showError]);
+
+  useEffect(() => {
+    if (useSameExpiryWarehouse) {
+      setFormData((prev) => ({
+      ...prev,
+        expiryWarehouseId: prev.warehouseId,
+      }));
     }
-  }, [isAuthenticated]);
+  }, [useSameExpiryWarehouse, formData.warehouseId]);
 
-  const handleInputChange = (field: keyof FormData, value: string | boolean) => {
-    setFormData(prev => ({
+  const updateForm = (field: keyof FormData, value: string | boolean) => {
+    setFormData((prev) => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
   };
 
-  const handleQuantityChange = (increment: boolean) => {
-    const currentQuantity = parseInt(formData.quantityInStock) || 1;
-    const newQuantity = increment ? currentQuantity + 1 : Math.max(1, currentQuantity - 1);
-    setFormData(prev => ({
+  const handleWarehouseFieldChange = (field: keyof typeof newWarehouse, value: string) => {
+    setNewWarehouse((prev) => ({
       ...prev,
-      quantityInStock: newQuantity.toString()
+      [field]: value,
     }));
   };
 
-  const handleImageUpload = async (file: File, isMain: boolean = false) => {
+  const resetForm = () => setFormData(DEFAULT_FORM);
+  const resetWarehouseForm = () => setNewWarehouse({ name: '', address: '', capacity: '' });
+
+  const handleCreateWarehouse = async () => {
+    if (!newWarehouse.name.trim()) {
+      showError('Validation Error', 'Warehouse name is required');
+      return;
+    }
+    
+    setWarehouseSaving(true);
     try {
-      // Upload to Cloudinary
-      const result = await uploadImage(file, {
-        folder: 'inventory',
-        transformation: {
-          width: 800,
-          height: 600,
-          crop: 'fill',
-          gravity: 'auto',
-          quality: 'auto',
-          format: 'auto'
-        }
+      const payload = {
+        name: newWarehouse.name.trim(),
+        address: newWarehouse.address.trim() || 'Not Provided',
+        capacity: Number(newWarehouse.capacity) || 0,
+        isActive: true,
+      };
+      const created = await createWarehouse(payload);
+
+      setWarehouses((prev) => {
+        const exists = prev.some((warehouse) => warehouse.id === created.id);
+        return exists ? prev : [...prev, created];
       });
 
-      if (isMain) {
-        setMainImage(result.secure_url);
-        showSuccess('Success', 'Main image uploaded successfully');
-      } else {
-        setAdditionalImages(prev => [...prev, result.secure_url]);
-        showSuccess('Success', 'Additional image uploaded successfully');
+      updateForm('warehouseId', created.id);
+      if (useSameExpiryWarehouse) {
+        updateForm('expiryWarehouseId', created.id);
       }
+      showSuccess('Success', 'Warehouse created successfully');
+      setShowWarehouseForm(false);
+      resetWarehouseForm();
     } catch (error: any) {
-      console.error('Image upload error:', error);
-      showError('Upload Error', error.message || 'Failed to upload image');
+      console.error(error);
+      showError('Error', error.message || 'Failed to create warehouse');
+    } finally {
+      setWarehouseSaving(false);
     }
   };
 
-  const removeImage = (index: number, isMain: boolean = false) => {
-    if (isMain) {
-      setMainImage(null);
-    } else {
-      setAdditionalImages(prev => prev.filter((_, i) => i !== index));
+  const validationErrors = useMemo(() => {
+    const errors: string[] = [];
+    if (!formData.name.trim()) errors.push('Product name is required');
+    if (!formData.sku.trim()) errors.push('SKU is required');
+    if (!formData.categoryName.trim()) errors.push('Category name is required');
+    if (!formData.warehouseId) errors.push('Warehouse is required');
+    if (!formData.expiryDate) errors.push('Expiry date is required');
+    if (!formData.purchasePrice || Number(formData.purchasePrice) <= 0) {
+      errors.push('Purchase price must be greater than zero');
     }
+    if (!formData.sellingPrice || Number(formData.sellingPrice) <= 0) {
+      errors.push('Selling price must be greater than zero');
+    }
+    return errors;
+  }, [formData]);
+
+  const buildPayload = (): CreateInventoryProduct => {
+    const payload: CreateInventoryProduct = {
+      name: formData.name.trim(),
+      sku: formData.sku.trim(),
+      barcode: formData.barcode.trim() || undefined,
+      description: formData.description.trim() || undefined,
+      categoryName: formData.categoryName.trim(),
+      warehouseId: formData.warehouseId,
+      expiryWarehouseId:
+        useSameExpiryWarehouse ? formData.warehouseId : formData.expiryWarehouseId || undefined,
+      purchasePrice: Number(formData.purchasePrice),
+      sellingPrice: Number(formData.sellingPrice),
+      pricePerPiece: numberValue(formData.pricePerPiece),
+      pricePerCarton: numberValue(formData.pricePerCarton),
+      pricePerRoll: numberValue(formData.pricePerRoll),
+      piecesPerCarton: numberValue(formData.piecesPerCarton),
+      piecesPerRoll: numberValue(formData.piecesPerRoll),
+      inventoryUnits: {
+        piecesInStock: numberValue(formData.piecesInStock) ?? 0,
+        cartonsInStock: numberValue(formData.cartonsInStock) ?? 0,
+        rollsInStock: numberValue(formData.rollsInStock) ?? 0,
+      },
+      expiryDate: formData.expiryDate,
+      productSize: formData.productSize.trim() || undefined,
+      productSizeUnit: formData.productSizeUnit,
+      reorderPoint: numberValue(formData.reorderPoint),
+      expiryAlertThreshold: numberValue(formData.expiryAlertThreshold),
+      isOutsourced: formData.isOutsourced,
+      outsourcedDetails: formData.isOutsourced
+        ? {
+            supplierName: formData.supplierName.trim() || undefined,
+            sourceCostPrice: numberValue(formData.sourceCostPrice),
+            liveSellingPrice: numberValue(formData.liveSellingPrice),
+            notes: formData.outsourcedNotes.trim() || undefined,
+          }
+        : undefined,
+      status: formData.status,
+    };
+
+    return payload;
   };
 
-  const handleSaveAsDraft = async () => {
-    // Validate required fields
-    if (!formData.productName.trim()) {
-      showError('Validation Error', 'Product name is required');
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (validationErrors.length > 0) {
+      showError('Validation Error', validationErrors[0]);
       return;
     }
     
     try {
-      // Create tire object from form data - matching backend expectations
-      const tireData = {
-        name: formData.productName, // Required field
-        description: formData.shortDescription,
-        sku: formData.sku || `TIRE-${Date.now()}`, // Generate unique SKU if not provided
-        categoryId: isCreatingNewCategory ? undefined : (selectedCategoryId || "default-category-id"),
-        categoryName: isCreatingNewCategory ? newCategoryName : undefined, // Send category name for auto-creation
-        warehouseId: isCreatingNewWarehouse ? undefined : (selectedWarehouseId || "default-warehouse-id"),
-        warehouseName: isCreatingNewWarehouse ? newWarehouseName : undefined, // Send warehouse name for auto-creation
-        purchasePrice: parseFloat(formData.costPrice) || 0, // Backend expects purchasePrice
-        sellingPrice: parseFloat(formData.sellingPrice) || 0, // Backend expects sellingPrice
-        quantity: parseInt(formData.quantityInStock) || 0,
-        brand: formData.productBrand,
-        coverImage: mainImage || "", // Backend expects coverImage (single URL)
-        additionalImages: additionalImages.map(url => ({ url })), // Backend expects array of objects with url property
-        status: 'DRAFT' as const // Backend expects uppercase
-      };
-      
-      // Debug logging
-      
-      // Send data to API
-      await createTire(tireData);
-      
-      showSuccess('Success', 'Tire saved as draft successfully');
+      setSubmitting(true);
+      const payload = buildPayload();
+      await createInventoryProduct(payload);
+      showSuccess('Success', 'Pharma inventory item created successfully');
+      resetForm();
       router.push('/inventory');
     } catch (error: any) {
-      showError('Error', error.message || 'Failed to save tire');
-      console.error("Error saving tire:", error);
-    }
-  };
-
-  const handleSaveAndPublish = async () => {
-    // Validate required fields
-    if (!formData.productName.trim()) {
-      showError('Validation Error', 'Product name is required');
-      return;
-    }
-    if (!isCreatingNewCategory && !selectedCategoryId) {
-      showError('Validation Error', 'Please select a category');
-      return;
-    }
-    if (isCreatingNewCategory && !newCategoryName.trim()) {
-      showError('Validation Error', 'Please enter a category name');
-      return;
-    }
-    if (!isCreatingNewWarehouse && !selectedWarehouseId) {
-      showError('Validation Error', 'Please select a warehouse');
-      return;
-    }
-    if (isCreatingNewWarehouse && !newWarehouseName.trim()) {
-      showError('Validation Error', 'Please enter a warehouse name');
-      return;
-    }
-    if (!formData.sellingPrice.trim()) {
-      showError('Validation Error', 'Selling price is required');
-      return;
-    }
-    if (!formData.costPrice.trim()) {
-      showError('Validation Error', 'Cost price is required');
-      return;
-    }
-    
-    try {
-      // Create tire object from form data - matching backend expectations
-      const tireData = {
-        name: formData.productName, // Required field
-        description: formData.shortDescription,
-        sku: formData.sku || `TIRE-${Date.now()}`, // Generate unique SKU if not provided
-        categoryId: isCreatingNewCategory ? undefined : (selectedCategoryId || "default-category-id"),
-        categoryName: isCreatingNewCategory ? newCategoryName : undefined, // Send category name for auto-creation
-        warehouseId: isCreatingNewWarehouse ? undefined : (selectedWarehouseId || "default-warehouse-id"),
-        warehouseName: isCreatingNewWarehouse ? newWarehouseName : undefined, // Send warehouse name for auto-creation
-        purchasePrice: parseFloat(formData.costPrice) || 0, // Backend expects purchasePrice
-        sellingPrice: parseFloat(formData.sellingPrice) || 0, // Backend expects sellingPrice
-        quantity: parseInt(formData.quantityInStock) || 0,
-        brand: formData.productBrand,
-        coverImage: mainImage || "", // Backend expects coverImage (single URL)
-        additionalImages: additionalImages.map(url => ({ url })), // Backend expects array of objects with url property
-        status: 'PUBLISHED' as const // Backend expects uppercase
-      };
-      
-      // Debug logging
-      
-      // Send data to API
-      await createTire(tireData);
-      
-      showSuccess('Success', 'Tire saved and published successfully');
-      router.push('/inventory');
-    } catch (error: any) {
-      showError('Error', error.message || 'Failed to save tire');
-      console.error("Error saving tire:", error);
+      console.error(error);
+      showError('Error', error.message || 'Failed to create inventory item');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -310,732 +293,598 @@ export default function CreateInventoryPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" />
+          <p className="mt-4 text-gray-600">Loading inventory form...</p>
         </div>
       </div>
     );
   }
 
-  if (!isAuthenticated) {
-    return null;
-  }
+  if (!isAuthenticated) return null;
 
   return (
     <div className="flex w-full h-screen bg-gray-50 overflow-hidden">
-      {/* Sidebar */}
       <Sidebar currentPage="inventory" sidebarOpen={showSidebar} setSidebarOpen={setShowSidebar} />
-      
-      {/* Main Content */}
       <main className="flex-1 h-screen overflow-y-auto transition-all duration-300 relative">
         <Header 
-          title="Add New Tyre" 
+          title="Add Pharma Inventory"
           sidebarOpen={showSidebar}
           setSidebarOpen={setShowSidebar}
         />
         
         <div className="p-4 sm:p-6">
-          {/* Breadcrumb */}
-          <div className="mb-6">
-            <nav className="flex items-center space-x-2 text-sm text-gray-500">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-              </svg>
-              <span>Inventory</span>
-              <span>/</span>
-              <span>New Inventory</span>
-            </nav>
+          <div className="max-w-5xl mx-auto bg-white rounded-2xl shadow-sm p-6 sm:p-8">
+            <form onSubmit={handleSubmit} className="space-y-10">
+              <section>
+                <div className="flex flex-col gap-2 mb-6">
+                  <h1 className="text-2xl font-bold text-gray-900">Product details</h1>
+                  <p className="text-sm text-gray-500">
+                    Capture the identifiers dispensary teams search for.
+                  </p>
           </div>
-
-          {/* Page Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-4 sm:mb-0">New Inventory Item</h1>
-            
-            {/* Action Buttons */}
-            <div className="flex gap-3">
-              <div className="relative">
-                <button
-                  onClick={handleSaveAsDraft}
-                  className="bg-gray-800 text-white px-6 py-3 rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2"
-                >
-                  Save as Draft
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-              </div>
-              <button
-                onClick={handleSaveAndPublish}
-                className="bg-[#02016a] text-white px-6 py-3 rounded-lg hover:bg-[#03024a] transition-colors"
-              >
-                Save & Publish
-              </button>
-            </div>
-          </div>
-
-          {/* Form Content */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left Column - Product Details */}
-            <div className="space-y-6">
-              {/* Product Name */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Product Name
+                      Product name <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
-                  value={formData.productName}
-                  onChange={(e) => handleInputChange('productName', e.target.value)}
-                  placeholder="Product Name"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      value={formData.name}
+                      onChange={(e) => updateForm('name', e.target.value)}
+                      placeholder="Augmentin 625mg"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      required
                 />
               </div>
-
-              {/* SKU */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+                  <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  SKU (Stock Keeping Unit)
+                      SKU <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.sku}
-                  onChange={(e) => handleInputChange('sku', e.target.value)}
-                  placeholder="Enter SKU (e.g., TIRE-001, MIC-205-55R16)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                <p className="text-xs text-gray-500 mt-1">Leave empty to auto-generate SKU</p>
+                      onChange={(e) => updateForm('sku', e.target.value)}
+                      placeholder="AUG-625"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      required
+                    />
               </div>
-
-              {/* Product Category */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Barcode</label>
+                      <input
+                      type="text"
+                      value={formData.barcode}
+                      onChange={(e) => updateForm('barcode', e.target.value)}
+                      placeholder="1234567890123"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tyre Category
-                </label>
-                
-                {/* Category Mode Toggle */}
-                <div className="mb-4">
-                  <div className="flex space-x-4">
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="categoryMode"
-                        checked={!isCreatingNewCategory}
-                        onChange={() => {
-                          setIsCreatingNewCategory(false);
-                          setNewCategoryName('');
-                        }}
-                        className="mr-2"
-                      />
-                      <span className="text-sm text-gray-700">Select Existing Category</span>
+                      Category name <span className="text-red-500">*</span>
                     </label>
-                    <label className="flex items-center">
                       <input
-                        type="radio"
-                        name="categoryMode"
-                        checked={isCreatingNewCategory}
-                        onChange={() => {
-                          setIsCreatingNewCategory(true);
-                          setSelectedCategoryId('');
-                        }}
-                        className="mr-2"
-                      />
-                      <span className="text-sm text-gray-700">Create New Category</span>
-                    </label>
+                      type="text"
+                      value={formData.categoryName}
+                      onChange={(e) => updateForm('categoryName', e.target.value)}
+                      list="category-suggestions"
+                      placeholder="Tablets"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      required
+                    />
+                    <datalist id="category-suggestions">
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.name} />
+                      ))}
+                    </datalist>
                   </div>
                 </div>
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                  <textarea
+                    rows={4}
+                    value={formData.description}
+                    onChange={(e) => updateForm('description', e.target.value)}
+                    placeholder="Broad spectrum antibiotic"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  />
+                </div>
+              </section>
 
-                {/* Existing Category Dropdown */}
-                {!isCreatingNewCategory && (
-                  <div className="relative">
+              <section>
+                <div className="flex flex-col gap-2 mb-6">
+                  <h2 className="text-xl font-semibold text-gray-900">Warehousing</h2>
+                  <p className="text-sm text-gray-500">
+                    Select where this stock lives. Expiry warehouse can differ for cold-chain items.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Storage warehouse <span className="text-red-500">*</span>
+                    </label>
                     <select
-                      value={selectedCategoryId}
-                      onChange={(e) => setSelectedCategoryId(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
+                      value={formData.warehouseId}
+                      onChange={(e) => updateForm('warehouseId', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     >
-                      <option value="">Select a category</option>
-                      {categories.length > 0 ? (
-                        categories.map((category) => (
-                          <option key={category.id} value={category.id}>
-                            {category.name}
+                      <option value="">Select warehouse</option>
+                      {warehouses.map((warehouse) => (
+                        <option key={warehouse.id} value={warehouse.id}>
+                          {warehouse.name}
                           </option>
-                        ))
-                      ) : (
-                        <option value="">Loading categories...</option>
-                      )}
+                      ))}
                     </select>
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                      <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
-                  </div>
-                )}
-
-                {/* New Category Input */}
-                {isCreatingNewCategory && (
-                  <div className="space-y-2">
+                    <div className="mt-2">
+                      {showWarehouseForm ? (
+                        <div className="space-y-2 border border-gray-200 rounded-lg p-3 bg-gray-50">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                              Warehouse name
+                            </label>
                     <input
                       type="text"
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      placeholder="Enter new category name"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                    <p className="text-xs text-gray-500">Category will be created automatically when you save the product</p>
+                              value={newWarehouse.name}
+                              onChange={(e) => handleWarehouseFieldChange('name', e.target.value)}
+                              placeholder="e.g. Lekki Depot"
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                            />
                   </div>
-                )}
-              </div>
-
-              {/* Pricing */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Selling Price
+                              <label className="block text-xs font-medium text-gray-600 mb-1">
+                                Address / Location
                     </label>
                     <input
-                      type="number"
-                      value={formData.sellingPrice}
-                      onChange={(e) => handleInputChange('sellingPrice', e.target.value)}
-                      placeholder="Selling Price"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                type="text"
+                                value={newWarehouse.address}
+                                onChange={(e) => handleWarehouseFieldChange('address', e.target.value)}
+                                placeholder="Optional"
+                                className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Cost Price
+                              <label className="block text-xs font-medium text-gray-600 mb-1">
+                                Capacity (units)
                     </label>
                     <input
                       type="number"
-                      value={formData.costPrice}
-                      onChange={(e) => handleInputChange('costPrice', e.target.value)}
-                      placeholder="Cost Price"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                value={newWarehouse.capacity}
+                                onChange={(e) => handleWarehouseFieldChange('capacity', e.target.value)}
+                                min={0}
+                                placeholder="0"
+                                className="w-full px-2 py-1.5 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     />
                   </div>
                 </div>
-              </div>
-
-              {/* Quantity in Stock */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Quantity in Stock
-                </label>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => handleQuantityChange(false)}
-                    className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                  >
-                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                    </svg>
+                              type="button"
+                              onClick={handleCreateWarehouse}
+                              disabled={warehouseSaving}
+                              className={`px-3 py-1.5 rounded-md text-sm text-white ${
+                                warehouseSaving
+                                  ? 'bg-gray-400 cursor-not-allowed'
+                                  : 'bg-indigo-600 hover:bg-indigo-700'
+                              }`}
+                            >
+                              {warehouseSaving ? 'Saving...' : 'Save warehouse'}
                   </button>
-                  <input
-                    type="number"
-                    value={formData.quantityInStock}
-                    onChange={(e) => handleInputChange('quantityInStock', e.target.value)}
-                    className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-center"
-                    min="1"
-                  />
                   <button
-                    onClick={() => handleQuantityChange(true)}
-                    className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-                  >
-                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
+                              type="button"
+                              onClick={() => {
+                                setShowWarehouseForm(false);
+                                resetWarehouseForm();
+                              }}
+                              className="px-3 py-1.5 rounded-md text-sm border border-gray-300 text-gray-600 hover:bg-gray-100"
+                            >
+                              Cancel
                   </button>
                 </div>
               </div>
-
-              {/* Product Brand */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Product Brand
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={formData.productBrand}
-                    onChange={(e) => handleInputChange('productBrand', e.target.value)}
-                    placeholder="Enter or select tyre brand"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    list="tyre-brands"
-                  />
-                  <datalist id="tyre-brands">
-                    {tyreBrands.map((brand) => (
-                      <option key={brand} value={brand} />
-                    ))}
-                  </datalist>
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">Type to search or select from popular tyre brands</p>
-              </div>
-
-              {/* Warehouse Selection */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Warehouse
-                </label>
-                
-                {/* Warehouse Mode Toggle */}
-                <div className="mb-4">
-                  <div className="flex space-x-4">
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="warehouseMode"
-                        checked={!isCreatingNewWarehouse}
-                        onChange={() => {
-                          setIsCreatingNewWarehouse(false);
-                          setNewWarehouseName('');
-                        }}
-                        className="mr-2"
-                      />
-                      <span className="text-sm text-gray-700">Select Existing Warehouse</span>
-                    </label>
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="warehouseMode"
-                        checked={isCreatingNewWarehouse}
-                        onChange={() => {
-                          setIsCreatingNewWarehouse(true);
-                          setSelectedWarehouseId('');
-                        }}
-                        className="mr-2"
-                      />
-                      <span className="text-sm text-gray-700">Create New Warehouse</span>
-                    </label>
-                </div>
-                </div>
-
-                {/* Existing Warehouse Dropdown */}
-                {!isCreatingNewWarehouse && (
-                  <div className="relative">
-                      <select
-                      value={selectedWarehouseId}
-                      onChange={(e) => setSelectedWarehouseId(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
-                    >
-                      <option value="">Select a warehouse...</option>
-                      {warehouses.length > 0 ? (
-                        warehouses.map((warehouse) => (
-                          <option key={warehouse.id} value={warehouse.id}>
-                            {warehouse.name} - {warehouse.location}
-                          </option>
-                        ))
                       ) : (
-                        <option value="">Loading warehouses...</option>
+                        <button
+                          type="button"
+                          onClick={() => setShowWarehouseForm(true)}
+                          className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                        >
+                          + Add new warehouse
+                        </button>
                       )}
-                      </select>
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                      <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">Select the warehouse where this product will be stored</p>
                   </div>
-                )}
-
-                {/* New Warehouse Name Input */}
-                {isCreatingNewWarehouse && (
-                    <div className="relative">
-                      <input
-                      type="text"
-                      value={newWarehouseName}
-                      onChange={(e) => setNewWarehouseName(e.target.value)}
-                      placeholder="Enter new warehouse name (e.g., 'Storage Room A')"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    <div className="mt-2 text-sm text-gray-600">
-                      <p>💡 The system will automatically create this warehouse and assign it a unique ID.</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-            </div>
-
-            {/* Middle Column - Descriptions & Policies */}
-            <div className="space-y-6">
-              {/* Short Description */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+                </div>
+                  <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Short Description
+                      Expiry warehouse
                 </label>
-                <textarea
-                  value={formData.shortDescription}
-                  onChange={(e) => handleInputChange('shortDescription', e.target.value)}
-                  placeholder="Short Description"
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    <div className="flex items-center gap-3 mb-2">
+                      <input
+                        id="same-warehouse"
+                        type="checkbox"
+                        className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                        checked={useSameExpiryWarehouse}
+                        onChange={(e) => setUseSameExpiryWarehouse(e.target.checked)}
+                      />
+                      <label htmlFor="same-warehouse" className="text-sm text-gray-600">
+                        Use storage warehouse
+                    </label>
+                </div>
+                      <select
+                      value={formData.expiryWarehouseId}
+                      onChange={(e) => updateForm('expiryWarehouseId', e.target.value)}
+                      disabled={useSameExpiryWarehouse}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-50"
+                    >
+                      <option value="">Select warehouse</option>
+                      {warehouses.map((warehouse) => (
+                          <option key={warehouse.id} value={warehouse.id}>
+                          {warehouse.name}
+                          </option>
+                      ))}
+                      </select>
+                    </div>
+                  </div>
+              </section>
+
+              <section>
+                <div className="flex flex-col gap-2 mb-6">
+                  <h2 className="text-xl font-semibold text-gray-900">Pricing</h2>
+                  <p className="text-sm text-gray-500">
+                    Capture unit prices so the sales workflow can pick the right package.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Purchase price <span className="text-red-500">*</span>
+                    </label>
+                      <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.purchasePrice}
+                      onChange={(e) => updateForm('purchasePrice', e.target.value)}
+                      placeholder="3500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      required
+                    />
+                    </div>
+                  <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Base selling price <span className="text-red-500">*</span>
+                </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.sellingPrice}
+                      onChange={(e) => updateForm('sellingPrice', e.target.value)}
+                      placeholder="5000"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      required
                 />
               </div>
-
-              {/* Product Long Description */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+                  <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Product Long Description
+                      Price per piece
                 </label>
-                <div className="border border-gray-300 rounded-lg">
-                  {/* Rich Text Editor Toolbar */}
-                  <div className="border-b border-gray-300 p-3 flex items-center gap-2 flex-wrap">
-                    <select className="text-sm border border-gray-300 rounded px-2 py-1">
-                      <option>Roboto</option>
-                    </select>
-                    <select className="text-sm border border-gray-300 rounded px-2 py-1">
-                      <option>Paragraph</option>
-                    </select>
-                    <button className="p-1 hover:bg-gray-100 rounded">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                    <button className="p-1 hover:bg-gray-100 rounded">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                      </svg>
-                    </button>
-                    <button className="p-1 hover:bg-gray-100 rounded">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                      </svg>
-                    </button>
-                    <div className="flex gap-1">
-                      <button className="p-1 hover:bg-gray-100 rounded">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6h12M6 12h12M6 18h12" />
-                        </svg>
-                      </button>
-                      <button className="p-1 hover:bg-gray-100 rounded">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6h12M6 12h12M6 18h12" />
-                        </svg>
-                      </button>
-                      <button className="p-1 hover:bg-gray-100 rounded">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6h12M6 12h12M6 18h12" />
-                        </svg>
-                      </button>
-                      <button className="p-1 hover:bg-gray-100 rounded">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6h12M6 12h12M6 18h12" />
-                        </svg>
-                      </button>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.pricePerPiece}
+                      onChange={(e) => updateForm('pricePerPiece', e.target.value)}
+                      placeholder="5000"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                    />
                     </div>
-                    <button className="p-1 hover:bg-gray-100 rounded">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                      </svg>
-                    </button>
-                  </div>
-                  <textarea
-                    value={formData.longDescription}
-                    onChange={(e) => handleInputChange('longDescription', e.target.value)}
-                    placeholder="Your text goes here"
-                    rows={8}
-                    className="w-full px-3 py-2 border-0 focus:ring-0 resize-none"
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Price per carton
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.pricePerCarton}
+                      onChange={(e) => updateForm('pricePerCarton', e.target.value)}
+                      placeholder="60000"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-2">Add a long description for your product</p>
-              </div>
-
-              {/* Return Policy */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <label className="text-sm font-medium text-gray-700">Return Policy</label>
-                  <button
-                    onClick={() => handleInputChange('addReturnPolicy', !formData.addReturnPolicy)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      formData.addReturnPolicy ? 'bg-[#02016a]' : 'bg-gray-200'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        formData.addReturnPolicy ? 'translate-x-6' : 'translate-x-1'
-                      }`}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Price per roll
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.pricePerRoll}
+                      onChange={(e) => updateForm('pricePerRoll', e.target.value)}
+                      placeholder="15000"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
                     />
-                  </button>
-                  <span className="text-sm text-gray-600">Add Return Policy</span>
                 </div>
-                {formData.addReturnPolicy && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
-                      <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Pieces per carton
+                </label>
                         <input
-                          type="date"
-                          value={formData.returnPolicyDate}
-                          onChange={(e) => handleInputChange('returnPolicyDate', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                        <svg className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                      </div>
+                    type="number"
+                        min="0"
+                        value={formData.piecesPerCarton}
+                        onChange={(e) => updateForm('piecesPerCarton', e.target.value)}
+                        placeholder="12"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                      />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Time</label>
-                      <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Pieces per roll
+                </label>
                         <input
-                          type="time"
-                          value={formData.returnPolicyTime}
-                          onChange={(e) => handleInputChange('returnPolicyTime', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                        <svg className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
+                        type="number"
+                        min="0"
+                        value={formData.piecesPerRoll}
+                        onChange={(e) => updateForm('piecesPerRoll', e.target.value)}
+                        placeholder="3"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                      />
                       </div>
                     </div>
                   </div>
-                )}
-              </div>
+              </section>
 
-              {/* Discount */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <label className="text-sm font-medium text-gray-700">Discount</label>
-                  <button
-                    onClick={() => handleInputChange('addDiscount', !formData.addDiscount)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      formData.addDiscount ? 'bg-[#02016a]' : 'bg-gray-200'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        formData.addDiscount ? 'translate-x-6' : 'translate-x-1'
-                      }`}
-                    />
-                  </button>
-                  <span className="text-sm text-gray-600">Add Discount</span>
+              <section>
+                <div className="flex flex-col gap-2 mb-6">
+                  <h2 className="text-xl font-semibold text-gray-900">Inventory units</h2>
+                  <p className="text-sm text-gray-500">
+                    Add counts for each unit. These values feed the sales workflow.
+                  </p>
                 </div>
-                {formData.addDiscount && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Type</label>
-                      <select
-                        value={formData.discountType}
-                        onChange={(e) => handleInputChange('discountType', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="percentage">Percentage</option>
-                        <option value="fixed">Fixed Amount</option>
-                      </select>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Pieces in stock
+                </label>
+                      <input
+                      type="number"
+                      min="0"
+                      value={formData.piecesInStock}
+                      onChange={(e) => updateForm('piecesInStock', e.target.value)}
+                      placeholder="24"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Value</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Cartons in stock
+                    </label>
                       <input
                         type="number"
-                        value={formData.discountValue}
-                        onChange={(e) => handleInputChange('discountValue', e.target.value)}
-                        placeholder="Value"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      min="0"
+                      value={formData.cartonsInStock}
+                      onChange={(e) => updateForm('cartonsInStock', e.target.value)}
+                      placeholder="5"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
                       />
                     </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Right Column - Images */}
-            <div className="space-y-6">
-              {/* Main Product Image */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Upload Image (Cover Image)</h3>
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                  {uploadProgress.isUploading ? (
-                    <div className="flex flex-col items-center justify-center h-48">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#02016a] mb-4"></div>
-                      <p className="text-gray-600 mb-2">Uploading to Cloudinary...</p>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-[#02016a] h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${uploadProgress.progress}%` }}
-                        ></div>
-                      </div>
-                      <p className="text-sm text-gray-500 mt-2">{uploadProgress.progress}%</p>
-                    </div>
-                  ) : mainImage ? (
-                    <div className="relative">
-                      <img
-                        src={mainImage}
-                        alt="Main product"
-                        className="w-full h-48 object-cover rounded-lg"
-                      />
-                      <div className="absolute top-2 right-2 flex gap-2">
-                        <button
-                          onClick={() => document.getElementById('main-image-upload')?.click()}
-                          className="p-2 bg-white rounded-full shadow-md hover:bg-gray-50"
-                          disabled={uploadProgress.isUploading}
-                        >
-                          <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => removeImage(0, true)}
-                          className="p-2 bg-white rounded-full shadow-md hover:bg-gray-50"
-                          disabled={uploadProgress.isUploading}
-                        >
-                          <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Rolls in stock
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.rollsInStock}
+                      onChange={(e) => updateForm('rollsInStock', e.target.value)}
+                      placeholder="2"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                    />
                       </div>
                     </div>
-                  ) : (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
                     <div>
-                      <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                      <p className="text-gray-600 mb-2">Upload Image</p>
-                      <p className="text-sm text-gray-500 mb-4">Upload a cover image for your product.</p>
-                      <p className="text-xs text-gray-400 mb-4">
-                        File Format jpeg, png, webp<br />
-                        Max Size 10MB
-                      </p>
-                      <button
-                        onClick={() => document.getElementById('main-image-upload')?.click()}
-                        className="px-4 py-2 bg-[#02016a] text-white rounded-lg hover:bg-[#03024a] transition-colors disabled:opacity-50"
-                        disabled={uploadProgress.isUploading}
-                      >
-                        Choose File
-                      </button>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Reorder point
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.reorderPoint}
+                      onChange={(e) => updateForm('reorderPoint', e.target.value)}
+                      placeholder="10"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                    />
                     </div>
-                  )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Expiry alert threshold (days)
+                    </label>
                   <input
-                    id="main-image-upload"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) handleImageUpload(file, true);
-                    }}
-                    className="hidden"
+                      type="number"
+                      min="1"
+                      value={formData.expiryAlertThreshold}
+                      onChange={(e) => updateForm('expiryAlertThreshold', e.target.value)}
+                      placeholder="30"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
                   />
                 </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                      <select
+                      value={formData.status}
+                      onChange={(e) => updateForm('status', e.target.value as FormData['status'])}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                    >
+                      {STATUS_OPTIONS.map((status) => (
+                        <option key={status.value} value={status.value}>
+                          {status.label}
+                          </option>
+                      ))}
+                      </select>
               </div>
+                  </div>
+              </section>
 
-              {/* Additional Images */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Additional Images</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  {additionalImages.map((image, index) => (
-                    <div key={index} className="relative">
-                      <img
-                        src={image}
-                        alt={`Additional ${index + 1}`}
-                        className="w-full h-32 object-cover rounded-lg"
-                      />
-                      <div className="absolute top-2 right-2 flex gap-1">
-                        <button
-                          onClick={() => document.getElementById(`additional-image-upload-${index}`)?.click()}
-                          className="p-1 bg-white rounded-full shadow-md hover:bg-gray-50"
-                        >
-                          <svg className="w-3 h-3 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => removeImage(index)}
-                          className="p-1 bg-white rounded-full shadow-md hover:bg-gray-50"
-                        >
-                          <svg className="w-3 h-3 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+              <section>
+                <div className="flex flex-col gap-2 mb-6">
+                  <h2 className="text-xl font-semibold text-gray-900">Pharma specifics</h2>
+                  <p className="text-sm text-gray-500">
+                    Set the size and expiry so the dashboard can alert the team before stock spoils.
+                  </p>
                       </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Product size
+                </label>
                       <input
-                        id={`additional-image-upload-${index}`}
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleImageUpload(file, false);
-                        }}
-                        className="hidden"
+                      type="text"
+                      value={formData.productSize}
+                      onChange={(e) => updateForm('productSize', e.target.value)}
+                      placeholder="625"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
                       />
                     </div>
-                  ))}
-                  
-                  {/* Add more images button */}
-                  {additionalImages.length < 4 && (
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-                      <svg className="w-8 h-8 text-gray-400 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                      <p className="text-xs text-gray-500 mb-2">Upload Image</p>
-                      <button
-                        onClick={() => document.getElementById('additional-image-upload-new')?.click()}
-                        className="text-xs text-[#02016a] hover:text-[#03024a]"
-                      >
-                        Add Image
-                      </button>
+                  <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Size unit
+                </label>
+                    <select
+                      value={formData.productSizeUnit}
+                      onChange={(e) => updateForm('productSizeUnit', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                    >
+                      {SIZE_UNITS.map((unit) => (
+                        <option key={unit} value={unit}>
+                          {unit}
+                        </option>
+                      ))}
+                    </select>
+                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Expiry date <span className="text-red-500">*</span>
+                    </label>
                       <input
-                        id="additional-image-upload-new"
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleImageUpload(file, false);
-                        }}
-                        className="hidden"
+                      type="date"
+                      value={formData.expiryDate}
+                      onChange={(e) => updateForm('expiryDate', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                      required
                       />
                     </div>
-                  )}
                 </div>
-              </div>
+              </section>
 
-              {/* Expiry Date */}
-              <div className="bg-white p-6 rounded-lg shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <label className="text-sm font-medium text-gray-700">Expiry Date</label>
+              <section>
+                <div className="flex flex-col gap-2 mb-6">
+                  <h2 className="text-xl font-semibold text-gray-900">Outsourcing</h2>
+                  <p className="text-sm text-gray-500">
+                    Capture the upstream supplier if this SKU is fulfilled externally.
+                  </p>
+                </div>
+                <div className="border border-gray-200 rounded-xl p-4 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm text-gray-700">Is this product outsourced?</p>
                   <button
-                    onClick={() => handleInputChange('addExpiryDate', !formData.addExpiryDate)}
+                      type="button"
+                      onClick={() => updateForm('isOutsourced', !formData.isOutsourced)}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      formData.addExpiryDate ? 'bg-[#02016a]' : 'bg-gray-200'
+                        formData.isOutsourced ? 'bg-indigo-600' : 'bg-gray-200'
                     }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        formData.addExpiryDate ? 'translate-x-6' : 'translate-x-1'
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                          formData.isOutsourced ? 'translate-x-6' : 'translate-x-1'
                       }`}
                     />
                   </button>
-                  <span className="text-sm text-gray-600">Add Expiry Date</span>
                 </div>
-                {formData.addExpiryDate && (
+                  {formData.isOutsourced && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Expiry Date</label>
-                    <div className="relative">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Supplier name
+                        </label>
                       <input
-                        type="date"
-                        value={formData.expiryDate}
-                        onChange={(e) => handleInputChange('expiryDate', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          type="text"
+                          value={formData.supplierName}
+                          onChange={(e) => updateForm('supplierName', e.target.value)}
+                          placeholder="ABC Pharma"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Supplier cost price
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={formData.sourceCostPrice}
+                          onChange={(e) => updateForm('sourceCostPrice', e.target.value)}
+                          placeholder="3200"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                        />
+                      </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Live selling price
+                        </label>
+                      <input
+                        type="number"
+                          min="0"
+                          step="0.01"
+                          value={formData.liveSellingPrice}
+                          onChange={(e) => updateForm('liveSellingPrice', e.target.value)}
+                          placeholder="5100"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
                       />
-                      <svg className="absolute right-3 top-2.5 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
+                    </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Internal notes
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={formData.outsourcedNotes}
+                          onChange={(e) => updateForm('outsourcedNotes', e.target.value)}
+                          placeholder="Keep internal only"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                        />
                     </div>
                   </div>
                 )}
               </div>
+              </section>
+
+              <div className="flex items-center justify-end gap-3">
+                        <button
+                  type="button"
+                  onClick={() => router.back()}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                        >
+                  Cancel
+                        </button>
+                        <button
+                  type="submit"
+                  disabled={submitting}
+                  className="inline-flex items-center px-6 py-2 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-60"
+                        >
+                  {submitting ? 'Saving...' : 'Save product'}
+                        </button>
             </div>
+            </form>
           </div>
         </div>
       </main>
-
-      <NotificationContainer 
-        notifications={notifications} 
-        onRemove={removeNotification} 
-      />
+      <NotificationContainer notifications={notifications} onRemove={removeNotification} />
     </div>
   );
 }
+

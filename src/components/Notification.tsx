@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 export interface Notification {
   id: string;
   type: "success" | "error" | "warning" | "info";
@@ -162,42 +162,57 @@ export function NotificationContainer({ notifications, onRemove }: NotificationC
 export function useNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  const addNotification = (notification: Omit<Notification, "id">) => {
+  const addNotification = useCallback((notification: Omit<Notification, "id">) => {
     const id = Math.random().toString(36).substr(2, 9);
     const newNotification: Notification = {
       ...notification,
       id,
     };
-    setNotifications(prev => [...prev, newNotification]);
-  };
+    setNotifications((prev) => [...prev, newNotification]);
+  }, []);
 
-  const removeNotification = (id: string) => {
-    setNotifications(prev => prev.filter(notification => notification.id !== id));
-  };
+  const removeNotification = useCallback((id: string) => {
+    setNotifications((prev) => prev.filter((notification) => notification.id !== id));
+  }, []);
 
-  const showSuccess = (title: string, message: string, duration?: number) => {
-    addNotification({ type: "success", title, message, duration });
-  };
+  const showSuccess = useCallback(
+    (title: string, message: string, duration?: number) => {
+      addNotification({ type: "success", title, message, duration });
+    },
+    [addNotification]
+  );
 
-  const showError = (title: string, message: string, duration?: number) => {
-    addNotification({ type: "error", title, message, duration });
-  };
+  const showError = useCallback(
+    (title: string, message: string, duration?: number) => {
+      addNotification({ type: "error", title, message, duration });
+    },
+    [addNotification]
+  );
 
-  const showWarning = (title: string, message: string, duration?: number) => {
-    addNotification({ type: "warning", title, message, duration });
-  };
+  const showWarning = useCallback(
+    (title: string, message: string, duration?: number) => {
+      addNotification({ type: "warning", title, message, duration });
+    },
+    [addNotification]
+  );
 
-  const showInfo = (title: string, message: string, duration?: number) => {
-    addNotification({ type: "info", title, message, duration });
-  };
+  const showInfo = useCallback(
+    (title: string, message: string, duration?: number) => {
+      addNotification({ type: "info", title, message, duration });
+    },
+    [addNotification]
+  );
 
-  return {
-    notifications,
-    addNotification,
-    removeNotification,
-    showSuccess,
-    showError,
-    showWarning,
-    showInfo,
-  };
+  return useMemo(
+    () => ({
+      notifications,
+      addNotification,
+      removeNotification,
+      showSuccess,
+      showError,
+      showWarning,
+      showInfo,
+    }),
+    [notifications, addNotification, removeNotification, showSuccess, showError, showWarning, showInfo]
+  );
 }

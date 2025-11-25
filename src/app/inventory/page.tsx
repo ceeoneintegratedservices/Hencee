@@ -1,14 +1,155 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { InventoryDataService, InventoryItem, InventorySummary } from '@/services/InventoryDataService';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
-import { getInventoryProducts, createInventoryProduct, updateInventoryProduct, deleteInventoryProduct, adjustProductStock, getProductMovements } from '@/services/inventory';
+import {
+  getInventoryProducts,
+  updateInventoryProduct,
+  deleteInventoryProduct,
+  getInventoryExpiryAlerts,
+  importInventoryProducts,
+  recordProductDamage,
+  getInventoryExpirySummary,
+  listInventoryDamages,
+  mapFlatRecordToPayload,
+  type InventoryProduct,
+  type InventoryImportResult,
+  type CreateInventoryProduct,
+  type InventoryExpirySummary,
+  type InventoryDamageRecord,
+  type InventoryDamageSummary,
+  type InventoryDamageFilters,
+} from '@/services/inventory';
 import FilterByDateModal from '@/components/FilterByDateModal';
 import TimePeriodSelector from '@/components/TimePeriodSelector';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import { getWarehouses, type Warehouse } from '@/services/categories';
+
+type InventoryUnitsState = NonNullable<InventoryProduct['inventoryUnits']>;
+type InventoryRow = InventoryItem & {
+  warehouseId?: string;
+  expiryWarehouseId?: string;
+  sku?: string;
+  expiryStatus?: string;
+  inventoryUnits?: InventoryUnitsState;
+  supplier?: string;
+};
+
+const splitCsvLine = (line: string): string[] => {
+  const result: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      result.push(current);
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  result.push(current);
+  return result.map((value) => value.trim());
+};
+
+const parseCsvText = (text: string): Record<string, string>[] => {
+  const rows = text
+    .split(/\r?\n/)
+    .map((row) => row.trim())
+    .filter(Boolean);
+
+  if (rows.length === 0) return [];
+  const headers = splitCsvLine(rows[0]);
+  return rows.slice(1).map((row) => {
+    const values = splitCsvLine(row);
+    return headers.reduce<Record<string, string>>((record, header, index) => {
+      record[header] = values[index] ?? '';
+      return record;
+    }, {});
+  });
+};
+
+const mapApiProductToInventoryItem = (product: InventoryProduct): InventoryRow => {
+  const piecesInStock =
+    product.inventoryUnits?.piecesInStock ?? product.quantity ?? 0;
+  const sellingPrice = product.sellingPrice ?? 0;
+
+  return {
+    id: String(product.id),
+    productName: product.name ?? 'Product',
+    category: product.category ?? product.categoryName ?? 'General',
+    unitPrice: sellingPrice,
+    costPrice: product.purchasePrice ?? 0,
+    inStock: piecesInStock,
+    discount: 0,
+    totalValue: sellingPrice * piecesInStock,
+    status:
+      product.status === 'PUBLISHED'
+        ? 'Published'
+        : product.status === 'DRAFT'
+        ? 'Draft'
+        : 'Unpublished',
+    image: '',
+    shortDescription: product.description,
+    longDescription: product.description,
+    expiryDate: product.expiryDate,
+    returnPolicy: undefined,
+    dateAdded: product.createdAt ?? new Date().toISOString(),
+    lastOrder: product.updatedAt,
+    views: 0,
+    favorites: 0,
+    brand: '',
+    description: product.description,
+    warehouseNumber: product.warehouse ?? 'N/A',
+    supplier: product.outsourcedDetails?.supplierName,
+    warehouseId: product.warehouseId,
+    expiryWarehouseId: product.expiryWarehouseId,
+    sku: product.sku,
+    expiryStatus: product.expiryStatus,
+    inventoryUnits: product.inventoryUnits,
+  };
+};
+
+const EXPIRY_STATUS_META: Record<
+  "healthy" | "warning" | "critical" | "expired",
+  { label: string; color: string; badge: string; ring: string }
+> = {
+  healthy: {
+    label: "Healthy",
+    color: "text-emerald-700",
+    badge: "bg-emerald-50 text-emerald-700",
+    ring: "#10B981",
+  },
+  warning: {
+    label: "Warning",
+    color: "text-amber-700",
+    badge: "bg-amber-50 text-amber-700",
+    ring: "#F59E0B",
+  },
+  critical: {
+    label: "Critical",
+    color: "text-orange-700",
+    badge: "bg-orange-50 text-orange-700",
+    ring: "#EA580C",
+  },
+  expired: {
+    label: "Expired",
+    color: "text-red-700",
+    badge: "bg-red-50 text-red-700",
+    ring: "#EF4444",
+  },
+};
 
 export default function InventoryPage() {
   const router = useRouter();
@@ -19,9 +160,10 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true);
   
   // Data states
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryRow[]>([]);
   const [summaryData, setSummaryData] = useState<InventorySummary | null>(null);
-  const [filteredItems, setFilteredItems] = useState<InventoryItem[]>([]);
+  const [filteredItems, setFilteredItems] = useState<InventoryRow[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   
   // API state management
   const [apiLoading, setApiLoading] = useState(false);
@@ -45,6 +187,40 @@ export default function InventoryPage() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [showDateFilterModal, setShowDateFilterModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importingRows, setImportingRows] = useState(false);
+  const [importResult, setImportResult] = useState<InventoryImportResult | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [expiryAlerts, setExpiryAlerts] = useState<InventoryRow[]>([]);
+  const [expiryThreshold, setExpiryThreshold] = useState(30);
+  const [expiryLoading, setExpiryLoading] = useState(false);
+  const [expirySummary, setExpirySummary] = useState<InventoryExpirySummary | null>(null);
+  const [expirySummaryLoading, setExpirySummaryLoading] = useState(false);
+  const [expirySummaryError, setExpirySummaryError] = useState<string | null>(null);
+  const [damageModal, setDamageModal] = useState<{ open: boolean; product?: InventoryRow }>({
+    open: false,
+  });
+  const [damageForm, setDamageForm] = useState({
+    quantity: '',
+    reason: '',
+    action: 'discard',
+    inspectorNotes: '',
+    warehouseId: '',
+  });
+  const [recordingDamage, setRecordingDamage] = useState(false);
+  const [damageLog, setDamageLog] = useState<InventoryDamageRecord[]>([]);
+  const [damageSummary, setDamageSummary] = useState<InventoryDamageSummary | null>(null);
+  const [damageLoading, setDamageLoading] = useState(false);
+  const [damageError, setDamageError] = useState<string | null>(null);
+  const [damageFilters, setDamageFilters] = useState({
+    startDate: '',
+    endDate: '',
+    warehouseId: '',
+    reason: '',
+    action: '',
+    productId: '',
+  });
   
   // Refs for click outside detection
   const statusDropdownRef = useRef<HTMLDivElement>(null);
@@ -64,124 +240,67 @@ export default function InventoryPage() {
     setLoading(false);
   }, [router]);
 
-  // Fetch inventory data from API
-  const fetchInventoryData = async () => {
+  const fetchInventoryData = useCallback(
+    async (search?: string) => {
     setApiLoading(true);
     setApiError(null);
     try {
-      const data = await getInventoryProducts();
-      // Handle both array response and { data: [] } response formats
-      const itemsArray = Array.isArray(data) ? data : ((data as any).data || []);
-      
-      // Map API response to InventoryItem format
-      const mappedItems = itemsArray.map((item: any) => ({
-        id: String(item.id || ''),
-        productName: String(item.name || item.productName || 'Unknown Product'),
-        category: String(item.category?.name || item.category || 'General'),
-        warehouseNumber: String(item.warehouse?.name || item.warehouseNumber || item.warehouse || 'N/A'),
-        unitPrice: Number(item.sellingPrice || item.price || item.unitPrice || 0),
-        inStock: Number(item.quantity || item.stock || item.inStock || 0),
-        discount: Number(item.discount || 0),
-        totalValue: Number(item.totalValue || (item.sellingPrice || item.price || 0) * (item.quantity || item.stock || 0)),
-        status: String(item.status || 'Active'),
-        lastUpdated: String(item.updatedAt || item.lastUpdated || new Date().toISOString()),
-        sku: String(item.sku || item.id || ''),
-        brand: String(item.brand || ''),
-        model: String(item.model || ''),
-        size: String(item.size || ''),
-        description: String(item.description || ''),
-        reorderLevel: Number(item.reorderPoint || item.reorderLevel || 10),
-        supplier: String(item.supplier || ''),
-        costPrice: Number(item.purchasePrice || item.costPrice || item.cost || 0),
-        sellingPrice: Number(item.sellingPrice || item.price || 0),
-        profitMargin: Number(item.profitMargin || 0),
-        imageUrl: String(item.coverImage || item.imageUrl || item.image || ''),
-        tags: Array.isArray(item.tags) ? item.tags : [],
-        notes: String(item.notes || ''),
-        isActive: Boolean(item.isActive !== false),
-        createdAt: String(item.createdAt || new Date().toISOString()),
-        dateAdded: String(item.createdAt || new Date().toISOString()),
-      }));
-      
+        const response = await getInventoryProducts({
+          search: search || undefined,
+          limit: 100,
+        });
+
+        const mappedItems = response.data.map(mapApiProductToInventoryItem);
       setInventoryItems(mappedItems);
       setFilteredItems(mappedItems);
-      
-      // Store items in localStorage so view page can access the same data
       localStorage.setItem('inventoryItems', JSON.stringify(mappedItems));
       
-      // Generate summary from API data
       const summary = InventoryDataService.generateInventorySummary(mappedItems);
       setSummaryData(summary);
     } catch (err: any) {
       console.error('Error fetching inventory:', err);
       setApiError(err.message || 'Failed to load inventory');
       showError('Error', err.message || 'Failed to load inventory');
-      
-      // No fallback - show empty state instead
       setInventoryItems([]);
       setFilteredItems([]);
       setSummaryData(null);
     } finally {
       setApiLoading(false);
     }
-  };
+    },
+    [showError]
+  );
 
-  // Load inventory data
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchInventoryData();
-    }
-  }, [isAuthenticated]);
+    if (!isAuthenticated) return;
+    const debounce = setTimeout(() => {
+      fetchInventoryData(searchQuery);
+    }, 400);
+    return () => clearTimeout(debounce);
+  }, [isAuthenticated, searchQuery, fetchInventoryData]);
 
-  // Handle inventory item creation
-  const handleCreateInventoryItem = async (itemData: any) => {
-    try {
-      const newItem = await createInventoryProduct(itemData);
-      // Refresh inventory data
-      await fetchInventoryData();
-      showSuccess('Success', 'Inventory item created successfully');
-    } catch (err: any) {
-      console.error('Error creating inventory item:', err);
-      showError('Error', err.message || 'Failed to create inventory item');
-    }
-  };
-
-  // Handle inventory item update
-  const handleUpdateInventoryItem = async (id: string, itemData: any) => {
-    try {
-      const updatedItem = await updateInventoryProduct(id, itemData);
-      // Refresh inventory data
-      await fetchInventoryData();
-      showSuccess('Success', 'Inventory item updated successfully');
-    } catch (err: any) {
-      console.error('Error updating inventory item:', err);
-      showError('Error', err.message || 'Failed to update inventory item');
-    }
-  };
+  useEffect(() => {
+    const loadWarehouses = async () => {
+      try {
+        const data = await getWarehouses();
+        setWarehouses(data);
+      } catch (error) {
+        console.error('Failed to load warehouses', error);
+      }
+    };
+    loadWarehouses();
+  }, []);
 
   // Handle inventory item deletion
   const handleDeleteInventoryItem = async (id: string) => {
     try {
       await deleteInventoryProduct(id);
       // Refresh inventory data
-      await fetchInventoryData();
+      await fetchInventoryData(searchQuery);
       showSuccess('Success', 'Inventory item deleted successfully');
     } catch (err: any) {
       console.error('Error deleting inventory item:', err);
       showError('Error', err.message || 'Failed to delete inventory item');
-    }
-  };
-
-  // Handle stock adjustment
-  const handleStockAdjustment = async (id: string, adjustment: { quantity: number; reason: string; notes?: string }) => {
-    try {
-      await adjustProductStock(id, adjustment);
-      // Refresh inventory data
-      await fetchInventoryData();
-      showSuccess('Success', 'Stock adjusted successfully');
-    } catch (err: any) {
-      console.error('Error adjusting stock:', err);
-      showError('Error', err.message || 'Failed to adjust stock');
     }
   };
 
@@ -275,6 +394,146 @@ export default function InventoryPage() {
     // Handle date filtering logic here
     showSuccess('Success', 'Date filter applied successfully');
   };
+  const handleImportCsv = async (file: File) => {
+    setImportingRows(true);
+    setImportError(null);
+    setImportResult(null);
+    try {
+      const text = await file.text();
+      const records = parseCsvText(text);
+      if (!records.length) {
+        throw new Error('The CSV file is empty.');
+      }
+      const rows = records.map((record) => mapFlatRecordToPayload(record));
+      const result = await importInventoryProducts(rows as CreateInventoryProduct[]);
+      setImportResult(result);
+      showSuccess('Success', `Imported ${result.created} item(s)`);
+      await fetchInventoryData(searchQuery);
+      await fetchExpiryAlerts(expiryThreshold);
+    } catch (error: any) {
+      console.error('Import failed', error);
+      setImportError(error.message || 'Failed to import inventory');
+      showError('Error', error.message || 'Failed to import inventory');
+    } finally {
+      setImportingRows(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleDamageSubmit = async () => {
+    if (!damageModal.product) return;
+    if (!damageForm.quantity || Number(damageForm.quantity) <= 0) {
+      showError('Validation Error', 'Quantity must be greater than zero');
+      return;
+    }
+    if (!damageForm.reason.trim()) {
+      showError('Validation Error', 'Please provide a reason');
+      return;
+    }
+    try {
+      setRecordingDamage(true);
+      await recordProductDamage(damageModal.product.id, {
+        quantity: Number(damageForm.quantity),
+        reason: damageForm.reason.trim(),
+        warehouseId: damageForm.warehouseId || undefined,
+        action: damageForm.action as 'discard' | 'return' | 'repair',
+        inspectorNotes: damageForm.inspectorNotes.trim() || undefined,
+      });
+      showSuccess('Success', 'Damage recorded successfully');
+      setDamageModal({ open: false });
+      await fetchInventoryData(searchQuery);
+      await fetchExpiryAlerts(expiryThreshold);
+    } catch (error: any) {
+      console.error('Damage recording failed', error);
+      showError('Error', error.message || 'Failed to record damage');
+    } finally {
+      setRecordingDamage(false);
+    }
+  };
+
+  const fetchExpiryAlerts = useCallback(
+    async (threshold: number) => {
+      setExpiryLoading(true);
+      try {
+        const alerts = await getInventoryExpiryAlerts(threshold);
+        const mapped = alerts.map(mapApiProductToInventoryItem);
+        setExpiryAlerts(mapped);
+      } catch (error: any) {
+        console.error('Failed to fetch expiry alerts', error);
+        setExpiryAlerts([]);
+        showError('Error', error.message || 'Failed to load expiry alerts');
+      } finally {
+        setExpiryLoading(false);
+      }
+    },
+    [showError]
+  );
+
+  const fetchExpirySummary = useCallback(async () => {
+    setExpirySummaryLoading(true);
+    setExpirySummaryError(null);
+    try {
+      const summary = await getInventoryExpirySummary();
+      setExpirySummary(summary);
+    } catch (error: any) {
+      console.error('Failed to fetch expiry summary', error);
+      setExpirySummary(null);
+      setExpirySummaryError(error?.message || 'Unable to load expiry summary');
+    } finally {
+      setExpirySummaryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetchExpiryAlerts(expiryThreshold);
+  }, [isAuthenticated, expiryThreshold, fetchExpiryAlerts]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    fetchExpirySummary();
+  }, [isAuthenticated, fetchExpirySummary]);
+
+  const fetchDamageLog = useCallback(
+    async (overrides: Partial<typeof damageFilters> = {}) => {
+      if (!isAuthenticated) return;
+      setDamageLoading(true);
+      setDamageError(null);
+      try {
+        const merged = { ...damageFilters, ...overrides };
+        const actionValue = merged.action?.trim() || '';
+        const payload: InventoryDamageFilters = {
+          startDate: merged.startDate || undefined,
+          endDate: merged.endDate || undefined,
+          warehouseId: merged.warehouseId || undefined,
+          reason: merged.reason || undefined,
+          productId: merged.productId || undefined,
+          action: (actionValue === 'discard' || actionValue === 'return' || actionValue === 'repair'
+            ? actionValue
+            : undefined),
+          page: 1,
+          limit: 50,
+        };
+        const response = await listInventoryDamages(payload);
+        setDamageLog(response.data || []);
+        setDamageSummary(response.summary || null);
+      } catch (error: any) {
+        console.error('Failed to fetch damage log', error);
+        setDamageError(error?.message || 'Unable to load damage log');
+        setDamageLog([]);
+        setDamageSummary(null);
+      } finally {
+        setDamageLoading(false);
+      }
+    },
+    [damageFilters, isAuthenticated]
+  );
+
+  useEffect(() => {
+    fetchDamageLog();
+  }, [fetchDamageLog]);
 
   const getTimePeriodData = () => {
     if (!summaryData) return summaryData;
@@ -297,6 +556,45 @@ export default function InventoryPage() {
   };
 
   const currentSummaryData = getTimePeriodData();
+  const formatNumber = (value?: number | null) => {
+    if (value === undefined || value === null || Number.isNaN(value)) return "0";
+    return Number(value).toLocaleString();
+  };
+  const formatDate = (value?: string | null) =>
+    value ? new Date(value).toLocaleDateString() : "—";
+  const expiryTotals = expirySummary?.totals || {};
+  const statusStatsRaw = (["healthy", "warning", "critical", "expired"] as const).map(
+    (key) => ({
+      key,
+      label: EXPIRY_STATUS_META[key].label,
+      value: Number(expiryTotals?.[key] ?? 0),
+      color: EXPIRY_STATUS_META[key].color,
+      badge: EXPIRY_STATUS_META[key].badge,
+      ring: EXPIRY_STATUS_META[key].ring,
+    })
+  );
+  const totalStatuses =
+    expiryTotals?.total ??
+    statusStatsRaw.reduce((sum, stat) => sum + (Number.isFinite(stat.value) ? stat.value : 0), 0);
+  const statusStats = statusStatsRaw.map((stat) => ({
+    ...stat,
+    percent: totalStatuses ? Math.round((stat.value / totalStatuses) * 100) : 0,
+  }));
+  const donutGradient = (() => {
+    if (!totalStatuses) return "#E5E7EB";
+    let acc = 0;
+    const segments = statusStats
+      .filter((stat) => stat.value > 0)
+      .map((stat) => {
+        const start = (acc / totalStatuses) * 360;
+        acc += stat.value;
+        const end = (acc / totalStatuses) * 360;
+        return `${stat.ring} ${start}deg ${end}deg`;
+      });
+    return segments.length ? `conic-gradient(${segments.join(",")})` : "#E5E7EB";
+  })();
+  const topWarehouses = (expirySummary?.warehouses ?? []).slice(0, 4);
+  const upcomingExpiries = (expirySummary?.upcoming ?? []).slice(0, 5);
 
   if (loading) {
     return (
@@ -321,7 +619,7 @@ export default function InventoryPage() {
       {/* Main Content */}
       <main className="flex-1 h-screen overflow-y-auto transition-all duration-300 relative">
         <Header 
-          title="Tyre Inventory" 
+          title="Pharma Inventory" 
           sidebarOpen={showSidebar}
           setSidebarOpen={setShowSidebar}
         />
@@ -330,15 +628,16 @@ export default function InventoryPage() {
           {/* Breadcrumb */}
           <div className="mb-6">
             <nav className="flex items-center space-x-2 text-sm text-gray-500">
-              <span>Tyre Inventory</span>
+              <span>Pharma Inventory</span>
             </nav>
           </div>
 
           {/* Inventory Summary */}
           <div className="mb-8">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6">
-              <h1 className="text-2xl font-bold text-gray-900 mb-4 sm:mb-0">Tyre Inventory Summary</h1>
+              <h1 className="text-2xl font-bold text-gray-900 mb-4 sm:mb-0">Pharma Inventory Summary</h1>
               <div className="flex items-center space-x-4">
+                <div className="flex flex-wrap items-center gap-3">
                 <button
                   onClick={() => router.push('/inventory/create')}
                   className="bg-[#02016a] text-white px-4 py-2 rounded-lg hover:bg-[#03024a] transition-colors flex items-center gap-2"
@@ -348,6 +647,17 @@ export default function InventoryPage() {
                   </svg>
                     Add new inventory
                 </button>
+                  <button
+                    onClick={() => {
+                      setImportError(null);
+                      setImportResult(null);
+                      setShowImportModal(true);
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Bulk import (CSV)
+                  </button>
+                </div>
                 <TimePeriodSelector
                   selectedTimePeriod={selectedTimePeriod}
                   onTimePeriodChange={setSelectedTimePeriod}
@@ -357,11 +667,11 @@ export default function InventoryPage() {
 
             {currentSummaryData && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                {/* All Tyres Card */}
+                {/* All Products Card */}
                 <div className="bg-[#02016a] text-white p-6 rounded-lg">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-white/80 text-sm">All Tyres</p>
+                      <p className="text-white/80 text-sm">All Products</p>
                       <p className="text-3xl font-bold">{currentSummaryData.allProducts}</p>
                       <p className="text-white/80 text-sm mt-1">
                         Active {currentSummaryData.activeProducts} {Math.round((currentSummaryData.activeProducts / currentSummaryData.allProducts) * 100)}%
@@ -377,7 +687,7 @@ export default function InventoryPage() {
                 <div className="bg-white p-6 rounded-lg shadow-sm">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[#8b8d97] text-sm">Low Tyre Stock</p>
+                      <p className="text-[#8b8d97] text-sm">Low Pharma Stock</p>
                       <p className="text-3xl font-bold text-[#45464e]">{currentSummaryData.lowStockAlert}</p>
                     </div>
                     <svg className="w-8 h-8 text-[#8b8d97]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -418,11 +728,500 @@ export default function InventoryPage() {
             )}
           </div>
 
+          <section className="mb-8">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Expiry Risk Overview</h2>
+                <p className="text-sm text-gray-500">
+                  Live snapshot of healthy vs. at-risk stock and upcoming expiries.
+                </p>
+              </div>
+              {expirySummaryLoading && (
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <svg className="w-4 h-4 animate-spin text-gray-400" viewBox="0 0 24 24">
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                    ></path>
+                  </svg>
+                  Updating…
+                </div>
+              )}
+            </div>
+            {expirySummaryError && (
+              <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-2">
+                {expirySummaryError}
+              </div>
+            )}
+            {expirySummaryLoading && !expirySummary ? (
+              <div className="grid gap-4 lg:grid-cols-3">
+                {[1, 2, 3].map((item) => (
+                  <div
+                    key={item}
+                    className="h-48 bg-white rounded-lg shadow-sm border border-gray-100 animate-pulse"
+                  />
+                ))}
+              </div>
+            ) : !expirySummary ? (
+              <div className="bg-white border border-dashed border-gray-200 rounded-lg p-6 text-sm text-gray-500">
+                No expiry insights available yet.
+              </div>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-3">
+                <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-6 flex flex-col gap-6">
+                  <div className="flex items-center gap-6">
+                    <div className="relative w-28 h-28">
+                      <div
+                        className="w-full h-full rounded-full"
+                        style={{ background: donutGradient }}
+                      ></div>
+                      <div className="absolute inset-4 bg-white rounded-full flex flex-col items-center justify-center text-center">
+                        <p className="text-xs uppercase text-gray-500">Total</p>
+                        <p className="text-2xl font-semibold text-gray-900">
+                          {formatNumber(totalStatuses)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-3 flex-1">
+                      {statusStats.map((stat) => (
+                        <div key={stat.key}>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className={`font-medium ${stat.color}`}>{stat.label}</span>
+                            <span className="text-gray-500">{stat.percent}%</span>
+                          </div>
+                          <div className="mt-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full"
+                              style={{
+                                width: `${stat.percent}%`,
+                                backgroundColor: stat.ring,
+                              }}
+                            ></div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    Based on current stock levels. Healthy items exclude anything marked as warning,
+                    critical, or expired.
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-6 flex flex-col">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-gray-900">Warehouse breakdown</h3>
+                    <span className="text-xs text-gray-400">
+                      Showing top {topWarehouses.length || 0}
+                    </span>
+                  </div>
+                  {topWarehouses.length === 0 ? (
+                    <p className="text-sm text-gray-500">No warehouse data yet.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {topWarehouses.map((warehouse, index) => {
+                        const total =
+                          warehouse.total ??
+                          (warehouse.healthy ?? 0) +
+                            (warehouse.warning ?? 0) +
+                            (warehouse.critical ?? 0) +
+                            (warehouse.expired ?? 0);
+                        const percent = totalStatuses
+                          ? Math.round(((total ?? 0) / totalStatuses) * 100)
+                          : 0;
+                        return (
+                          <div key={`${warehouse.warehouseId || index}`}>
+                            <div className="flex items-center justify-between text-sm font-medium text-gray-900">
+                              <span>{warehouse.warehouseName || "Warehouse"}</span>
+                              <span>{formatNumber(total)}</span>
+                            </div>
+                            <div className="mt-2 flex items-center gap-2">
+                              <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full rounded-full bg-gradient-to-r from-green-500 via-amber-500 to-red-500"
+                                  style={{ width: `${percent}%` }}
+                                ></div>
+                              </div>
+                              <span className="text-xs text-gray-500 w-12 text-right">
+                                {percent}%
+                              </span>
+                            </div>
+                            <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-gray-500">
+                              <span>
+                                Healthy: <strong className="text-gray-700">{formatNumber(warehouse.healthy)}</strong>
+                              </span>
+                              <span>
+                                Warning: <strong className="text-gray-700">{formatNumber(warehouse.warning)}</strong>
+                              </span>
+                              <span>
+                                Critical: <strong className="text-gray-700">{formatNumber(warehouse.critical)}</strong>
+                              </span>
+                              <span>
+                                Expired: <strong className="text-gray-700">{formatNumber(warehouse.expired)}</strong>
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-6 flex flex-col">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-semibold text-gray-900">Upcoming expiries</h3>
+                    {upcomingExpiries.length > 5 && (
+                      <span className="text-xs text-gray-400">
+                        Showing 5 of {upcomingExpiries.length}
+                      </span>
+                    )}
+                  </div>
+                  {upcomingExpiries.length === 0 ? (
+                    <p className="text-sm text-gray-500">No products nearing expiry.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {upcomingExpiries.map((item, index) => (
+                        <div key={`${item.productId || index}`} className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">
+                              {item.productName || "Product"}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {item.warehouseName || "Warehouse"} · {formatDate(item.expiryDate)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-gray-500">
+                              {item.daysRemaining != null
+                                ? `${item.daysRemaining}d left`
+                                : "—"}
+                            </p>
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded-full ${
+                                item.status === "critical"
+                                  ? "bg-red-50 text-red-700"
+                                  : item.status === "warning"
+                                  ? "bg-orange-50 text-orange-700"
+                                  : "bg-emerald-50 text-emerald-700"
+                              }`}
+                            >
+                              {item.status || "healthy"}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {expiryLoading ? (
+            <div className="mb-8 p-4 bg-white rounded-lg shadow-sm border border-gray-100">
+              <p className="text-sm text-gray-500">Loading expiry alerts...</p>
+            </div>
+          ) : expiryAlerts.length > 0 ? (
+            <div className="mb-8 bg-white rounded-lg shadow-sm border border-orange-100">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-orange-100 p-4">
+                <div>
+                  <p className="text-sm font-semibold text-orange-700">
+                    {expiryAlerts.length} product{expiryAlerts.length === 1 ? '' : 's'} approaching expiry
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    Threshold: {expiryThreshold} day{expiryThreshold === 1 ? '' : 's'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-500">Alert window</label>
+                  <select
+                    value={expiryThreshold}
+                    onChange={(e) => setExpiryThreshold(Number(e.target.value))}
+                    className="border border-gray-200 rounded-md px-2 py-1 text-xs focus:ring-1 focus:ring-orange-500"
+                  >
+                    {[7, 14, 30, 60].map((value) => (
+                      <option key={value} value={value}>
+                        {value} days
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {expiryAlerts.slice(0, 5).map((alert) => (
+                  <div key={alert.id} className="p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{alert.productName}</p>
+                      <p className="text-xs text-gray-500">
+                        Expires {alert.expiryDate ? new Date(alert.expiryDate).toLocaleDateString() : '—'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-700">{alert.inStock} pcs</p>
+                      <span
+                        className={`text-xs px-2 py-0.5 rounded-full ${
+                          alert.expiryStatus === 'critical'
+                            ? 'bg-red-50 text-red-700'
+                            : alert.expiryStatus === 'warning'
+                            ? 'bg-orange-50 text-orange-700'
+                            : 'bg-green-50 text-green-700'
+                        }`}
+                      >
+                        {alert.expiryStatus || 'healthy'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {expiryAlerts.length > 5 && (
+                  <div className="p-4 text-sm text-gray-500">
+                    Showing 5 of {expiryAlerts.length} alerts
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Damage Log */}
+          <section className="mb-8">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Damage Log</h2>
+                <p className="text-sm text-gray-500">
+                  Inspection records, reasons, and actions taken across warehouses.
+                </p>
+              </div>
+              <button
+                onClick={() => fetchDamageLog()}
+                className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-2"
+              >
+                <svg className={`w-4 h-4 ${damageLoading ? 'animate-spin' : ''}`} viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M4 4v5h.582m15.418 2a8 8 0 10-15.418 2"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                Refresh
+              </button>
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 mb-4">
+              <div className="p-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div>
+                  <label className="text-xs text-gray-500 uppercase">Start date</label>
+                  <input
+                    type="date"
+                    value={damageFilters.startDate}
+                    onChange={(e) => setDamageFilters((prev) => ({ ...prev, startDate: e.target.value }))}
+                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 uppercase">End date</label>
+                  <input
+                    type="date"
+                    value={damageFilters.endDate}
+                    onChange={(e) => setDamageFilters((prev) => ({ ...prev, endDate: e.target.value }))}
+                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 uppercase">Action</label>
+                  <select
+                    value={damageFilters.action}
+                    onChange={(e) => setDamageFilters((prev) => ({ ...prev, action: e.target.value }))}
+                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">All actions</option>
+                    <option value="discard">Discard</option>
+                    <option value="return">Return</option>
+                    <option value="repair">Repair</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 uppercase">Warehouse</label>
+                  <select
+                    value={damageFilters.warehouseId}
+                    onChange={(e) => setDamageFilters((prev) => ({ ...prev, warehouseId: e.target.value }))}
+                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">All warehouses</option>
+                    {warehouses.map((warehouse) => (
+                      <option key={warehouse.id} value={warehouse.id}>
+                        {warehouse.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 uppercase">Reason</label>
+                  <input
+                    type="text"
+                    value={damageFilters.reason}
+                    onChange={(e) => setDamageFilters((prev) => ({ ...prev, reason: e.target.value }))}
+                    placeholder="e.g. expired"
+                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 uppercase">Product ID/SKU</label>
+                  <input
+                    type="text"
+                    value={damageFilters.productId}
+                    onChange={(e) => setDamageFilters((prev) => ({ ...prev, productId: e.target.value }))}
+                    placeholder="Optional"
+                    className="mt-1 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="flex items-end gap-2">
+                  <button
+                    onClick={() => fetchDamageLog()}
+                    className="w-full bg-[#02016a] text-white px-4 py-2 rounded-lg hover:bg-[#03024a] transition-colors text-sm font-medium"
+                  >
+                    Apply filters
+                  </button>
+                  <button
+                    onClick={() => {
+                      setDamageFilters({
+                        startDate: '',
+                        endDate: '',
+                        warehouseId: '',
+                        reason: '',
+                        action: '',
+                        productId: '',
+                      });
+                      fetchDamageLog({
+                        startDate: '',
+                        endDate: '',
+                        warehouseId: '',
+                        reason: '',
+                        action: '',
+                        productId: '',
+                      });
+                    }}
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+                  >
+                    Reset
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-3 mb-4">
+              <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4">
+                <p className="text-xs uppercase text-gray-500">Total damage cases</p>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {formatNumber(damageSummary?.totalDamages)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">All recorded inspections</p>
+              </div>
+              <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4">
+                <p className="text-xs uppercase text-gray-500">Units affected</p>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {formatNumber(damageSummary?.totalQuantity)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">Total damaged quantity</p>
+              </div>
+              <div className="bg-white rounded-lg border border-gray-100 shadow-sm p-4">
+                <p className="text-xs uppercase text-gray-500">Top reasons</p>
+                {damageSummary?.quantityByReason ? (
+                  <div className="mt-2 space-y-1 text-sm text-gray-600">
+                    {Object.entries(damageSummary.quantityByReason)
+                      .sort((a, b) => Number(b[1]) - Number(a[1]))
+                      .slice(0, 3)
+                      .map(([reason, qty]) => (
+                        <div key={reason} className="flex justify-between">
+                          <span className="capitalize">{reason || 'Other'}</span>
+                          <span className="text-gray-900 font-medium">{formatNumber(qty)}</span>
+                        </div>
+                      ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 mt-1">No reason data yet.</p>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-100">
+              <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-900">Damage records</h3>
+                {damageLoading && (
+                  <span className="text-xs text-gray-500 flex items-center gap-1">
+                    <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v4l3-3"
+                      ></path>
+                    </svg>
+                    Loading…
+                  </span>
+                )}
+              </div>
+              {damageError ? (
+                <div className="p-6 text-sm text-red-600">{damageError}</div>
+              ) : damageLog.length === 0 ? (
+                <div className="p-6 text-sm text-gray-500">No damage records found.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quantity</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reason</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Warehouse</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Recorded</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-100">
+                      {damageLog.map((record) => (
+                        <tr key={record.id}>
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            <div className="font-medium">{record.productName || 'Product'}</div>
+                            <div className="text-xs text-gray-500">{record.sku || record.productId}</div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900">{record.quantity}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 capitalize">{record.reason || '—'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900 capitalize">{record.action || '—'}</td>
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            <div>{record.warehouseName || '—'}</div>
+                            <div className="text-xs text-gray-500">{record.warehouseId}</div>
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-900">
+                            <div>{formatDate(record.createdAt)}</div>
+                            <div className="text-xs text-gray-500">
+                              By {record.recordedByName || record.recordedBy || 'Unknown'}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </section>
+
           {/* Inventory Items */}
           <div className="bg-white rounded-lg shadow">
             <div className="p-6 border-b border-gray-200">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                <h2 className="text-xl font-semibold text-gray-900">Tyre Products</h2>
+                <h2 className="text-xl font-semibold text-gray-900">Pharma Products</h2>
                 
                 {/* Search and Filter Bar */}
                 <div className="flex flex-col sm:flex-row gap-3">
@@ -775,7 +1574,7 @@ export default function InventoryPage() {
                           <p className="font-medium">Error loading inventory</p>
                           <p className="text-sm mt-1">{apiError}</p>
                           <button 
-                            onClick={fetchInventoryData}
+                            onClick={() => fetchInventoryData(searchQuery)}
                             className="mt-2 px-4 py-2 bg-[#02016a] text-white rounded-lg hover:bg-[#03024a] transition-colors"
                           >
                             Retry
@@ -904,6 +1703,22 @@ export default function InventoryPage() {
                               </div>
                             </div>
                           )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDamageModal({ open: true, product: item });
+                              setDamageForm({
+                                quantity: '',
+                                reason: '',
+                                action: 'discard',
+                                inspectorNotes: '',
+                                warehouseId: item.warehouseId || '',
+                              });
+                            }}
+                            className="mt-2 w-full text-xs text-red-600 border border-red-200 rounded-lg py-1 hover:bg-red-50 transition-colors"
+                          >
+                            Record damage
+                          </button>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -933,7 +1748,7 @@ export default function InventoryPage() {
                     <p className="font-medium">Error loading inventory</p>
                     <p className="text-sm mt-1">{apiError}</p>
                     <button 
-                      onClick={fetchInventoryData}
+                      onClick={() => fetchInventoryData(searchQuery)}
                       className="mt-2 px-4 py-2 bg-[#02016a] text-white rounded-lg hover:bg-[#03024a] transition-colors"
                     >
                       Retry
@@ -1058,6 +1873,22 @@ export default function InventoryPage() {
                                 </div>
                               </div>
                             )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDamageModal({ open: true, product: item });
+                              setDamageForm({
+                                quantity: '',
+                                reason: '',
+                                action: 'discard',
+                                inspectorNotes: '',
+                                warehouseId: item.warehouseId || '',
+                              });
+                            }}
+                            className="mt-2 w-full text-xs text-red-600 border border-red-200 rounded-lg py-1 hover:bg-red-50 transition-colors"
+                          >
+                            Record damage
+                          </button>
                           </div>
                         </div>
                       </div>
@@ -1104,6 +1935,209 @@ export default function InventoryPage() {
         notifications={notifications} 
         onRemove={removeNotification} 
       />
+
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/40 z-40 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-xl w-full p-6 space-y-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Bulk import (CSV)</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Map each column to the payload field names (e.g. <code className="font-mono">name</code>,{' '}
+                  <code className="font-mono">sku</code>, <code className="font-mono">inventoryUnits.piecesInStock</code>).
+                </p>
+              </div>
+              <button
+                onClick={() => setShowImportModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="border border-dashed border-gray-300 rounded-lg p-4 text-center">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                id="import-csv-input"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    handleImportCsv(file);
+                  }
+                }}
+              />
+              <label
+                htmlFor="import-csv-input"
+                className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                {importingRows ? (
+                  <>
+                    <svg
+                      className="w-4 h-4 animate-spin text-gray-500"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M12 3v3m6.364-1.364l-2.121 2.121M21 12h-3m1.364 6.364l-2.121-2.121M12 21v-3m-6.364 1.364l2.121-2.121M3 12h3M4.636 5.636l2.121 2.121" />
+                    </svg>
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v16h16V4M4 4l8 8 8-8" />
+                    </svg>
+                    Choose CSV file
+                  </>
+                )}
+              </label>
+              <p className="text-xs text-gray-500 mt-2">
+                Required columns: name, sku, categoryName, warehouseId, purchasePrice, sellingPrice, expiryDate.
+              </p>
+            </div>
+
+            {importError && (
+              <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-sm text-red-700">
+                {importError}
+              </div>
+            )}
+
+            {importResult && (
+              <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 space-y-1 border border-gray-100">
+                <p>Processed rows: {importResult.total}</p>
+                <p className="text-green-600">Created: {importResult.created}</p>
+                {importResult.failed > 0 && (
+                  <p className="text-red-600">Failed: {importResult.failed}</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowImportModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {damageModal.open && damageModal.product && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Record damaged stock</h3>
+                <p className="text-sm text-gray-500 mt-1">{damageModal.product.productName}</p>
+              </div>
+              <button
+                onClick={() => setDamageModal({ open: false })}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Quantity <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={damageForm.quantity}
+                  onChange={(e) => setDamageForm((prev) => ({ ...prev, quantity: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Reason <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={damageForm.reason}
+                  onChange={(e) => setDamageForm((prev) => ({ ...prev, reason: e.target.value }))}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  placeholder="Broken bottle"
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Action</label>
+                  <select
+                    value={damageForm.action}
+                    onChange={(e) => setDamageForm((prev) => ({ ...prev, action: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  >
+                    <option value="discard">Discard</option>
+                    <option value="return">Return</option>
+                    <option value="repair">Repair</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Warehouse</label>
+                  <select
+                    value={damageForm.warehouseId}
+                    onChange={(e) =>
+                      setDamageForm((prev) => ({ ...prev, warehouseId: e.target.value }))
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  >
+                    <option value="">Use product warehouse</option>
+                    {warehouses.map((warehouse) => (
+                      <option key={warehouse.id} value={warehouse.id}>
+                        {warehouse.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Inspector notes
+                </label>
+                <textarea
+                  rows={3}
+                  value={damageForm.inspectorNotes}
+                  onChange={(e) =>
+                    setDamageForm((prev) => ({ ...prev, inspectorNotes: e.target.value }))
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  placeholder="Leak detected on arrival"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setDamageModal({ open: false })}
+                className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDamageSubmit}
+                disabled={recordingDamage}
+                className="inline-flex items-center px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-60"
+              >
+                {recordingDamage ? 'Recording...' : 'Record damage'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Date Filter Modal */}
       <FilterByDateModal

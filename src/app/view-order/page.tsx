@@ -1,21 +1,54 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import { OrderDataService, Order } from "@/services/OrderDataService";
 import { NotificationContainer, useNotifications } from "@/components/Notification";
 import { updateOrderStatus, getOrderById } from "@/services/orders";
-import { getSalesByCustomer, Sale } from "@/services/sales";
+import {
+  getSalesByCustomer,
+  getSaleById,
+  Sale,
+  approveSalePayment,
+  querySalePayment,
+  rejectSalePayment,
+  addSalePayment,
+  PaymentMethod,
+  PaymentStatus,
+  downloadSaleInvoice,
+} from "@/services/sales";
 import CreateRefundRequestDialog from "@/components/sales/CreateRefundRequestDialog";
 import { usePermissions } from "@/hooks/usePermissions";
+import { ROLES } from "@/services/permissions";
+
+const PAYMENT_METHOD_OPTIONS: Array<{ value: PaymentMethod; label: string }> = [
+  { value: "cash", label: "Cash" },
+  { value: "card", label: "Card" },
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "cheque", label: "Cheque" },
+  { value: "mobile_money", label: "Mobile Money" },
+];
+
+const PAYMENT_STATUS_OPTIONS: Array<{ value: PaymentStatus; label: string }> = [
+  { value: "PENDING", label: "Pending" },
+  { value: "COMPLETED", label: "Completed" },
+  { value: "FAILED", label: "Failed" },
+  { value: "REFUNDED", label: "Refunded" },
+];
+
+const getPaymentMethodLabel = (method?: string | null) => {
+  if (!method) return "Not set";
+  const match = PAYMENT_METHOD_OPTIONS.find((opt) => opt.value === method);
+  return match ? match.label : method.replace(/_/g, " ");
+};
 
 function ViewOrderContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const orderId = searchParams.get("id");
-  const { notifications, removeNotification, showSuccess } = useNotifications();
+  const { notifications, removeNotification, showSuccess, showError } = useNotifications();
   
   // Fallback: try to get orderId from window.location if searchParams fails
   const [fallbackOrderId, setFallbackOrderId] = useState<string | null>(null);
@@ -37,122 +70,340 @@ function ViewOrderContent() {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showItemStatusDropdown, setShowItemStatusDropdown] = useState<number | null>(null);
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
-  const { hasPermission } = usePermissions();
+  const [saleDetails, setSaleDetails] = useState<Sale | null>(null);
+  const [saleLoading, setSaleLoading] = useState(false);
+  const [saleError, setSaleError] = useState<string | null>(null);
+  const [approveModalOpen, setApproveModalOpen] = useState(false);
+  const [queryModalOpen, setQueryModalOpen] = useState(false);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [addPaymentModalOpen, setAddPaymentModalOpen] = useState(false);
+  const [approveForm, setApproveForm] = useState({ amountPaid: "", note: "" });
+  const [queryNote, setQueryNote] = useState("");
+  const [rejectNote, setRejectNote] = useState("");
+  const [addPaymentForm, setAddPaymentForm] = useState({
+    amount: "",
+    method: "bank_transfer" as PaymentMethod,
+    status: "PENDING" as PaymentStatus,
+    reference: "",
+    senderName: "",
+    transactionReference: "",
+    chequeNumber: "",
+    accountName: "",
+  });
+  const [actionInFlight, setActionInFlight] =
+    useState<null | "approve" | "query" | "reject" | "addPayment" | "invoice:standard" | "invoice:outsourced">(null);
+  const { hasPermission, hasRole } = usePermissions();
+
+  const isAdmin = hasRole(ROLES.ADMIN);
+  const isManagingDirector = hasRole(ROLES.MANAGING_DIRECTOR);
+  const canApprovePayment = isAdmin || isManagingDirector;
+  const canQueryPayment = isAdmin;
+  const canRejectPayment = isManagingDirector;
+  const canAddPayment = isAdmin || isManagingDirector;
+  const salePayments = saleDetails?.payments ?? [];
+  const approvalTrailEntries = saleDetails?.metadata?.approvalTrail ?? [];
   
   // Check if user can create refund requests
   const canCreateRefund = hasPermission('create_sales') || hasPermission('sales.create') || hasPermission('refund.create');
 
+  const formatCurrency = (value?: number | string | null) => {
+    if (value === undefined || value === null || value === "") return "₦0";
+    const numericValue = typeof value === "string" ? Number(value) : value;
+    if (Number.isNaN(numericValue)) {
+      return "₦0";
+    }
+    return `₦${Number(numericValue).toLocaleString()}`;
+  };
 
-  // Load order data using the real API
-  useEffect(() => {
-    const fetchOrderData = async () => {
-      if (finalOrderId) {
-        try {
-          setLoading(true);
-          
-          // Fetch real order data from API
-          const apiResponse = await getOrderById(finalOrderId);
-          
-          // Transform API response to match expected Order interface
-          const orderData: Order = {
-            id: apiResponse.id,
-            orderNumber: apiResponse.orderNumber || `#${apiResponse.id}`,
-            orderDate: apiResponse.orderDate || apiResponse.createdAt,
-            trackingId: apiResponse.trackingId || `TRK${apiResponse.id}`,
-            customer: {
-              id: apiResponse.customer?.id || '',
-              name: apiResponse.customer?.name || 'Unknown Customer',
-              email: apiResponse.customer?.email || '',
-              phone: apiResponse.customer?.phone || '',
-              customerSince: apiResponse.customer?.customerSince || new Date().toISOString(),
-              status: apiResponse.customer?.status || 'Active'
-            },
-            homeAddress: apiResponse.homeAddress || '',
-            billingAddress: apiResponse.billingAddress || '',
-            paymentMethod: apiResponse.paymentMethod || 'Cash',
-            payment: apiResponse.payment || 'Full Payment',
-            paymentAmount: apiResponse.paymentAmount || apiResponse.totalAmount?.toString(),
-            orderType: apiResponse.orderType || 'Pick Up',
-            items: apiResponse.items?.map((item: any) => ({
-              id: item.id || item.productId,
-              productName: item.product?.name || item.productName || 'Unknown Product',
-              productImage: item.product?.image || item.productImage || '',
-              unitPrice: item.unitPrice || 0,
-              quantity: item.quantity || 1,
-              discount: item.discount || 0,
-              orderTotal: item.totalPrice || 0,
-              status: item.status || 'Pending',
-              warehouseNumber: item.warehouseNumber || item.warehouseId
-            })) || [],
-            totalAmount: apiResponse.totalAmount || 0,
-            status: apiResponse.status || 'Pending',
-            statusColor: apiResponse.statusColor
-          };
-          
-          // Fetch real customer order history from API
-          try {
-            const customerSales = await getSalesByCustomer(orderData.customer.id);
-            
-            // Transform API response to match expected Order interface
-            const previousOrdersData: Order[] = customerSales
-              .filter(sale => sale.id !== finalOrderId) // Exclude current order
-              .map(sale => ({
-                id: sale.id,
-                orderNumber: `#${sale.id.slice(-8).toUpperCase()}`,
-                orderDate: new Date(sale.createdAt).toLocaleString(),
-                trackingId: `TRK${sale.id.slice(-6).toUpperCase()}`,
-                customer: orderData.customer,
-                homeAddress: orderData.homeAddress,
-                billingAddress: orderData.billingAddress,
-                paymentMethod: sale.paymentMethod,
-                payment: sale.paymentStatus === 'completed' ? 'Full Payment' : 'Part Payment',
-                paymentAmount: sale.totalAmount.toString(),
-                orderType: 'Pick Up',
-                items: sale.items.map(item => ({
-                  id: item.productId,
-                  productName: item.product?.name || item.productName || 'Unknown Product',
-                  productImage: item.product?.image || '',
-                  unitPrice: item.unitPrice || 0,
-                  quantity: item.quantity,
-                  discount: 0,
-                  orderTotal: item.totalPrice || 0,
-                  status: 'Completed' as any,
-                  warehouseNumber: undefined
-                })),
-                totalAmount: sale.totalAmount,
-                status: sale.status as any,
-                statusColor: sale.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : 
-                           sale.status === 'PENDING' ? 'bg-orange-100 text-orange-800' : 
-                           'bg-blue-100 text-blue-800'
-              }));
-            
-            setOrder(orderData);
-            setPreviousOrders(previousOrdersData);
-          } catch (error) {
-            console.error('Error fetching customer orders:', error);
-            // Fallback to mock data if API fails
-            const previousOrdersData = OrderDataService.generatePreviousOrders(orderData.customer.id, finalOrderId);
-            setOrder(orderData);
-            setPreviousOrders(previousOrdersData);
-          }
-        } catch (error) {
-          console.error('Error fetching order:', error);
-          // Fallback to mock data if API fails
-          const orderData = OrderDataService.generateOrder(finalOrderId);
-          const previousOrdersData = OrderDataService.generatePreviousOrders(orderData.customer.id, finalOrderId);
-          
-          setOrder(orderData);
-          setPreviousOrders(previousOrdersData);
-        } finally {
-          setLoading(false);
-        }
-      } else {
-        setLoading(false);
+  const normalizeStatus = (status?: string | null) => (status ? status.toUpperCase() : "");
+
+  const formatPaymentStatus = (status?: string | null) => {
+    if (!status) return "Unknown";
+    return status
+      .toLowerCase()
+      .split("_")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  };
+
+  const paymentStatusBadgeClass = (status?: string | null) => {
+    switch (normalizeStatus(status)) {
+      case "COMPLETED":
+        return "bg-green-100 text-green-800";
+      case "FAILED":
+        return "bg-red-100 text-red-800";
+      case "REFUNDED":
+        return "bg-purple-100 text-purple-800";
+      case "PENDING":
+      default:
+        return "bg-orange-100 text-orange-800";
+    }
+  };
+
+
+  const fetchOrderData = useCallback(async () => {
+    if (!finalOrderId) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const apiResponse = await getOrderById(finalOrderId);
+      const orderData: Order = {
+        id: apiResponse.id,
+        orderNumber: apiResponse.orderNumber || `#${apiResponse.id}`,
+        orderDate: apiResponse.orderDate || apiResponse.createdAt,
+        trackingId: apiResponse.trackingId || `TRK${apiResponse.id}`,
+        customer: {
+          id: apiResponse.customer?.id || "",
+          name: apiResponse.customer?.name || "Unknown Customer",
+          email: apiResponse.customer?.email || "",
+          phone: apiResponse.customer?.phone || "",
+          customerSince: apiResponse.customer?.customerSince || new Date().toISOString(),
+          status: apiResponse.customer?.status || "Active",
+        },
+        homeAddress: apiResponse.homeAddress || "",
+        billingAddress: apiResponse.billingAddress || "",
+        paymentMethod: apiResponse.paymentMethod || "Cash",
+        payment: apiResponse.payment || "Full Payment",
+        paymentAmount: apiResponse.paymentAmount || apiResponse.totalAmount?.toString(),
+        orderType: apiResponse.orderType || "Pick Up",
+        items:
+          apiResponse.items?.map((item: any) => ({
+            id: item.id || item.productId,
+            productName: item.product?.name || item.productName || "Unknown Product",
+            productImage: item.product?.image || item.productImage || "",
+            unitPrice: item.unitPrice || 0,
+            quantity: item.quantity || 1,
+            discount: item.discount || 0,
+            orderTotal: item.totalPrice || 0,
+            status: item.status || "Pending",
+            warehouseNumber: item.warehouseNumber || item.warehouseId,
+          })) || [],
+        totalAmount: apiResponse.totalAmount || 0,
+        status: apiResponse.status || "Pending",
+        statusColor: apiResponse.statusColor,
+      };
+
+      try {
+        const customerSales = await getSalesByCustomer(orderData.customer.id);
+        const previousOrdersData: Order[] = customerSales
+          .filter((sale) => sale.id !== finalOrderId)
+          .map((sale) => {
+            const normalizedPaymentStatus = normalizeStatus(sale.paymentStatus);
+            const salePaymentMethod =
+              sale.paymentMethod ||
+              sale.payments?.[0]?.method ||
+              orderData.paymentMethod ||
+              "Bank Transfer";
+            return {
+              id: sale.id,
+              orderNumber: `#${sale.id.slice(-8).toUpperCase()}`,
+              orderDate: new Date(sale.createdAt).toLocaleString(),
+              trackingId: `TRK${sale.id.slice(-6).toUpperCase()}`,
+              customer: orderData.customer,
+              homeAddress: orderData.homeAddress,
+              billingAddress: orderData.billingAddress,
+              paymentMethod: salePaymentMethod,
+              payment:
+                normalizedPaymentStatus === "COMPLETED" ? "Full Payment" : "Part Payment",
+              paymentAmount: sale.totalAmount.toString(),
+              orderType: "Pick Up",
+              items: sale.items.map((item) => ({
+                id: item.productId,
+                productName: item.product?.name || item.productName || "Unknown Product",
+                productImage: item.product?.image || "",
+                unitPrice: item.unitPrice || 0,
+                quantity: item.quantity,
+                discount: 0,
+                orderTotal: item.totalPrice || 0,
+                status: "Completed" as any,
+                warehouseNumber: undefined,
+              })),
+              totalAmount: sale.totalAmount,
+              status: sale.status as any,
+              statusColor:
+                sale.status === "COMPLETED"
+                  ? "bg-green-100 text-green-800"
+                  : sale.status === "PENDING"
+                  ? "bg-orange-100 text-orange-800"
+                  : "bg-blue-100 text-blue-800",
+            };
+          });
+
+        setOrder(orderData);
+        setPreviousOrders(previousOrdersData);
+      } catch (error) {
+        console.error("Error fetching customer orders:", error);
+        const previousOrdersData = OrderDataService.generatePreviousOrders(
+          orderData.customer.id,
+          finalOrderId
+        );
+        setOrder(orderData);
+        setPreviousOrders(previousOrdersData);
       }
-    };
+    } catch (error) {
+      console.error("Error fetching order:", error);
+      const orderData = OrderDataService.generateOrder(finalOrderId);
+      const previousOrdersData = OrderDataService.generatePreviousOrders(
+        orderData.customer.id,
+        finalOrderId
+      );
 
-    fetchOrderData();
+      setOrder(orderData);
+      setPreviousOrders(previousOrdersData);
+    } finally {
+      setLoading(false);
+    }
   }, [finalOrderId]);
+
+  useEffect(() => {
+    fetchOrderData();
+  }, [fetchOrderData]);
+
+  const fetchSaleDetails = useCallback(async () => {
+    if (!finalOrderId) {
+      setSaleDetails(null);
+      return;
+    }
+
+    try {
+      setSaleLoading(true);
+      setSaleError(null);
+      const sale = await getSaleById(finalOrderId);
+      setSaleDetails(sale);
+    } catch (error: any) {
+      console.error("Error fetching sale details:", error);
+      setSaleError(error?.message || "Failed to load payment details");
+    } finally {
+      setSaleLoading(false);
+    }
+  }, [finalOrderId]);
+
+  useEffect(() => {
+    fetchSaleDetails();
+  }, [fetchSaleDetails]);
+
+  const handleApprovePayment = async () => {
+    if (!finalOrderId) return;
+    const amountValue = parseFloat(approveForm.amountPaid);
+    if (!amountValue || amountValue <= 0) {
+      showError("Approval Error", "Please provide a valid amount paid greater than zero.");
+      return;
+    }
+    try {
+      setActionInFlight("approve");
+      await approveSalePayment(finalOrderId, {
+        amountPaid: amountValue,
+        note: approveForm.note.trim() ? approveForm.note.trim() : undefined,
+      });
+      showSuccess("Payment Approved", "Payment status updated successfully.");
+      setApproveModalOpen(false);
+      setApproveForm({ amountPaid: "", note: "" });
+      await Promise.all([fetchSaleDetails(), fetchOrderData()]);
+    } catch (error: any) {
+      console.error("Approve payment failed:", error);
+      showError("Approval Failed", error?.message || "Unable to approve payment.");
+    } finally {
+      setActionInFlight(null);
+    }
+  };
+
+  const handleQueryPayment = async () => {
+    if (!finalOrderId) return;
+    if (!queryNote.trim()) {
+      showError("Query Required", "Please provide a note explaining the query.");
+      return;
+    }
+    try {
+      setActionInFlight("query");
+      await querySalePayment(finalOrderId, { note: queryNote.trim() });
+      showSuccess("Payment Queried", "The payment has been flagged for review.");
+      setQueryModalOpen(false);
+      setQueryNote("");
+      await fetchSaleDetails();
+    } catch (error: any) {
+      console.error("Query payment failed:", error);
+      showError("Query Failed", error?.message || "Unable to query payment.");
+    } finally {
+      setActionInFlight(null);
+    }
+  };
+
+  const handleRejectPayment = async () => {
+    if (!finalOrderId) return;
+    if (!rejectNote.trim()) {
+      showError("Rejection Note Required", "Please provide a note explaining the rejection.");
+      return;
+    }
+    try {
+      setActionInFlight("reject");
+      await rejectSalePayment(finalOrderId, { note: rejectNote.trim() });
+      showSuccess("Payment Rejected", "Payment has been rejected successfully.");
+      setRejectModalOpen(false);
+      setRejectNote("");
+      await fetchSaleDetails();
+    } catch (error: any) {
+      console.error("Reject payment failed:", error);
+      showError("Rejection Failed", error?.message || "Unable to reject payment.");
+    } finally {
+      setActionInFlight(null);
+    }
+  };
+
+  const handleAddPayment = async () => {
+    if (!finalOrderId) return;
+    const amountValue = Number(addPaymentForm.amount);
+    if (!amountValue || amountValue <= 0) {
+      showError("Invalid Amount", "Please enter the payment amount (greater than zero).");
+      return;
+    }
+
+    if (
+      addPaymentForm.status === "COMPLETED" &&
+      (!amountValue || Number.isNaN(amountValue))
+    ) {
+      showError(
+        "Amount Required",
+        "Completed payments must include the amount received."
+      );
+      return;
+    }
+
+    try {
+      setActionInFlight("addPayment");
+      await addSalePayment(finalOrderId, {
+        amount: amountValue,
+        method: addPaymentForm.method,
+        status: addPaymentForm.status,
+        reference: addPaymentForm.reference.trim() || undefined,
+        senderName: addPaymentForm.senderName.trim() || undefined,
+        transactionReference: addPaymentForm.transactionReference.trim() || undefined,
+        chequeNumber: addPaymentForm.chequeNumber.trim() || undefined,
+        accountName: addPaymentForm.accountName.trim() || undefined,
+      });
+      showSuccess("Payment Recorded", "The additional payment has been logged.");
+      setAddPaymentModalOpen(false);
+      setAddPaymentForm({
+        amount: "",
+        method: addPaymentForm.method,
+        status: "PENDING",
+        reference: "",
+        senderName: "",
+        transactionReference: "",
+        chequeNumber: "",
+        accountName: "",
+      });
+      await fetchSaleDetails();
+    } catch (error: any) {
+      console.error("Add payment failed:", error);
+      showError("Unable to record payment", error?.message || "Please try again.");
+    } finally {
+      setActionInFlight(null);
+    }
+  };
 
   // Close sidebar on escape key
   useEffect(() => {
@@ -277,10 +528,6 @@ function ViewOrderContent() {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return OrderDataService.formatCurrency(amount);
-  };
-
   const getTireBrandImage = (productName: string) => {
     const brandImages: Record<string, string> = {
       "Michelin": "/images/michelin.png",
@@ -314,6 +561,28 @@ function ViewOrderContent() {
       </div>
     );
   }
+
+  const handleDownloadInvoice = async (variant: "standard" | "outsourced") => {
+    if (!finalOrderId) return;
+    const key = variant === "standard" ? "invoice:standard" : "invoice:outsourced";
+    try {
+      setActionInFlight(key);
+      const blob = await downloadSaleInvoice(finalOrderId, variant);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${order?.orderNumber || "order"}-${variant}-invoice.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error("Invoice download failed:", error);
+      showError("Error", error?.message || "Unable to download invoice.");
+    } finally {
+      setActionInFlight(null);
+    }
+  };
 
   if (!order) {
     return (
@@ -407,6 +676,31 @@ function ViewOrderContent() {
                     {order.status}
                   </span>
                 </div>
+              {saleDetails && (
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 mt-3">
+                  <span
+                    className={`px-3 py-1 text-xs font-semibold rounded-full ${paymentStatusBadgeClass(
+                      saleDetails.paymentStatus
+                    )}`}
+                  >
+                    {formatPaymentStatus(saleDetails.paymentStatus)}
+                  </span>
+                  <span className="text-sm text-gray-600">
+                    Outstanding Balance:{" "}
+                    <span className="font-semibold text-gray-900">
+                      {formatCurrency(saleDetails.outstandingBalance)}
+                    </span>
+                  </span>
+                  {saleDetails.metadata?.outstandingAfter !== undefined && (
+                    <span className="text-sm text-gray-600">
+                      Balance After Action:{" "}
+                      <span className="font-semibold text-gray-900">
+                        {formatCurrency(saleDetails.metadata?.outstandingAfter)}
+                      </span>
+                    </span>
+                  )}
+                </div>
+              )}
               </div>
               
               <div className="flex flex-col sm:flex-row gap-3">
@@ -487,6 +781,133 @@ function ViewOrderContent() {
                   </div>
                 )}
               </div>
+              {(canApprovePayment || canQueryPayment || canRejectPayment || canAddPayment) && (
+                <div className="flex flex-wrap gap-3 mt-4">
+                  {canAddPayment && (
+                    <button
+                      onClick={() => setAddPaymentModalOpen(true)}
+                      className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700"
+                    >
+                      Add Payment
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleDownloadInvoice("standard")}
+                    disabled={actionInFlight === "invoice:standard"}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 border border-gray-300 ${
+                      actionInFlight === "invoice:standard"
+                        ? "text-gray-400 cursor-not-allowed"
+                        : "text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {actionInFlight === "invoice:standard" ? (
+                      <>
+                        <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                          <circle
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                            className="opacity-25"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8v4l3-3"
+                          ></path>
+                        </svg>
+                        Downloading...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2m-4-4l-4 4m0 0l-4-4m4 4V4"
+                          />
+                        </svg>
+                        Download Invoice
+                      </>
+                    )}
+                  </button>
+                  {saleDetails?.isOutsourced && (
+                    <button
+                      onClick={() => handleDownloadInvoice("outsourced")}
+                      disabled={actionInFlight === "invoice:outsourced"}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${
+                        actionInFlight === "invoice:outsourced"
+                          ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                          : "bg-gray-900 text-white hover:bg-black"
+                      }`}
+                    >
+                      {actionInFlight === "invoice:outsourced" ? (
+                        <>
+                          <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                            <circle
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                              className="opacity-25"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8v4l3-3"
+                            ></path>
+                          </svg>
+                          Outsourced copy...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"
+                            />
+                          </svg>
+                          Outsourced Invoice
+                        </>
+                      )}
+                    </button>
+                  )}
+                  {canApprovePayment && (
+                    <button
+                      onClick={() => setApproveModalOpen(true)}
+                      disabled={normalizeStatus(saleDetails?.paymentStatus) === "COMPLETED"}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 ${
+                        normalizeStatus(saleDetails?.paymentStatus) === "COMPLETED"
+                          ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+                          : "bg-green-600 text-white hover:bg-green-700"
+                      }`}
+                    >
+                      Approve Payment
+                    </button>
+                  )}
+                  {canQueryPayment && (
+                    <button
+                      onClick={() => setQueryModalOpen(true)}
+                      className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 bg-yellow-500 text-white hover:bg-yellow-600"
+                    >
+                      Query Payment
+                    </button>
+                  )}
+                  {canRejectPayment && (
+                    <button
+                      onClick={() => setRejectModalOpen(true)}
+                      className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 bg-red-600 text-white hover:bg-red-700"
+                    >
+                      Reject Payment
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -580,6 +1001,40 @@ function ViewOrderContent() {
                         )}
                       </p>
                     </div>
+                  {saleDetails && (
+                    <>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Payment Status</p>
+                        <span
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium ${paymentStatusBadgeClass(
+                            saleDetails.paymentStatus
+                          )}`}
+                        >
+                          {formatPaymentStatus(saleDetails.paymentStatus)}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Outstanding Balance</p>
+                        <p className="text-sm text-gray-900">
+                          {formatCurrency(saleDetails.outstandingBalance)}
+                        </p>
+                      </div>
+                      {saleDetails.metadata?.discountTotal !== undefined && (
+                        <div>
+                          <p className="text-xs text-gray-500 mb-1">Discount Applied</p>
+                          <p className="text-sm text-gray-900">
+                            {formatCurrency(saleDetails.metadata.discountTotal)}
+                          </p>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Show Discount on Invoice</p>
+                        <p className="text-sm text-gray-900">
+                          {saleDetails.showDiscountOnInvoice ? "Yes" : "No"}
+                        </p>
+                      </div>
+                    </>
+                  )}
                   </div>
                 </div>
               </div>
@@ -835,6 +1290,179 @@ function ViewOrderContent() {
             </div>
           </div>
 
+          {/* Payment History */}
+          <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Payment History</h2>
+                <p className="text-sm text-gray-600 mt-1">
+                  Track every payment attempt, approval, and reference metadata.
+                </p>
+              </div>
+              {saleError && <span className="text-sm text-red-600">{saleError}</span>}
+            </div>
+            {saleLoading ? (
+              <div className="p-6 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#02016a]"></div>
+              </div>
+            ) : salePayments.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Method
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Amount
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Reference
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Sender / Account
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Transaction Details
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Date
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {salePayments.map((payment) => (
+                      <tr key={payment.id}>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          {getPaymentMethodLabel(payment.method)}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          {formatCurrency(payment.amount)}
+                        </td>
+                        <td className="px-6 py-4 text-sm">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-medium ${paymentStatusBadgeClass(
+                              payment.status
+                            )}`}
+                          >
+                            {formatPaymentStatus(payment.status)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          {payment.reference || "—"}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          <div className="flex flex-col">
+                            <span>{payment.senderName || "—"}</span>
+                            {payment.accountName && (
+                              <span className="text-xs text-gray-500">{payment.accountName}</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          <div className="flex flex-col">
+                            <span>
+                              {payment.transactionReference || payment.chequeNumber || "—"}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          {payment.createdAt
+                            ? new Date(payment.createdAt).toLocaleString()
+                            : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="p-6 text-sm text-gray-600">No payments recorded yet.</div>
+            )}
+          </div>
+
+          {/* Approval Trail */}
+          <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Approval Trail</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Logged actions for this sale, including approvals, queries, and rejections.
+              </p>
+            </div>
+            {approvalTrailEntries.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Action
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Role
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Amount
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Note
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Timestamp
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {approvalTrailEntries
+                      .slice()
+                      .sort((a, b) => {
+                        const aTime = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+                        const bTime = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+                        return bTime - aTime;
+                      })
+                      .map((entry, idx) => (
+                        <tr key={`${entry.action}-${idx}-${entry.timestamp || idx}`}>
+                          <td className="px-6 py-4 text-sm text-gray-900">
+                            {entry.action || "—"}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-900 capitalize">
+                            {entry.role || "—"}
+                          </td>
+                          <td className="px-6 py-4 text-sm">
+                            <span
+                              className={`px-2 py-1 rounded-full text-xs font-medium ${paymentStatusBadgeClass(
+                                entry.status
+                              )}`}
+                            >
+                              {formatPaymentStatus(entry.status)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-900">
+                            {entry.amountPaid ? formatCurrency(entry.amountPaid) : "—"}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-900 max-w-xs break-words">
+                            {entry.note || "—"}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-900">
+                            {entry.timestamp
+                              ? new Date(entry.timestamp).toLocaleString()
+                              : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="p-6 text-sm text-gray-600">No approval actions have been recorded.</div>
+            )}
+          </div>
+
           {/* Previous Orders Section */}
           {previousOrders.length > 0 && (
             <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200">
@@ -900,6 +1528,380 @@ function ViewOrderContent() {
               showSuccess('Success', 'Refund request submitted successfully');
             }}
           />
+        )}
+
+        {/* Approve Payment Modal */}
+        {approveModalOpen && (
+          <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Approve Payment</h3>
+                <button
+                  onClick={() => setApproveModalOpen(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                  aria-label="Close approval modal"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="px-6 py-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Amount Paid
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                    value={approveForm.amountPaid}
+                    onChange={(e) =>
+                      setApproveForm((prev) => ({ ...prev, amountPaid: e.target.value }))
+                    }
+                    placeholder="Enter amount received"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Approval Note (optional)
+                  </label>
+                  <textarea
+                    rows={3}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                    value={approveForm.note}
+                    onChange={(e) =>
+                      setApproveForm((prev) => ({ ...prev, note: e.target.value }))
+                    }
+                    placeholder="Add a note for the approval trail"
+                  />
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                <button
+                  onClick={() => setApproveModalOpen(false)}
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleApprovePayment}
+                  disabled={actionInFlight === "approve"}
+                  className={`px-4 py-2 rounded-lg text-white ${
+                    actionInFlight === "approve"
+                      ? "bg-green-300 cursor-not-allowed"
+                      : "bg-green-600 hover:bg-green-700"
+                  }`}
+                >
+                  {actionInFlight === "approve" ? "Approving..." : "Approve Payment"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Query Payment Modal */}
+        {queryModalOpen && (
+          <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Query Payment</h3>
+                <button
+                  onClick={() => setQueryModalOpen(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                  aria-label="Close query modal"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="px-6 py-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Query Note
+                </label>
+                <textarea
+                  rows={4}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                  value={queryNote}
+                  onChange={(e) => setQueryNote(e.target.value)}
+                  placeholder="Explain why the payment is being queried"
+                />
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                <button
+                  onClick={() => setQueryModalOpen(false)}
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleQueryPayment}
+                  disabled={actionInFlight === "query"}
+                  className={`px-4 py-2 rounded-lg text-white ${
+                    actionInFlight === "query"
+                      ? "bg-yellow-300 cursor-not-allowed"
+                      : "bg-yellow-500 hover:bg-yellow-600"
+                  }`}
+                >
+                  {actionInFlight === "query" ? "Submitting..." : "Submit Query"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Reject Payment Modal */}
+        {rejectModalOpen && (
+          <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-md">
+              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Reject Payment</h3>
+                <button
+                  onClick={() => setRejectModalOpen(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                  aria-label="Close reject modal"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="px-6 py-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Rejection Note
+                </label>
+                <textarea
+                  rows={4}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                  value={rejectNote}
+                  onChange={(e) => setRejectNote(e.target.value)}
+                  placeholder="Provide the reason for rejecting this payment"
+                />
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                <button
+                  onClick={() => setRejectModalOpen(false)}
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRejectPayment}
+                  disabled={actionInFlight === "reject"}
+                  className={`px-4 py-2 rounded-lg text-white ${
+                    actionInFlight === "reject"
+                      ? "bg-red-300 cursor-not-allowed"
+                      : "bg-red-600 hover:bg-red-700"
+                  }`}
+                >
+                  {actionInFlight === "reject" ? "Rejecting..." : "Reject Payment"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Add Payment Modal */}
+        {addPaymentModalOpen && (
+          <div className="fixed inset-0 z-40 bg-black/50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+              <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Record Additional Payment</h3>
+                <button
+                  onClick={() => setAddPaymentModalOpen(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                  aria-label="Close add payment modal"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="px-6 py-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Amount Received
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      value={addPaymentForm.amount}
+                      onChange={(e) =>
+                        setAddPaymentForm((prev) => ({ ...prev, amount: e.target.value }))
+                      }
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 pl-8 focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                      placeholder="e.g. 25000"
+                    />
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm text-gray-500">
+                      ₦
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Method
+                    </label>
+                    <select
+                      value={addPaymentForm.method}
+                      onChange={(e) =>
+                        setAddPaymentForm((prev) => ({
+                          ...prev,
+                          method: e.target.value as PaymentMethod,
+                          senderName:
+                            e.target.value === "bank_transfer" ? prev.senderName : "",
+                          transactionReference:
+                            e.target.value === "bank_transfer"
+                              ? prev.transactionReference
+                              : "",
+                          chequeNumber: e.target.value === "cheque" ? prev.chequeNumber : "",
+                          accountName: e.target.value === "cheque" ? prev.accountName : "",
+                        }))
+                      }
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                    >
+                      {PAYMENT_METHOD_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Status
+                    </label>
+                    <select
+                      value={addPaymentForm.status}
+                      onChange={(e) =>
+                        setAddPaymentForm((prev) => ({
+                          ...prev,
+                          status: e.target.value as PaymentStatus,
+                        }))
+                      }
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                    >
+                      {PAYMENT_STATUS_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Use Pending until finance confirms receipt.
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Reference
+                  </label>
+                  <input
+                    type="text"
+                    value={addPaymentForm.reference}
+                    onChange={(e) =>
+                      setAddPaymentForm((prev) => ({ ...prev, reference: e.target.value }))
+                    }
+                    placeholder="PAY-00124 (optional)"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                  />
+                </div>
+
+                {addPaymentForm.method === "bank_transfer" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Sender Name
+                      </label>
+                      <input
+                        type="text"
+                        value={addPaymentForm.senderName}
+                        onChange={(e) =>
+                          setAddPaymentForm((prev) => ({
+                            ...prev,
+                            senderName: e.target.value,
+                          }))
+                        }
+                        placeholder="Account holder name"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Transaction Reference
+                      </label>
+                      <input
+                        type="text"
+                        value={addPaymentForm.transactionReference}
+                        onChange={(e) =>
+                          setAddPaymentForm((prev) => ({
+                            ...prev,
+                            transactionReference: e.target.value,
+                          }))
+                        }
+                        placeholder="e.g. BANK-123456"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {addPaymentForm.method === "cheque" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Cheque Number
+                      </label>
+                      <input
+                        type="text"
+                        value={addPaymentForm.chequeNumber}
+                        onChange={(e) =>
+                          setAddPaymentForm((prev) => ({
+                            ...prev,
+                            chequeNumber: e.target.value,
+                          }))
+                        }
+                        placeholder="Cheque number"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Account Name
+                      </label>
+                      <input
+                        type="text"
+                        value={addPaymentForm.accountName}
+                        onChange={(e) =>
+                          setAddPaymentForm((prev) => ({
+                            ...prev,
+                            accountName: e.target.value,
+                          }))
+                        }
+                        placeholder="Name on cheque"
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+                <button
+                  onClick={() => setAddPaymentModalOpen(false)}
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAddPayment}
+                  disabled={actionInFlight === "addPayment"}
+                  className={`px-4 py-2 rounded-lg text-white ${
+                    actionInFlight === "addPayment"
+                      ? "bg-blue-300 cursor-not-allowed"
+                      : "bg-blue-600 hover:bg-blue-700"
+                  }`}
+                >
+                  {actionInFlight === "addPayment" ? "Saving..." : "Save Payment"}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>

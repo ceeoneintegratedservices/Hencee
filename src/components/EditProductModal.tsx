@@ -64,30 +64,6 @@ export default function EditProductModal({ isOpen, onClose, onSave, inventoryIte
   const [newWarehouseAddress, setNewWarehouseAddress] = useState('');
   const [newWarehouseCapacity, setNewWarehouseCapacity] = useState('');
 
-  // Tyre brands list
-  const tyreBrands = [
-    'Michelin',
-    'Bridgestone',
-    'Continental',
-    'Pirelli',
-    'Goodyear',
-    'Dunlop',
-    'Hankook',
-    'Yokohama',
-    'Maxxis',
-    'Firestone',
-    'Cooper',
-    'Falken',
-    'Nexen',
-    'Kumho',
-    'Toyo',
-    'Nitto',
-    'BFGoodrich',
-    'General',
-    'Uniroyal',
-    'Vredestein'
-  ];
-
   // Initialize form data when inventory item changes
   useEffect(() => {
     if (inventoryItem && isOpen) {
@@ -355,22 +331,11 @@ export default function EditProductModal({ isOpen, onClose, onSave, inventoryIte
                     type="text"
                     value={formData.productBrand}
                     onChange={(e) => handleInputChange('productBrand', e.target.value)}
-                    placeholder="Enter or select tyre brand"
+                    placeholder="Enter product brand"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    list="tyre-brands"
                   />
-                  <datalist id="tyre-brands">
-                    {tyreBrands.map((brand) => (
-                      <option key={brand} value={brand} />
-                    ))}
-                  </datalist>
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                    <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Type to search or select from popular tyre brands</p>
+                <p className="text-xs text-gray-500 mt-1">Type the product brand just like you add categories.</p>
               </div>
 
               {/* Warehouse Selection */}

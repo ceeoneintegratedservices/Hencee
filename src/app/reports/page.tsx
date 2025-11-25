@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Link from "next/link";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import Breadcrumb from "@/components/Breadcrumb";
@@ -131,7 +132,12 @@ export default function ReportsPage() {
         salesReport: salesReport.status === 'fulfilled' ? salesReport.value : null,
         financeReport: financeReport.status === 'fulfilled' ? financeReport.value : null,
         customers: customers.status === 'fulfilled' ? customers.value || [] : [],
-        inventory: inventory.status === 'fulfilled' ? inventory.value || [] : [],
+        inventory:
+          inventory.status === 'fulfilled'
+            ? Array.isArray(inventory.value)
+              ? inventory.value
+              : inventory.value?.data || []
+            : [],
         products: products.status === 'fulfilled' ? products.value || [] : [],
         dashboardData: {
           overview: null,
@@ -962,6 +968,12 @@ export default function ReportsPage() {
                   Export Selected ({selectedReports.length})
                 </button>
               )}
+                <Link
+                  href="/reports/outsourced"
+                  className="px-4 py-2 rounded-md border border-[#02016a] text-sm font-medium text-[#02016a] hover:bg-[#f5f6ff] transition-colors"
+                >
+                  Outsourced Analytics
+                </Link>
             </div>
           </div>
 

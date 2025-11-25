@@ -4,11 +4,13 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://loca
 // Pharma App (CeeOne) API prefix
 const CEEONE_PREFIX = '/api/ceeone';
 
+const PHARMA_INVENTORY_BASE = `${API_BASE_URL}${CEEONE_PREFIX}/pharma/inventory`;
+
 // API endpoints
 export const API_ENDPOINTS = {
   // Auth endpoints (Pharma/CeeOne)
   register: `${API_BASE_URL}${CEEONE_PREFIX}/auth/register`,
-  login: `${API_BASE_URL}${CEEONE_PREFIX}/auth/login`, // Login endpoint is shared (no prefix)
+  login: `${API_BASE_URL}/auth/login`, // Login endpoint is shared (no prefix)
   verifyEmail: `${API_BASE_URL}${CEEONE_PREFIX}/auth/verify-email`,
   resendVerification: `${API_BASE_URL}${CEEONE_PREFIX}/auth/resend-verification`,
   forgotPassword: `${API_BASE_URL}${CEEONE_PREFIX}/auth/password/forgot`,
@@ -57,6 +59,9 @@ export const API_ENDPOINTS = {
   sales: `${API_BASE_URL}${CEEONE_PREFIX}/sales`,
   saleById: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/sales/${id}`,
   saleStatus: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/sales/${id}/status`,
+  saleApprove: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/sales/${id}/approve`,
+  saleQuery: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/sales/${id}/query`,
+  saleReject: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/sales/${id}/reject`,
   salePayments: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/sales/${id}/payments`,
   salesByCustomer: (customerId: string) => `${API_BASE_URL}${CEEONE_PREFIX}/sales/customer/${customerId}`,
   salesDateRange: `${API_BASE_URL}${CEEONE_PREFIX}/sales/date-range`,
@@ -77,6 +82,8 @@ export const API_ENDPOINTS = {
   orders: `${API_BASE_URL}${CEEONE_PREFIX}/sales`, // Using sales endpoint for orders
   orderById: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/sales/${id}`,
   orderStatus: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/sales/${id}/status`,
+  saleInvoice: (id: string, variant: string = "standard") =>
+    `${API_BASE_URL}${CEEONE_PREFIX}/sales/${id}/invoice?variant=${variant}`,
   
   // Payment endpoints (Pharma/CeeOne)
   payments: `${API_BASE_URL}${CEEONE_PREFIX}/payments`,
@@ -93,19 +100,18 @@ export const API_ENDPOINTS = {
   paymentRefund: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/payments/${id}/refund`,
   
   // Inventory endpoints (Pharma/CeeOne)
-  inventory: `${API_BASE_URL}${CEEONE_PREFIX}/inventory`,
-  inventoryById: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/inventory/${id}`,
-  inventoryAdjustStock: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/inventory/adjust-stock/${id}`,
-  inventoryMovements: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/inventory/${id}/movements`,
-  inventoryReorderLevel: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/inventory/${id}/reorder-level`,
-  inventoryPermissions: `${API_BASE_URL}${CEEONE_PREFIX}/inventory/permissions`,
-  
-  // Pharma-specific Inventory endpoints
-  inventoryExpiring: `${API_BASE_URL}${CEEONE_PREFIX}/inventory/expiring`,
-  inventoryExpiringByWarehouse: (warehouseId: string) => `${API_BASE_URL}${CEEONE_PREFIX}/inventory/expiring/warehouse/${warehouseId}`,
-  inventoryDamages: `${API_BASE_URL}${CEEONE_PREFIX}/inventory/damages`,
-  inventoryDamagesByProduct: (productId: string) => `${API_BASE_URL}${CEEONE_PREFIX}/inventory/damages/product/${productId}`,
-  inventoryRecordDamage: (productId: string) => `${API_BASE_URL}${CEEONE_PREFIX}/inventory/damages/product/${productId}`,
+  inventory: PHARMA_INVENTORY_BASE,
+  inventoryById: (id: string) => `${PHARMA_INVENTORY_BASE}/${id}`,
+  inventoryAdjustStock: (id: string) => `${PHARMA_INVENTORY_BASE}/${id}/adjust-stock`,
+  inventoryMovements: (id: string) => `${PHARMA_INVENTORY_BASE}/${id}/movements`,
+  inventoryReorderLevel: (id: string) => `${PHARMA_INVENTORY_BASE}/${id}/reorder-point`,
+  inventoryPermissions: `${PHARMA_INVENTORY_BASE}/permissions`,
+  inventoryImport: `${PHARMA_INVENTORY_BASE}/import`,
+  inventoryExpiryAlerts: `${PHARMA_INVENTORY_BASE}/expiry/alerts`,
+  inventoryExpirySummary: `${PHARMA_INVENTORY_BASE}/expiry/summary`,
+  inventoryRecordDamage: (productId: string) => `${PHARMA_INVENTORY_BASE}/${productId}/damage`,
+  inventoryDamages: `${API_BASE_URL}${CEEONE_PREFIX}/pharma/damages`,
+  pharmaPresets: `${API_BASE_URL}${CEEONE_PREFIX}/pharma/presets`,
   
   // Category endpoints (Pharma/CeeOne)
   categories: `${API_BASE_URL}${CEEONE_PREFIX}/categories`,
@@ -165,6 +171,7 @@ export const API_ENDPOINTS = {
     customers: `${API_BASE_URL}${CEEONE_PREFIX}/reports/customers`,
     payments: `${API_BASE_URL}${CEEONE_PREFIX}/reports/payments`,
     finance: `${API_BASE_URL}${CEEONE_PREFIX}/reports/finance`,
+    outsourced: `${API_BASE_URL}${CEEONE_PREFIX}/reports/outsourced`,
   },
   
   // Dashboard endpoints (Pharma/CeeOne)

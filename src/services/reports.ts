@@ -73,6 +73,56 @@ export interface FinanceReportResponse {
   };
 }
 
+export interface OutsourcedReportParams {
+  dateRange?: string;
+  startDate?: string;
+  endDate?: string;
+  outsourcedSupplier?: string;
+  supplierId?: string;
+}
+
+export interface OutsourcedReportSummary {
+  totalOrders?: number;
+  totalRevenue?: number;
+  totalCost?: number;
+  totalMargin?: number;
+  averageMargin?: number;
+  outstandingBalance?: number;
+}
+
+export interface OutsourcedSupplierRow {
+  supplierId?: string;
+  supplierName?: string;
+  orders?: number;
+  revenue?: number;
+  cost?: number;
+  margin?: number;
+  marginPercent?: number;
+  outstandingBalance?: number;
+  paymentStatusBreakdown?: Record<string, number>;
+}
+
+export interface OutsourcedPaymentStatusEntry {
+  status: string;
+  count?: number;
+  amount?: number;
+}
+
+export interface OutsourcedTimelinePoint {
+  period: string;
+  revenue?: number;
+  cost?: number;
+  margin?: number;
+  outstandingBalance?: number;
+}
+
+export interface OutsourcedReportResponse {
+  summary?: OutsourcedReportSummary;
+  suppliers?: OutsourcedSupplierRow[];
+  paymentStatus?: OutsourcedPaymentStatusEntry[];
+  timeline?: OutsourcedTimelinePoint[];
+}
+
 /**
  * Get sales report data
  */
@@ -197,4 +247,27 @@ export async function getDashboardOrders(timeframe: string = 'thisWeek'): Promis
   } catch (error) {
     throw error;
   }
+}
+
+export async function getOutsourcedReport(
+  params: OutsourcedReportParams = {}
+): Promise<OutsourcedReportResponse> {
+  const qp = new URLSearchParams();
+  if (params.startDate && params.endDate) {
+    qp.set("startDate", params.startDate);
+    qp.set("endDate", params.endDate);
+    qp.set("dateRange", "custom");
+  } else if (params.dateRange) {
+    qp.set("dateRange", params.dateRange);
+  }
+  if (params.outsourcedSupplier) {
+    qp.set("outsourcedSupplier", params.outsourcedSupplier);
+  } else if (params.supplierId) {
+    qp.set("outsourcedSupplier", params.supplierId);
+  }
+  const url = `${API_ENDPOINTS.reports.outsourced}${
+    qp.toString() ? `?${qp.toString()}` : ""
+  }`;
+  const res = await authFetch(url);
+  return res.json();
 }

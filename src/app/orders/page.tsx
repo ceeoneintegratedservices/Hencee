@@ -14,7 +14,13 @@ import { OrderDataService, Order } from "../../services/OrderDataService";
 import { NotificationContainer, useNotifications } from "../../components/Notification";
 import { updateOrderStatus } from "../../services/orders";
 import { fetchSalesDashboard, createSale, updateSaleStatus } from "../../services/sales";
-import type { SalesDashboardResponse, CreateSalePayload } from "../../services/sales";
+import type {
+  SalesDashboardResponse,
+  CreateSalePayload,
+  PaymentMethod,
+  PaymentStatus,
+  SalePaymentPayload,
+} from "../../services/sales";
 
 export default function OrdersPage() {
   const router = useRouter();
@@ -54,6 +60,13 @@ export default function OrdersPage() {
     setCurrentPage(1); // Reset to first page when filtering
   };
 
+  const normalizePaymentMethod = (method?: string): PaymentMethod | undefined => {
+    if (!method) return undefined;
+    const normalized = method.toLowerCase().replace(/\s+/g, "_");
+    const allowedMethods: PaymentMethod[] = ["cash", "card", "bank_transfer", "cheque", "mobile_money"];
+    return allowedMethods.includes(normalized as PaymentMethod) ? (normalized as PaymentMethod) : undefined;
+  };
+
   const handleCreateOrder = async (orderData: any) => {
     try {
       // Validate that we have a customer ID
@@ -62,17 +75,35 @@ export default function OrdersPage() {
       }
 
       // Convert orderData to CreateSalePayload format
+      const paymentStatus: PaymentStatus =
+        orderData.payment === 'Full Payment' ? 'COMPLETED' : 'PENDING';
+      const paymentMethod = normalizePaymentMethod(orderData.paymentType);
+
+      const paymentPayload: SalePaymentPayload | undefined =
+        paymentMethod || orderData.paymentAmount
+          ? {
+              method: paymentMethod,
+              status: paymentStatus,
+              amount: orderData.paymentAmount ? Number(orderData.paymentAmount) : undefined,
+            }
+          : undefined;
+
       const salePayload: CreateSalePayload = {
         customerId: orderData.customerId,
         items: orderData.items.map((item: any) => ({
           productId: item.id,
-          quantity: item.quantity,
-          price: item.price,
+          quantity: Number(item.quantity) || 1,
+          unitPrice: item.price !== undefined ? Number(item.price) : undefined,
+          unitType: item.unitType || undefined,
+          discountAmount: item.discountAmount || undefined,
         })),
-        paymentMethod: orderData.paymentType,
-        paymentStatus: orderData.payment === 'Full Payment' ? 'completed' : 'pending',
         notes: orderData.orderNote,
+        showDiscountOnInvoice: Boolean(orderData.showDiscountOnInvoice),
       };
+
+      if (paymentPayload) {
+        salePayload.payment = paymentPayload;
+      }
 
       await createSale(salePayload);
       showSuccess("Order Created", "The order has been created successfully.");

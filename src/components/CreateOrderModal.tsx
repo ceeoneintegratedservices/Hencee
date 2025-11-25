@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
-import { CreateSalePayload } from "@/services/sales";
+import type { CreateSalePayload, SaleUnitType, PaymentMethod, PaymentStatus } from "@/services/sales";
+import { getPharmaPresets } from "@/services/pharmaPresets";
 import { listCustomers, createCustomer } from "@/services/customers";
 import { listProducts } from "@/services/products";
 import { CreateCustomerBody } from "@/types/customers";
@@ -10,7 +11,7 @@ import { CreateCustomerBody } from "@/types/customers";
 interface CreateOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreate: (orderData: OrderData) => void;
+  onCreate: (payload: CreateSalePayload) => void;
 }
 
 interface OrderData {
@@ -22,16 +23,31 @@ interface OrderData {
   orderTime: string;
   orderStatus: string;
   orderNote: string;
+  showDiscountOnInvoice: boolean;
   items: OrderItem[];
 }
 
 interface OrderItem {
   id: string;
   name: string;
+  unitPrice: number;
   price: number;
   quantity: number;
   total: number;
+  unitType: SaleUnitType;
+  discountAmount: number;
   warehouseNumber?: string;
+}
+
+interface PaymentFormState {
+  method: PaymentMethod | "";
+  status: PaymentStatus;
+  amount: string;
+  reference: string;
+  senderName: string;
+  transactionReference: string;
+  chequeNumber: string;
+  accountName: string;
 }
 
 interface Product {
@@ -55,7 +71,24 @@ interface Customer {
   lastOrderDate?: string;
   address?: string;
   status?: string;
+  balance?: number;
+  outstandingBalance?: number;
 }
+
+const FALLBACK_UNIT_OPTIONS: SaleUnitType[] = ["piece", "carton", "roll"];
+const FALLBACK_PAYMENT_METHOD_OPTIONS: Array<{ value: PaymentMethod; label: string }> = [
+  { value: "cash", label: "Cash" },
+  { value: "card", label: "Card" },
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "cheque", label: "Cheque" },
+  { value: "mobile_money", label: "Mobile Money" },
+];
+const FALLBACK_PAYMENT_STATUS_OPTIONS: Array<{ value: PaymentStatus; label: string }> = [
+  { value: "PENDING", label: "Pending" },
+  { value: "COMPLETED", label: "Completed" },
+  { value: "FAILED", label: "Failed" },
+  { value: "REFUNDED", label: "Refunded" },
+];
 
 export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOrderModalProps) {
   const [orderData, setOrderData] = useState<OrderData>({
@@ -67,6 +100,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
     orderTime: "12:00 PM",
     orderStatus: "Pending",
     orderNote: "",
+    showDiscountOnInvoice: true,
     items: []
   });
 
@@ -96,6 +130,61 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
     address: ''
   });
   const [creatingCustomer, setCreatingCustomer] = useState(false);
+  const [customerBalance, setCustomerBalance] = useState<number | null>(null);
+  const [paymentForm, setPaymentForm] = useState<PaymentFormState>({
+    method: "",
+    status: "PENDING",
+    amount: "",
+    reference: "",
+    senderName: "",
+    transactionReference: "",
+    chequeNumber: "",
+    accountName: "",
+  });
+  const [presetOptions, setPresetOptions] = useState({
+    unitTypes: FALLBACK_UNIT_OPTIONS,
+    paymentMethods: FALLBACK_PAYMENT_METHOD_OPTIONS,
+    paymentStatuses: FALLBACK_PAYMENT_STATUS_OPTIONS,
+    showDiscountDefault: true,
+  });
+  const [appliedPresetDefaults, setAppliedPresetDefaults] = useState(false);
+  const formatAmount = (value: number) => `₦${Number(value || 0).toLocaleString()}`;
+  const calculateLineTotal = (unitPrice: number, discount: number, quantity: number) => {
+    const safeUnit = Number(unitPrice) || 0;
+    const safeDiscount = Number(discount) || 0;
+    const effectiveUnit = Math.max(safeUnit - safeDiscount, 0);
+    return effectiveUnit * Math.max(quantity, 0);
+  };
+  const unitOptions = presetOptions.unitTypes;
+  const paymentMethodOptions = presetOptions.paymentMethods;
+  const paymentStatusOptions = presetOptions.paymentStatuses;
+
+  const getPaymentMethodLabel = useCallback(
+    (method?: string | null) => {
+      if (!method) return "Not set";
+      const match = paymentMethodOptions.find((opt) => opt.value === method);
+      if (match) return match.label;
+      return method
+        .split("_")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
+    },
+    [paymentMethodOptions]
+  );
+
+  const getPaymentStatusLabel = useCallback(
+    (status?: string | null) => {
+      if (!status) return "Not set";
+      const match = paymentStatusOptions.find((opt) => opt.value === status);
+      if (match) return match.label;
+      return status
+        .toLowerCase()
+        .split("_")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
+    },
+    [paymentStatusOptions]
+  );
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -154,6 +243,116 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
 
     fetchProducts();
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let active = true;
+    const fetchPresets = async () => {
+      const presets = await getPharmaPresets();
+      if (!active) return;
+
+      const normalizeUnitTypes = (input?: unknown): SaleUnitType[] => {
+        if (!Array.isArray(input)) return [];
+        return input
+          .filter((value): value is string => typeof value === "string")
+          .map((value) => value.toLowerCase().trim())
+          .filter((value): value is SaleUnitType =>
+            FALLBACK_UNIT_OPTIONS.includes(value as SaleUnitType)
+          );
+      };
+
+      const normalizeMethodOptions = (
+        input?: unknown
+      ): Array<{ value: PaymentMethod; label: string }> => {
+        if (!Array.isArray(input)) return [];
+        const mapped: Array<{ value: PaymentMethod; label: string }> = [];
+        input.forEach((entry) => {
+          let rawValue: string | undefined;
+          let rawLabel: string | undefined;
+          if (typeof entry === "string") {
+            rawValue = entry;
+          } else if (entry && typeof entry === "object" && "value" in entry) {
+            rawValue = String((entry as any).value);
+            rawLabel = (entry as any).label ? String((entry as any).label) : undefined;
+          }
+          if (!rawValue) return;
+          const normalized = rawValue.toLowerCase().trim() as PaymentMethod;
+          if (FALLBACK_PAYMENT_METHOD_OPTIONS.find((opt) => opt.value === normalized)) {
+            mapped.push({
+              value: normalized,
+              label:
+                rawLabel ||
+                rawValue
+                  .split("_")
+                  .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+                  .join(" "),
+            });
+          }
+        });
+        return mapped;
+      };
+
+      const normalizeStatusOptions = (
+        input?: unknown
+      ): Array<{ value: PaymentStatus; label: string }> => {
+        if (!Array.isArray(input)) return [];
+        const mapped: Array<{ value: PaymentStatus; label: string }> = [];
+        input.forEach((entry) => {
+          let rawValue: string | undefined;
+          let rawLabel: string | undefined;
+          if (typeof entry === "string") {
+            rawValue = entry;
+          } else if (entry && typeof entry === "object" && "value" in entry) {
+            rawValue = String((entry as any).value);
+            rawLabel = (entry as any).label ? String((entry as any).label) : undefined;
+          }
+          if (!rawValue) return;
+          const normalized = rawValue.toUpperCase().trim() as PaymentStatus;
+          if (FALLBACK_PAYMENT_STATUS_OPTIONS.find((opt) => opt.value === normalized)) {
+            mapped.push({
+              value: normalized,
+              label:
+                rawLabel ||
+                rawValue
+                  .toLowerCase()
+                  .split("_")
+                  .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+                  .join(" "),
+            });
+          }
+        });
+        return mapped;
+      };
+
+      const unitTypes = normalizeUnitTypes(presets.unitTypes);
+      const paymentMethods = normalizeMethodOptions(presets.paymentMethods);
+      const paymentStatuses = normalizeStatusOptions(presets.paymentStatuses);
+      const showDiscountDefault =
+        presets.discountDefaults?.showDiscountOnInvoice ?? true;
+
+      setPresetOptions({
+        unitTypes: unitTypes.length ? unitTypes : FALLBACK_UNIT_OPTIONS,
+        paymentMethods:
+          paymentMethods.length > 0 ? paymentMethods : FALLBACK_PAYMENT_METHOD_OPTIONS,
+        paymentStatuses:
+          paymentStatuses.length > 0 ? paymentStatuses : FALLBACK_PAYMENT_STATUS_OPTIONS,
+        showDiscountDefault,
+      });
+
+      if (!appliedPresetDefaults) {
+        setOrderData((prev) => ({
+          ...prev,
+          showDiscountOnInvoice: showDiscountDefault,
+        }));
+        setAppliedPresetDefaults(true);
+      }
+    };
+
+    fetchPresets();
+    return () => {
+      active = false;
+    };
+  }, [isOpen, appliedPresetDefaults]);
 
   // Fetch customers from API
   useEffect(() => {
@@ -221,6 +420,13 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
     setOrderData(prev => ({ ...prev, customer: customer.name }));
     setCustomerSearchQuery(customer.name);
     setExplicitCustomerId(customer.id); // Store the customer ID
+    setCustomerBalance(
+      typeof customer.balance === "number"
+        ? customer.balance
+        : typeof customer.outstandingBalance === "number"
+        ? customer.outstandingBalance
+        : null
+    );
     setShowCustomerList(false);
   };
 
@@ -240,6 +446,13 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
     const currentDate = new Date().toLocaleDateString();
     const currentTime = new Date().toLocaleTimeString();
     const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
+    const showDiscountColumn = orderData.showDiscountOnInvoice;
+    const discountColumnHeader = showDiscountColumn ? "<th>Discount</th>" : "";
+    const paymentMethodLabel = getPaymentMethodLabel(paymentForm.method || orderData.paymentType);
+    const paymentStatusLabel = getPaymentStatusLabel(paymentForm.status);
+    const formattedPaymentAmount = paymentForm.amount
+      ? formatAmount(Number(paymentForm.amount))
+      : formatAmount(calculateTotal());
     
     return `
       <!DOCTYPE html>
@@ -282,8 +495,9 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
             <p><strong>${orderData.customer || 'Customer Name'}</strong></p>
             <p>Date: ${orderData.orderDate}</p>
             <p>Time: ${orderData.orderTime}</p>
-            <p>Payment Type: ${orderData.paymentType}</p>
-            <p>Payment Method: ${orderData.payment}${orderData.payment === 'Part Payment' && orderData.paymentAmount ? ` (₦${parseFloat(orderData.paymentAmount).toLocaleString()})` : ''}</p>
+            <p>Payment Method: ${paymentMethodLabel}</p>
+            <p>Payment Status: ${paymentStatusLabel}</p>
+            <p>Amount: ${formattedPaymentAmount}</p>
           </div>
         </div>
         
@@ -294,6 +508,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
               <th>Warehouse</th>
               <th>Quantity</th>
               <th>Price</th>
+              ${discountColumnHeader}
               <th>Total</th>
             </tr>
           </thead>
@@ -303,8 +518,9 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                 <td>${item.name}</td>
                 <td>${item.warehouseNumber || 'N/A'}</td>
                 <td>${item.quantity}</td>
-                <td>₦${item.price.toLocaleString()}</td>
-                <td>₦${item.total.toLocaleString()}</td>
+                <td>${formatAmount(item.unitPrice)}</td>
+                ${showDiscountColumn ? `<td>${formatAmount(item.discountAmount || 0)}</td>` : ''}
+                <td>${formatAmount(item.total)}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -334,28 +550,33 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
   const addProductToOrder = (product: Product) => {
     const existingItem = orderData.items.find(item => item.id === product.id);
     const productPrice = product.sellingPrice || product.price || 0;
-    
+    const defaultUnitType: SaleUnitType = "piece";
+
     if (existingItem) {
-      // Update quantity if product already exists
       const updatedItems = orderData.items.map(item =>
         item.id === product.id
-          ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * productPrice }
+          ? {
+              ...item,
+              quantity: item.quantity + 1,
+              total: calculateLineTotal(item.unitPrice, item.discountAmount, item.quantity + 1),
+            }
           : item
       );
       setOrderData(prev => ({ ...prev, items: updatedItems }));
     } else {
-      // Add new product to order
       const newItem: OrderItem = {
         id: product.id,
         name: product.name,
+        unitPrice: productPrice,
         price: productPrice,
         quantity: 1,
-        total: productPrice
+        total: calculateLineTotal(productPrice, 0, 1),
+        unitType: defaultUnitType,
+        discountAmount: 0,
       };
       setOrderData(prev => ({ ...prev, items: [...prev.items, newItem] }));
     }
-    
-    // Clear search and hide product list
+
     setSearchQuery("");
     setShowProductList(false);
   };
@@ -369,7 +590,50 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
 
     const updatedItems = orderData.items.map(item =>
       item.id === productId
-        ? { ...item, quantity: newQuantity, total: newQuantity * item.price }
+        ? {
+            ...item,
+            quantity: newQuantity,
+            total: calculateLineTotal(item.unitPrice, item.discountAmount, newQuantity),
+          }
+        : item
+    );
+    setOrderData(prev => ({ ...prev, items: updatedItems }));
+  };
+
+  const updateItemUnitType = (productId: string, unitType: SaleUnitType) => {
+    const updatedItems = orderData.items.map(item =>
+      item.id === productId
+        ? {
+            ...item,
+            unitType,
+          }
+        : item
+    );
+    setOrderData(prev => ({ ...prev, items: updatedItems }));
+  };
+
+  const updateItemUnitPrice = (productId: string, newPrice: number) => {
+    const updatedItems = orderData.items.map(item =>
+      item.id === productId
+        ? {
+            ...item,
+            unitPrice: newPrice,
+            price: newPrice,
+            total: calculateLineTotal(newPrice, item.discountAmount, item.quantity),
+          }
+        : item
+    );
+    setOrderData(prev => ({ ...prev, items: updatedItems }));
+  };
+
+  const updateItemDiscountAmount = (productId: string, newDiscount: number) => {
+    const updatedItems = orderData.items.map(item =>
+      item.id === productId
+        ? {
+            ...item,
+            discountAmount: newDiscount,
+            total: calculateLineTotal(item.unitPrice, newDiscount, item.quantity),
+          }
         : item
     );
     setOrderData(prev => ({ ...prev, items: updatedItems }));
@@ -418,13 +682,60 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
         throw new Error('Customer ID is required. Please select a customer or create a new one.');
       }
 
-      // Update order data with customer ID
-      const orderDataWithCustomer = {
-        ...orderData,
-        customerId: customerId
+      const salePayload: CreateSalePayload = {
+        customerId,
+        items: orderData.items.map((item) => ({
+          productId: item.id,
+          quantity: item.quantity,
+          unitType: item.unitType,
+          unitPrice: item.unitPrice,
+          discountAmount: item.discountAmount || 0,
+        })),
+        notes: orderData.orderNote || undefined,
+        showDiscountOnInvoice: orderData.showDiscountOnInvoice,
       };
 
-      onCreate(orderDataWithCustomer);
+      const legacyMethodMap: Record<string, PaymentMethod> = {
+        Cash: "cash",
+        Card: "card",
+        "Bank Transfer": "bank_transfer",
+        Cheque: "cheque",
+        "Mobile Money": "mobile_money",
+      };
+
+      const derivedMethod =
+        paymentForm.method || legacyMethodMap[orderData.paymentType] || "";
+      const derivedStatus: PaymentStatus =
+        paymentForm.status ||
+        (orderData.payment === "Full Payment" ? "COMPLETED" : "PENDING");
+      const derivedAmountString = paymentForm.amount || orderData.paymentAmount;
+      const parsedAmount =
+        derivedAmountString && !Number.isNaN(Number(derivedAmountString))
+          ? Number(derivedAmountString)
+          : undefined;
+
+      if (
+        derivedMethod &&
+        derivedStatus === "COMPLETED" &&
+        (!parsedAmount || parsedAmount <= 0)
+      ) {
+        throw new Error("Please enter the amount received when marking the payment as completed.");
+      }
+
+      if (derivedMethod) {
+        salePayload.payment = {
+          method: derivedMethod as PaymentMethod,
+          status: derivedStatus,
+          amount: parsedAmount,
+          reference: paymentForm.reference || undefined,
+          senderName: paymentForm.senderName || undefined,
+          transactionReference: paymentForm.transactionReference || undefined,
+          chequeNumber: paymentForm.chequeNumber || undefined,
+          accountName: paymentForm.accountName || undefined,
+        };
+      }
+
+      onCreate(salePayload);
       onClose();
     } catch (error: any) {
       console.error('Error creating order:', error);
@@ -495,39 +806,48 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                     <p className="text-gray-600 font-medium">{orderData.customer || 'Customer Name'}</p>
                     <p className="text-gray-600">Date: {orderData.orderDate}</p>
                     <p className="text-gray-600">Time: {orderData.orderTime}</p>
-                    <p className="text-gray-600">Payment Type: {orderData.paymentType}</p>
-                    <p className="text-gray-600">Payment Method: {orderData.payment}{orderData.payment === 'Part Payment' && orderData.paymentAmount ? ` (₦${parseFloat(orderData.paymentAmount).toLocaleString()})` : ''}</p>
+                    <p className="text-gray-600">Payment Method: {getPaymentMethodLabel(paymentForm.method || orderData.paymentType)}</p>
+                    <p className="text-gray-600">Payment Status: {getPaymentStatusLabel(paymentForm.status)}</p>
+                    <p className="text-gray-600">Amount: {paymentForm.amount && paymentForm.amount.trim() !== '' ? formatAmount(Number(paymentForm.amount)) : formatAmount(calculateTotal())}</p>
                   </div>
                 </div>
                 
                 {/* Items Table */}
                 <div className="mb-8">
-                  <table className="w-full border-collapse border border-gray-300">
-                    <thead>
-                      <tr className="bg-gray-50">
-                        <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Item</th>
-                        <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Warehouse</th>
-                        <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Quantity</th>
-                        <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Price</th>
-                        <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orderData.items.map((item, index) => (
-                        <tr key={index}>
-                          <td className="border border-gray-300 px-4 py-3 text-gray-700">{item.name}</td>
-                          <td className="border border-gray-300 px-4 py-3 text-gray-700">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              {item.warehouseNumber || 'N/A'}
-                            </span>
-                          </td>
-                          <td className="border border-gray-300 px-4 py-3 text-gray-700">{item.quantity}</td>
-                          <td className="border border-gray-300 px-4 py-3 text-gray-700">₦{item.price.toLocaleString()}</td>
-                          <td className="border border-gray-300 px-4 py-3 text-gray-700">₦{item.total.toLocaleString()}</td>
+                    <table className="w-full border-collapse border border-gray-300">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Item</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Warehouse</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Quantity</th>
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Price</th>
+                          {orderData.showDiscountOnInvoice && (
+                            <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Discount</th>
+                          )}
+                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Total</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {orderData.items.map((item, index) => (
+                          <tr key={index}>
+                            <td className="border border-gray-300 px-4 py-3 text-gray-700">{item.name}</td>
+                            <td className="border border-gray-300 px-4 py-3 text-gray-700">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                {item.warehouseNumber || 'N/A'}
+                              </span>
+                            </td>
+                            <td className="border border-gray-300 px-4 py-3 text-gray-700">{item.quantity}</td>
+                            <td className="border border-gray-300 px-4 py-3 text-gray-700">{formatAmount(item.unitPrice)}</td>
+                            {orderData.showDiscountOnInvoice && (
+                              <td className="border border-gray-300 px-4 py-3 text-gray-700">
+                                {formatAmount(item.discountAmount || 0)}
+                              </td>
+                            )}
+                            <td className="border border-gray-300 px-4 py-3 text-gray-700">{formatAmount(item.total)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                 </div>
                 
                 {/* Total */}
@@ -609,6 +929,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                         // Clear customer ID when manually typing
                         if (e.target.value !== orderData.customer) {
                           setExplicitCustomerId("");
+                          setCustomerBalance(null);
                         }
                       }}
                       onFocus={() => setShowCustomerList(true)}
@@ -619,6 +940,14 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                   </div>
+                  {customerBalance !== null && (
+                    <p className="mt-2 text-sm text-[#8b8d97]">
+                      Current outstanding balance:{" "}
+                      <span className="font-semibold text-[#02016a]">
+                        {formatAmount(customerBalance)}
+                      </span>
+                    </p>
+                  )}
                   
                   {/* Customer Dropdown */}
                   {showCustomerList && (
@@ -772,51 +1101,188 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                 </div>
               )}
 
-              {/* Payment Type & Payment */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* Payment Details */}
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-[14px] text-[#45464e] mb-2">Payment Type</label>
+                  <label className="block text-[14px] text-[#45464e] mb-2">Payment Method</label>
                   <select
-                    value={orderData.paymentType}
-                    onChange={(e) => setOrderData(prev => ({ ...prev, paymentType: e.target.value }))}
+                    value={paymentForm.method}
+                    onChange={(e) =>
+                      setPaymentForm((prev) => ({
+                        ...prev,
+                        method: e.target.value as PaymentMethod,
+                        senderName: e.target.value === "bank_transfer" ? prev.senderName : "",
+                        transactionReference:
+                          e.target.value === "bank_transfer" ? prev.transactionReference : "",
+                        chequeNumber: e.target.value === "cheque" ? prev.chequeNumber : "",
+                        accountName: e.target.value === "cheque" ? prev.accountName : "",
+                      }))
+                    }
                     className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
                   >
-                    <option value="">Payment Type</option>
-                    <option value="Cash">Cash</option>
-                    <option value="Card">Card</option>
-                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="">Select method</option>
+                    {paymentMethodOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-[14px] text-[#45464e] mb-2">Payment</label>
-                  <select
-                    value={orderData.payment}
-                    onChange={(e) => setOrderData(prev => ({ ...prev, payment: e.target.value, paymentAmount: e.target.value === 'Full Payment' ? '' : prev.paymentAmount }))}
-                    className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
-                  >
-                    <option value="">Select Payment</option>
-                    <option value="Full Payment">Full Payment</option>
-                    <option value="Part Payment">Part Payment</option>
-                  </select>
-                </div>
-              </div>
 
-              {/* Payment Amount - Only show when Part Payment is selected */}
-              {orderData.payment === 'Part Payment' && (
-                <div>
-                  <label className="block text-[14px] text-[#45464e] mb-2">Payment Amount</label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      value={orderData.paymentAmount}
-                      onChange={(e) => setOrderData(prev => ({ ...prev, paymentAmount: e.target.value }))}
-                      placeholder="Enter payment amount"
-                      className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent pl-10"
-                    />
-                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-[14px]">₦</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[14px] text-[#45464e] mb-2">Payment Status</label>
+                    <select
+                      value={paymentForm.status}
+                      onChange={(e) =>
+                        setPaymentForm((prev) => ({
+                          ...prev,
+                          status: e.target.value as PaymentStatus,
+                        }))
+                      }
+                      className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                    >
+                      {paymentStatusOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[14px] text-[#45464e] mb-2">Payment Amount</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        value={paymentForm.amount}
+                        onChange={(e) =>
+                          setPaymentForm((prev) => ({
+                            ...prev,
+                            amount: e.target.value,
+                          }))
+                        }
+                        placeholder="Enter amount or leave blank"
+                        className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent pl-10"
+                      />
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-[14px]">₦</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Required when marking status as Completed.
+                    </p>
                   </div>
                 </div>
-              )}
+
+                <div>
+                  <label className="block text-[14px] text-[#45464e] mb-2">Payment Reference</label>
+                  <input
+                    type="text"
+                    value={paymentForm.reference}
+                    onChange={(e) =>
+                      setPaymentForm((prev) => ({
+                        ...prev,
+                        reference: e.target.value,
+                      }))
+                    }
+                    placeholder="Enter reference (optional)"
+                    className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                  />
+                </div>
+
+                {paymentForm.method === "bank_transfer" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[14px] text-[#45464e] mb-2">Sender Name</label>
+                      <input
+                        type="text"
+                        value={paymentForm.senderName}
+                        onChange={(e) =>
+                          setPaymentForm((prev) => ({
+                            ...prev,
+                            senderName: e.target.value,
+                          }))
+                        }
+                        placeholder="Name on originating account"
+                        className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[14px] text-[#45464e] mb-2">Transaction Reference</label>
+                      <input
+                        type="text"
+                        value={paymentForm.transactionReference}
+                        onChange={(e) =>
+                          setPaymentForm((prev) => ({
+                            ...prev,
+                            transactionReference: e.target.value,
+                          }))
+                        }
+                        placeholder="e.g. BANK123456"
+                        className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {paymentForm.method === "cheque" && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[14px] text-[#45464e] mb-2">Cheque Number</label>
+                      <input
+                        type="text"
+                        value={paymentForm.chequeNumber}
+                        onChange={(e) =>
+                          setPaymentForm((prev) => ({
+                            ...prev,
+                            chequeNumber: e.target.value,
+                          }))
+                        }
+                        placeholder="Enter cheque number"
+                        className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[14px] text-[#45464e] mb-2">Account Name</label>
+                      <input
+                        type="text"
+                        value={paymentForm.accountName}
+                        onChange={(e) =>
+                          setPaymentForm((prev) => ({
+                            ...prev,
+                            accountName: e.target.value,
+                          }))
+                        }
+                        placeholder="Account name on cheque"
+                        className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Show Discount on Invoice */}
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <input
+                  id="show-discount-checkbox"
+                  type="checkbox"
+                  checked={orderData.showDiscountOnInvoice}
+                  onChange={(e) =>
+                    setOrderData((prev) => ({
+                      ...prev,
+                      showDiscountOnInvoice: e.target.checked,
+                    }))
+                  }
+                  className="mt-1 h-4 w-4 text-[#02016a] border-gray-300 rounded focus:ring-[#02016a]"
+                />
+                <div>
+                  <label htmlFor="show-discount-checkbox" className="text-[14px] font-medium text-[#45464e]">
+                    Show discount on invoice
+                  </label>
+                  <p className="text-[12px] text-[#8b8d97]">
+                    Disable this if you want to hide per-line discount information on the printed invoice.
+                  </p>
+                </div>
+              </div>
 
               {/* Order Time & Date */}
               <div className="grid grid-cols-2 gap-4">
@@ -982,7 +1448,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                       <div className="flex justify-between items-start mb-3">
                         <div className="flex-1">
                           <h5 className="text-[14px] font-medium text-[#45464e] mb-1">{item.name}</h5>
-                          <p className="text-[12px] text-[#8b8d97]">₦{item.price.toLocaleString()} each</p>
+                          <p className="text-[12px] text-[#8b8d97]">{formatAmount(item.unitPrice)} per unit</p>
                         </div>
                         <button
                           onClick={() => removeProductFromOrder(item.id)}
@@ -1015,7 +1481,60 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                           </button>
                         </div>
                         <div className="text-right">
-                          <p className="text-[14px] font-semibold text-[#45464e]">₦{item.total.toLocaleString()}</p>
+                          <p className="text-[14px] font-semibold text-[#45464e]">{formatAmount(item.total)}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+                        <div>
+                          <label className="block text-[12px] text-[#8b8d97] mb-1">Unit Type</label>
+                          <select
+                            value={item.unitType}
+                            onChange={(e) =>
+                              updateItemUnitType(item.id, e.target.value as SaleUnitType)
+                            }
+                            className="w-full p-2 border border-gray-300 rounded-lg text-[13px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                          >
+                            {unitOptions.map((option) => (
+                              <option key={option} value={option}>
+                                {option.charAt(0).toUpperCase() + option.slice(1)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[12px] text-[#8b8d97] mb-1">Unit Price</label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="0"
+                              value={item.unitPrice}
+                              onChange={(e) =>
+                                updateItemUnitPrice(item.id, Number(e.target.value) || 0)
+                              }
+                              className="w-full p-2 border border-gray-300 rounded-lg text-[13px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent pl-7"
+                            />
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">
+                              ₦
+                            </span>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[12px] text-[#8b8d97] mb-1">Discount / Unit</label>
+                          <div className="relative">
+                            <input
+                              type="number"
+                              min="0"
+                              value={item.discountAmount}
+                              onChange={(e) =>
+                                updateItemDiscountAmount(item.id, Number(e.target.value) || 0)
+                              }
+                              className="w-full p-2 border border-gray-300 rounded-lg text-[13px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent pl-7"
+                            />
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-500">
+                              ₦
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
