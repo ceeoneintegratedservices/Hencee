@@ -10,7 +10,7 @@ const PHARMA_INVENTORY_BASE = `${API_BASE_URL}${CEEONE_PREFIX}/pharma/inventory`
 export const API_ENDPOINTS = {
   // Auth endpoints (Pharma/CeeOne)
   register: `${API_BASE_URL}${CEEONE_PREFIX}/auth/register`,
-  login: `${API_BASE_URL}/auth/login`, // Login endpoint is shared (no prefix)
+  login: `${API_BASE_URL}${CEEONE_PREFIX}/auth/login`,
   verifyEmail: `${API_BASE_URL}${CEEONE_PREFIX}/auth/verify-email`,
   resendVerification: `${API_BASE_URL}${CEEONE_PREFIX}/auth/resend-verification`,
   forgotPassword: `${API_BASE_URL}${CEEONE_PREFIX}/auth/password/forgot`,

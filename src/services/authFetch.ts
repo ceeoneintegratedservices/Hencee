@@ -87,7 +87,7 @@ export async function authFetch(pathOrUrl: string, options: RequestInit = {}) {
   // Handle 401 - try to refresh token
   if (res.status === 401) {
     // Don't retry if this is already a refresh request or auth endpoint
-    if (url.includes("/api/ceeone/auth/refresh") || url.includes("/auth/login")) {
+    if (url.includes("/api/ceeone/auth/refresh") || url.includes("/api/ceeone/auth/login")) {
       try { 
         localStorage.removeItem("accessToken");
         localStorage.removeItem("authToken");
