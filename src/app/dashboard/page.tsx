@@ -149,12 +149,31 @@ export default function AdminDashboard() {
   };
 
   // Load dashboard data when authenticated or time period changes
-  // Only fetch data if user has permission to view dashboard
+  // Allow fetching data if user has any relevant permissions or if permissions aren't initialized yet
   useEffect(() => {
-    if (isAuthenticated && hasPermission('dashboard.view')) {
-      fetchDashboardData();
+    console.log('Dashboard useEffect:', { 
+      isAuthenticated, 
+      isInitialized, 
+      hasDashboardView: hasPermission('dashboard.view'),
+      hasAnyRelevant: hasAnyPermission(['sales.view', 'inventory.view', 'customers.view', 'reports.view'])
+    });
+    
+    if (isAuthenticated) {
+      // Allow dashboard access if user has dashboard.view OR any other relevant permissions OR if permissions aren't initialized yet
+      const canViewDashboard = !isInitialized || 
+        hasPermission('dashboard.view') || 
+        hasAnyPermission(['sales.view', 'inventory.view', 'customers.view', 'reports.view']);
+      
+      console.log('Can view dashboard:', canViewDashboard);
+      
+      if (canViewDashboard) {
+        fetchDashboardData();
+      } else {
+        // If no permissions, still set loading to false so the UI can show the access restricted message
+        setLoading(false);
+      }
     }
-  }, [isAuthenticated, selectedTimePeriod, hasPermission]);
+  }, [isAuthenticated, selectedTimePeriod, hasPermission, hasAnyPermission, isInitialized]);
 
   // Activity categories for display
   const activityCategories = {
@@ -239,13 +258,19 @@ export default function AdminDashboard() {
         
         <div className="px-5 pt-7">
           {/* Check if user has dashboard permissions */}
-          {!hasPermission('dashboard.view') ? (
+          {isInitialized && !hasPermission('dashboard.view') && !hasAnyPermission(['sales.view', 'inventory.view', 'customers.view', 'reports.view']) ? (
             <div className="flex items-center justify-center h-96">
               <div className="text-center">
                 <div className="text-red-500 text-6xl mb-4">🚫</div>
                 <h2 className="text-xl font-semibold text-gray-900 mb-2">Access Restricted</h2>
                 <p className="text-gray-600 mb-4">You don't have permission to view the dashboard.</p>
-                <p className="text-gray-500">Contact your administrator for access.</p>
+                <p className="text-gray-500 mb-4">Contact your administrator for access.</p>
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="px-4 py-2 bg-[#1C1D22] text-white rounded-lg hover:bg-[#2a2b32] transition-colors"
+                >
+                  Refresh Page
+                </button>
               </div>
             </div>
           ) : (
@@ -821,4 +846,4 @@ function BarChart({ data }: { data: { label: string; value: number }[] }) {
       </div>
     </div>
   );
-} 
+}

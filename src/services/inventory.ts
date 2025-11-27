@@ -256,7 +256,7 @@ export async function getInventoryProducts(
 }
 
 export async function getInventoryProductById(id: string): Promise<InventoryProduct> {
-    const response = await authFetch(API_ENDPOINTS.inventoryById(id));
+  const response = await authFetch(API_ENDPOINTS.inventoryById(id));
   return parseResponse<InventoryProduct>(response);
 }
 

@@ -155,6 +155,27 @@ export default function CustomersPage() {
     fetchCustomerMetrics();
   }, []);
 
+  // Refresh data when returning to the page
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchCustomers();
+      }
+    };
+
+    const handleFocus = () => {
+      fetchCustomers();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
   const handleSelectCustomer = (customerId: string) => {
     setSelectedCustomers(prev => 
       prev.includes(customerId) 

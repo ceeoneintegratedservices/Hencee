@@ -39,7 +39,15 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
   // Get permission-based menu items
   const menuItems = permissions.isInitialized ? permissions.getMenuItems() : [];
   // Exclude Settings from the main group; render it near Logout instead
-  const mainMenuItems = menuItems.filter((item: any) => item.key !== 'settings');
+  // Include Dashboard and all other items except Settings, with Dashboard first
+  const mainMenuItems = menuItems
+    .filter((item: any) => item.key !== 'settings')
+    .sort((a: any, b: any) => {
+      // Dashboard should always be first
+      if (a.key === 'dashboard') return -1;
+      if (b.key === 'dashboard') return 1;
+      return 0;
+    });
 
   // Icon mapping function
   const getIcon = (iconName: string) => {
@@ -180,38 +188,101 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
         {/* Menu - Scrollable area */}
         <nav className="flex flex-col gap-4 mt-6 px-6 flex-1 overflow-y-auto">
           {/* Dynamic menu items based on permissions */}
-          {mainMenuItems.map((item) => (
-            <Link
-              key={item.key}
-              href={getHref(item.key)}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium relative hover:bg-[#02016a] hover:text-white transition-colors ${
-                currentPage === item.key 
-                  ? 'bg-[#02016a] text-white' 
-                  : 'text-[#101828]'
-              }`}
-            >
-              <span className="w-5 h-5 flex items-center justify-center">
-                {getIcon(item.icon)}
-              </span>
-              <span className="text-sm">{item.label}</span>
-            </Link>
-          ))}
-          
-          {/* Settings and Logout */}
-          <div className="mt-8 pt-4 border-t border-gray-100">
-            {/* Settings link - only show if user has permission */}
-            {permissions.isInitialized && permissions.hasPermission('settings.view') && (
-              <Link 
-                href="/settings"
-                className="flex items-center gap-3 px-4 py-3 rounded-xl text-[#101828] font-medium hover:bg-[#02016a] hover:text-white transition-colors"
+          {mainMenuItems.length > 0 ? (
+            mainMenuItems.map((item) => (
+              <Link
+                key={item.key}
+                href={getHref(item.key)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium relative hover:bg-[#02016a] hover:text-white transition-colors ${
+                  currentPage === item.key 
+                    ? 'bg-[#02016a] text-white' 
+                    : 'text-[#101828]'
+                }`}
               >
                 <span className="w-5 h-5 flex items-center justify-center">
-                  {getIcon('settings')}
+                  {getIcon(item.icon)}
                 </span>
-                <span className="text-sm">Settings</span>
+                <span className="text-sm">{item.label}</span>
               </Link>
-            )}
-            
+            ))
+          ) : (
+            /* Fallback menu items when permissions aren't loaded */
+            <>
+              <Link
+                href="/orders"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium relative hover:bg-[#02016a] hover:text-white transition-colors ${
+                  currentPage === 'orders' || currentPage === 'sales'
+                    ? 'bg-[#02016a] text-white' 
+                    : 'text-[#101828]'
+                }`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center">
+                  {getIcon('sales')}
+                </span>
+                <span className="text-sm">Orders</span>
+              </Link>
+              
+              <Link
+                href="/customers"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium relative hover:bg-[#02016a] hover:text-white transition-colors ${
+                  currentPage === 'customers'
+                    ? 'bg-[#02016a] text-white' 
+                    : 'text-[#101828]'
+                }`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center">
+                  {getIcon('customers')}
+                </span>
+                <span className="text-sm">Customers</span>
+              </Link>
+              
+              <Link
+                href="/inventory"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium relative hover:bg-[#02016a] hover:text-white transition-colors ${
+                  currentPage === 'inventory' || currentPage === 'products'
+                    ? 'bg-[#02016a] text-white' 
+                    : 'text-[#101828]'
+                }`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center">
+                  {getIcon('inventory')}
+                </span>
+                <span className="text-sm">Inventory</span>
+              </Link>
+              
+              <Link
+                href="/reports"
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium relative hover:bg-[#02016a] hover:text-white transition-colors ${
+                  currentPage === 'reports'
+                    ? 'bg-[#02016a] text-white' 
+                    : 'text-[#101828]'
+                }`}
+              >
+                <span className="w-5 h-5 flex items-center justify-center">
+                  {getIcon('reports')}
+                </span>
+                <span className="text-sm">Reports</span>
+              </Link>
+            </>
+          )}
+
+          {/* Settings link - always visible as last menu item */}
+          <Link 
+            href="/settings"
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium hover:bg-[#02016a] hover:text-white transition-colors ${
+              currentPage === 'settings' 
+                ? 'bg-[#02016a] text-white' 
+                : 'text-[#101828]'
+            }`}
+          >
+            <span className="w-5 h-5 flex items-center justify-center">
+              {getIcon('settings')}
+            </span>
+            <span className="text-sm">Settings</span>
+          </Link>
+          
+          {/* Logout section */}
+          <div className="mt-8 pt-4 border-t border-gray-100">
             {/* Logout button - always show */}
             <button 
               onClick={handleLogout}

@@ -48,11 +48,10 @@ export async function getCustomer(id: string): Promise<CustomerRecord> {
 
 export async function createCustomer(body: CreateCustomerBody): Promise<CustomerRecord> {
   try {
-    const res = await fetch(`${API_ENDPOINTS.customers}`, {
+    const res = await authFetch(API_ENDPOINTS.customers, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${localStorage.getItem("authToken")}`
       },
       body: JSON.stringify(body),
     });

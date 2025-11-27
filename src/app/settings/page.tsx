@@ -196,28 +196,42 @@ export default function SettingsPage() {
     setApiError(null);
     
     try {
+      console.log('Fetching settings data...');
       const [systemData, preferencesData, profileData, businessData] = await Promise.allSettled([
-        getSystemSettings(),
-        getUserPreferences(),
-        getUserProfile(),
-        getBusinessProfile()
+        getSystemSettings().catch(err => {
+          console.warn('System settings failed:', err);
+          return null;
+        }),
+        getUserPreferences().catch(err => {
+          console.warn('User preferences failed:', err);
+          return null;
+        }),
+        getUserProfile().catch(err => {
+          console.warn('User profile failed:', err);
+          return null;
+        }),
+        getBusinessProfile().catch(err => {
+          console.warn('Business profile failed:', err);
+          return null;
+        })
       ]);
       
       // Handle system settings
       if (systemData.status === 'fulfilled' && systemData.value) {
-        setSystemSettings(systemData.value);
+        const settingsValue = systemData.value;
+        setSystemSettings(settingsValue);
         
         // Populate business form data from API
         setBusinessData(prev => ({
           ...prev,
-          businessName: systemData.value.businessName || "",
-          businessType: systemData.value.businessType || "Tyre Retailer",
-          registrationNumber: systemData.value.registrationNumber || "",
-          taxId: systemData.value.taxId || "",
-          businessAddress: systemData.value.businessAddress || "",
-          businessPhone: systemData.value.businessPhone || "",
-          businessEmail: systemData.value.businessEmail || "",
-          website: systemData.value.website || "",
+          businessName: settingsValue.businessName || "",
+          businessType: settingsValue.businessType || "Tyre Retailer",
+          registrationNumber: settingsValue.registrationNumber || "",
+          taxId: settingsValue.taxId || "",
+          businessAddress: settingsValue.businessAddress || "",
+          businessPhone: settingsValue.businessPhone || "",
+          businessEmail: settingsValue.businessEmail || "",
+          website: settingsValue.website || "",
           staffPosition: "Owner/Manager", // Default value
           designation: "" // Default value
         }));
@@ -242,20 +256,21 @@ export default function SettingsPage() {
       
       // Handle user profile
       if (profileData.status === 'fulfilled' && profileData.value) {
-        setUserProfile(profileData.value);
+        const profileValue = profileData.value;
+        setUserProfile(profileValue);
         
         // Populate personal form data from API
         setFormData(prev => ({
           ...prev,
-          firstName: profileData.value.firstName || "",
-          lastName: profileData.value.lastName || "",
-          email: profileData.value.email || "",
-          phoneCode: profileData.value.phoneCode || "+234",
-          phoneNumber: profileData.value.phoneNumber || "",
-          address: profileData.value.address || "",
-          city: profileData.value.city || "",
-          country: profileData.value.country || "Nigeria",
-          state: profileData.value.state || ""
+          firstName: profileValue.firstName || "",
+          lastName: profileValue.lastName || "",
+          email: profileValue.email || "",
+          phoneCode: profileValue.phoneCode || "+234",
+          phoneNumber: profileValue.phoneNumber || "",
+          address: profileValue.address || "",
+          city: profileValue.city || "",
+          country: profileValue.country || "Nigeria",
+          state: profileValue.state || ""
         }));
         
         // Set profile image if available
@@ -268,19 +283,20 @@ export default function SettingsPage() {
       
       // Handle business profile
       if (businessData.status === 'fulfilled' && businessData.value) {
-        setBusinessProfile(businessData.value);
+        const businessValue = businessData.value;
+        setBusinessProfile(businessValue);
         
         // Populate business form data from API
         setBusinessData(prev => ({
           ...prev,
-          businessName: businessData.value.businessName || "",
-          businessType: businessData.value.businessType || "Tyre Retailer",
-          registrationNumber: businessData.value.registrationNumber || "",
-          taxId: businessData.value.taxId || "",
-          businessAddress: businessData.value.businessAddress || "",
-          businessPhone: businessData.value.businessPhone || "",
-          businessEmail: businessData.value.businessEmail || "",
-          website: businessData.value.website || ""
+          businessName: businessValue.businessName || "",
+          businessType: businessValue.businessType || "Tyre Retailer",
+          registrationNumber: businessValue.registrationNumber || "",
+          taxId: businessValue.taxId || "",
+          businessAddress: businessValue.businessAddress || "",
+          businessPhone: businessValue.businessPhone || "",
+          businessEmail: businessValue.businessEmail || "",
+          website: businessValue.website || ""
         }));
         
         // Set selected category and warehouse
@@ -294,6 +310,7 @@ export default function SettingsPage() {
         console.error('Business profile error:', businessData.reason);
       }
       
+      console.log('Settings data loaded successfully');
     } catch (err: any) {
       console.error('Settings fetch error:', err);
       const errorMessage = err.message || 'Failed to load settings';

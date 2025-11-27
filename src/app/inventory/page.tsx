@@ -279,6 +279,29 @@ export default function InventoryPage() {
     return () => clearTimeout(debounce);
   }, [isAuthenticated, searchQuery, fetchInventoryData]);
 
+  // Refresh data when returning to the page (e.g., from create page)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && isAuthenticated) {
+        fetchInventoryData(searchQuery);
+      }
+    };
+
+    const handleFocus = () => {
+      if (isAuthenticated) {
+        fetchInventoryData(searchQuery);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [isAuthenticated, searchQuery, fetchInventoryData]);
+
   useEffect(() => {
     const loadWarehouses = async () => {
       try {

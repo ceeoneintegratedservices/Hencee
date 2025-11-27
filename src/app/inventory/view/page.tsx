@@ -78,6 +78,7 @@ function ViewInventoryContent() {
           showError('Error', 'No product ID provided');
           return;
         }
+        
         const product = await getInventoryProductById(itemId);
 
         if (!mounted) return;
@@ -165,12 +166,12 @@ function ViewInventoryContent() {
           setPurchases([]);
           setFilteredPurchases([]);
         }
-      } catch (error) {
+      } catch (error: any) {
         if (mounted) {
           setInventoryItem(null);
           setPurchases([]);
           setFilteredPurchases([]);
-          showError('Error', 'Failed to load product');
+          showError('Error', error.message || 'Failed to load product details');
         }
       }
     }
