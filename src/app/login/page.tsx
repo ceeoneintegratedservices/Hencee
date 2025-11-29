@@ -167,21 +167,23 @@ export default function LoginPage() {
             const roleType = userData?.role?.roleType || userData?.roleType || userData?.role?.name || '';
             const roleTypeLower = roleType?.toLowerCase() || '';
             
+            // Admin should go to dashboard by default
+            if (roleTypeLower === 'admin' || roleType === 'ADMIN' || roleType === 'admin') {
+              router.push('/dashboard');
+            }
             // Sales rep should go to orders page by default - check multiple variations
-            if (roleType === 'SALES_REP' || 
+            else if (roleType === 'SALES_REP' || 
                 roleType === 'sales_staff' || 
                 roleTypeLower === 'sales rep' || 
                 roleTypeLower === 'sales_rep' ||
                 roleTypeLower.includes('sales')) {
               router.push('/orders');
-            } else if (permissions.includes('view_users') || permissions.includes('users.view')) {
-              router.push('/users-roles');
             } else if (permissions.includes('view_expenses') || permissions.includes('expenses.view')) {
               router.push('/expenses');
             } else if (permissions.includes('view_reports') || permissions.includes('reports.view')) {
               router.push('/reports');
             } else {
-              // Default fallback
+              // Default fallback - dashboard for everyone else
               router.push('/dashboard');
             }
           } else {
