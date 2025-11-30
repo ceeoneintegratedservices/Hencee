@@ -265,24 +265,24 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
               </Link>
             </>
           )}
-
-          {/* Settings link - always visible as last menu item */}
-          <Link 
-            href="/settings"
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium hover:bg-[#02016a] hover:text-white transition-colors ${
-              currentPage === 'settings' 
-                ? 'bg-[#02016a] text-white' 
-                : 'text-[#101828]'
-            }`}
-          >
-            <span className="w-5 h-5 flex items-center justify-center">
-              {getIcon('settings')}
-            </span>
-            <span className="text-sm">Settings</span>
-          </Link>
           
           {/* Logout section */}
           <div className="mt-8 pt-4 border-t border-gray-100">
+            {/* Settings link - right above Logout */}
+            <Link 
+              href="/settings"
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium hover:bg-[#02016a] hover:text-white transition-colors ${
+                currentPage === 'settings' 
+                  ? 'bg-[#02016a] text-white' 
+                  : 'text-[#101828]'
+              }`}
+            >
+              <span className="w-5 h-5 flex items-center justify-center">
+                {getIcon('settings')}
+              </span>
+              <span className="text-sm">Settings</span>
+            </Link>
+            
             {/* Logout button - always show */}
             <button 
               onClick={handleLogout}

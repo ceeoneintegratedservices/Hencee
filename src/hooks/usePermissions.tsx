@@ -124,6 +124,21 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
       ];
     }
     
+    // For admin users, ensure they have expenses permissions even if not in the list
+    // This handles cases where the backend hasn't included all admin permissions
+    if (roleName.toLowerCase() === 'admin' && !userPermissions.some(p => 
+      p.includes('expenses') || p === 'expenses.view'
+    )) {
+      // Add expenses permissions for admin if missing
+      userPermissions = [
+        ...userPermissions,
+        'expenses.view',
+        'expenses.create',
+        'expenses.edit',
+        'expenses.delete'
+      ];
+    }
+    
     // Set permissions in the service
     permissionService.setUserPermissions(userPermissions, roleName);
     setIsInitialized(true);
