@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { usePermissions } from "@/hooks/usePermissions";
+import { getImportantNotifications, type Notification } from "@/services/notifications";
 
 interface HeaderProps {
   title: string;
@@ -20,40 +21,8 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
   const [userName, setUserName] = useState<string>("Admin User");
   const notificationRef = useRef<HTMLDivElement>(null);
   const permissionsRef = useRef<HTMLDivElement>(null);
-  const [notifications] = useState([
-    {
-      id: 1,
-      title: "New Order Received",
-      message: "Order #12345 has been placed by John Smith",
-      time: "2 minutes ago",
-      type: "order",
-      unread: true
-    },
-    {
-      id: 2,
-      title: "Low Stock Alert",
-      message: "GL601 tyres are running low (5 units remaining)",
-      time: "15 minutes ago",
-      type: "inventory",
-      unread: true
-    },
-    {
-      id: 3,
-      title: "Payment Received",
-      message: "Payment of ₦150,000 received for Order #12340",
-      time: "1 hour ago",
-      type: "payment",
-      unread: false
-    },
-    {
-      id: 4,
-      title: "New Customer Registration",
-      message: "Sarah Johnson has registered as a new customer",
-      time: "2 hours ago",
-      type: "customer",
-      unread: false
-    }
-  ]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
 
   useEffect(() => {
     if (isInitialized && user) {
@@ -77,6 +46,32 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
       }
     }
   }, [isInitialized, user, getUserRole]);
+
+  // Fetch notifications
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      if (!isInitialized) return;
+      
+      setNotificationsLoading(true);
+      try {
+        const fetchedNotifications = await getImportantNotifications();
+        setNotifications(fetchedNotifications);
+      } catch (error) {
+        console.error('Error fetching notifications:', error);
+        // Keep empty array on error
+        setNotifications([]);
+      } finally {
+        setNotificationsLoading(false);
+      }
+    };
+
+    fetchNotifications();
+    
+    // Refresh notifications every 30 seconds
+    const interval = setInterval(fetchNotifications, 30000);
+    
+    return () => clearInterval(interval);
+  }, [isInitialized]);
 
   // Get default permissions based on role
   const getDefaultPermissions = (role: string): string[] => {

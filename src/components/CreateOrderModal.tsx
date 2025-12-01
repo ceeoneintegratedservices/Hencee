@@ -55,7 +55,7 @@ interface Product {
   name: string;
   price?: number;
   sellingPrice?: number;
-  category?: string;
+  category?: string | { name?: string; label?: string } | null;
   stock?: number;
   quantity?: number;
   description?: string;
@@ -224,7 +224,9 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
           name: String(product.name || 'Unknown Product'),
           price: Number(product.price || product.sellingPrice || 0),
           sellingPrice: Number(product.sellingPrice || product.price || 0),
-          category: String(product.category || product.category?.name || 'General'),
+          category: typeof product.category === 'object' && product.category !== null 
+            ? ((product.category as any).name || (product.category as any).label || 'General')
+            : String(product.category || 'General'),
           stock: Number(product.stock || product.quantity || 0),
           quantity: Number(product.quantity || product.stock || 0),
           description: String(product.description || ''),
@@ -551,7 +553,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
     const existingItem = orderData.items.find(item => item.id === product.id);
     const productPrice = product.sellingPrice || product.price || 0;
     const defaultUnitType: SaleUnitType = "piece";
-
+    
     if (existingItem) {
       const updatedItems = orderData.items.map(item =>
         item.id === product.id
@@ -576,7 +578,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
       };
       setOrderData(prev => ({ ...prev, items: [...prev.items, newItem] }));
     }
-
+    
     setSearchQuery("");
     setShowProductList(false);
   };
@@ -814,29 +816,29 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                 
                 {/* Items Table */}
                 <div className="mb-8">
-                    <table className="w-full border-collapse border border-gray-300">
-                      <thead>
-                        <tr className="bg-gray-50">
-                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Item</th>
-                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Warehouse</th>
-                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Quantity</th>
-                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Price</th>
+                  <table className="w-full border-collapse border border-gray-300">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Item</th>
+                        <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Warehouse</th>
+                        <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Quantity</th>
+                        <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Price</th>
                           {orderData.showDiscountOnInvoice && (
                             <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Discount</th>
                           )}
-                          <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {orderData.items.map((item, index) => (
-                          <tr key={index}>
-                            <td className="border border-gray-300 px-4 py-3 text-gray-700">{item.name}</td>
-                            <td className="border border-gray-300 px-4 py-3 text-gray-700">
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                {item.warehouseNumber || 'N/A'}
-                              </span>
-                            </td>
-                            <td className="border border-gray-300 px-4 py-3 text-gray-700">{item.quantity}</td>
+                        <th className="border border-gray-300 px-4 py-3 text-left font-semibold text-gray-900">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {orderData.items.map((item, index) => (
+                        <tr key={index}>
+                          <td className="border border-gray-300 px-4 py-3 text-gray-700">{item.name}</td>
+                          <td className="border border-gray-300 px-4 py-3 text-gray-700">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              {item.warehouseNumber || 'N/A'}
+                            </span>
+                          </td>
+                          <td className="border border-gray-300 px-4 py-3 text-gray-700">{item.quantity}</td>
                             <td className="border border-gray-300 px-4 py-3 text-gray-700">{formatAmount(item.unitPrice)}</td>
                             {orderData.showDiscountOnInvoice && (
                               <td className="border border-gray-300 px-4 py-3 text-gray-700">
@@ -844,10 +846,10 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                               </td>
                             )}
                             <td className="border border-gray-300 px-4 py-3 text-gray-700">{formatAmount(item.total)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
                 
                 {/* Total */}
@@ -1130,9 +1132,9 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
+                <div>
                     <label className="block text-[14px] text-[#45464e] mb-2">Payment Status</label>
-                    <select
+                  <select
                       value={paymentForm.status}
                       onChange={(e) =>
                         setPaymentForm((prev) => ({
@@ -1140,20 +1142,20 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                           status: e.target.value as PaymentStatus,
                         }))
                       }
-                      className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
-                    >
+                    className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                  >
                       {paymentStatusOptions.map((option) => (
                         <option key={option.value} value={option.value}>
                           {option.label}
                         </option>
                       ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[14px] text-[#45464e] mb-2">Payment Amount</label>
-                    <div className="relative">
-                      <input
-                        type="number"
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[14px] text-[#45464e] mb-2">Payment Amount</label>
+                  <div className="relative">
+                    <input
+                      type="number"
                         min="0"
                         value={paymentForm.amount}
                         onChange={(e) =>
@@ -1163,10 +1165,10 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                           }))
                         }
                         placeholder="Enter amount or leave blank"
-                        className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent pl-10"
-                      />
-                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-[14px]">₦</span>
-                    </div>
+                      className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent pl-10"
+                    />
+                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-[14px]">₦</span>
+                  </div>
                     <p className="text-xs text-gray-500 mt-1">
                       Required when marking status as Completed.
                     </p>
@@ -1221,8 +1223,8 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                         className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
                       />
                     </div>
-                  </div>
-                )}
+                </div>
+              )}
 
                 {paymentForm.method === "cheque" && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1400,7 +1402,16 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                       const productPrice = Number(product.sellingPrice || product.price || 0);
                       const productStock = Number(product.stock || product.quantity || 0);
                       const productName = String(product.name || 'Unknown Product');
-                      const productCategory = String(product.category || '');
+                      // Handle category as object or string
+                      let productCategory = '';
+                      if (product.category) {
+                        if (typeof product.category === 'object' && product.category !== null) {
+                          const categoryObj = product.category as { name?: string; label?: string };
+                          productCategory = categoryObj.name || categoryObj.label || '';
+                        } else {
+                          productCategory = String(product.category);
+                        }
+                      }
                       
                       return (
                         <div

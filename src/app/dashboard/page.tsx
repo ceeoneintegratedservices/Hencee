@@ -176,13 +176,17 @@ export default function AdminDashboard() {
   }, [isAuthenticated, selectedTimePeriod, hasPermission, hasAnyPermission, isInitialized]);
 
   // Activity categories for display
-  const activityCategories = {
+  const activityCategories: Record<string, string> = {
     sale: 'Sales',
     order: 'Orders',
     inventory: 'Inventory', 
     customer: 'Customers',
     product: 'Products',
-    user: 'Users'
+    user: 'Users',
+    payment: 'Payments',
+    security: 'Security',
+    expense: 'Expenses',
+    other: 'Other'
   };
 
   // Client-side only rendering to prevent hydration issues

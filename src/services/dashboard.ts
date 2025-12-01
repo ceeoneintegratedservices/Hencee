@@ -194,16 +194,24 @@ export interface DashboardUsers {
 
 export interface DashboardActivity {
   id: string;
-  type: 'sale' | 'order' | 'customer' | 'product' | 'user' | 'inventory';
+  type: 'sale' | 'order' | 'customer' | 'product' | 'user' | 'inventory' | 'payment' | 'security' | 'expense' | 'other';
+  action: string;
   description: string;
+  message?: string | null;
   timestamp: string;
-  amount?: number;
+  createdAt: string;
+  date: string;
+  entityId?: string | null;
+  user?: string | null;
+  amount?: number | null;
   status?: string;
-  user?: string;
 }
 
 export interface DashboardActivities {
   activities: DashboardActivity[];
+  recentActivities?: DashboardActivity[]; // For compatibility with new API format
+  message?: string | null;
+  description?: string | null;
 }
 
 export interface DashboardSummary {

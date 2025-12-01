@@ -67,42 +67,16 @@ export default function OrdersPage() {
     return allowedMethods.includes(normalized as PaymentMethod) ? (normalized as PaymentMethod) : undefined;
   };
 
-  const handleCreateOrder = async (orderData: any) => {
+  const handleCreateOrder = async (salePayload: CreateSalePayload) => {
     try {
       // Validate that we have a customer ID
-      if (!orderData.customerId) {
+      if (!salePayload.customerId) {
         throw new Error('Customer ID is required to create an order');
       }
 
-      // Convert orderData to CreateSalePayload format
-      const paymentStatus: PaymentStatus =
-        orderData.payment === 'Full Payment' ? 'COMPLETED' : 'PENDING';
-      const paymentMethod = normalizePaymentMethod(orderData.paymentType);
-
-      const paymentPayload: SalePaymentPayload | undefined =
-        paymentMethod || orderData.paymentAmount
-          ? {
-              method: paymentMethod,
-              status: paymentStatus,
-              amount: orderData.paymentAmount ? Number(orderData.paymentAmount) : undefined,
-            }
-          : undefined;
-
-      const salePayload: CreateSalePayload = {
-        customerId: orderData.customerId,
-        items: orderData.items.map((item: any) => ({
-          productId: item.id,
-          quantity: Number(item.quantity) || 1,
-          unitPrice: item.price !== undefined ? Number(item.price) : undefined,
-          unitType: item.unitType || undefined,
-          discountAmount: item.discountAmount || undefined,
-        })),
-        notes: orderData.orderNote,
-        showDiscountOnInvoice: Boolean(orderData.showDiscountOnInvoice),
-      };
-
-      if (paymentPayload) {
-        salePayload.payment = paymentPayload;
+      // Validate items
+      if (!salePayload.items || salePayload.items.length === 0) {
+        throw new Error('At least one item is required to create an order');
       }
 
       await createSale(salePayload);
