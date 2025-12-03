@@ -324,49 +324,81 @@ function ViewInventoryContent() {
     }
   };
 
-  const handleUnpublishProduct = () => {
+  const handleUnpublishProduct = async () => {
     if (inventoryItem) {
-        const updatedItem = { ...inventoryItem, status: 'Unpublished' as const };
+      try {
+        // Update product status via API
+        const updatePayload = {
+          status: 'UNPUBLISHED' as InventoryStatus,
+        };
+
+        const updatedProduct = await updateInventoryProduct(inventoryItem.id, updatePayload);
+
+        // Update local state with API response
+        const updatedItem = {
+          ...inventoryItem,
+          status: 'Unpublished' as const,
+        };
         setInventoryItem(updatedItem);
         
-      // Update localStorage
-      const storedItems = localStorage.getItem('inventoryItems');
-      if (storedItems) {
-        try {
-          const items: InventoryItem[] = JSON.parse(storedItems);
-          const updatedItems = items.map(item => 
-            item.id === updatedItem.id ? updatedItem : item
-          );
-          localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
-      } catch (error) {
-          console.error('Error updating stored inventory items:', error);
+        // Update localStorage
+        const storedItems = localStorage.getItem('inventoryItems');
+        if (storedItems) {
+          try {
+            const items: InventoryItem[] = JSON.parse(storedItems);
+            const updatedItems = items.map(item => 
+              item.id === updatedItem.id ? updatedItem : item
+            );
+            localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
+          } catch (error) {
+            console.error('Error updating stored inventory items:', error);
+          }
+        }
+        
+        showSuccess('Success', 'Product unpublished successfully');
+      } catch (error: any) {
+        console.error('Error unpublishing product:', error);
+        showError('Error', error.message || 'Failed to unpublish product');
       }
-      }
-      
-      showSuccess('Success', 'Product unpublished successfully');
     }
   };
 
-  const handlePublishProduct = () => {
+  const handlePublishProduct = async () => {
     if (inventoryItem) {
-        const updatedItem = { ...inventoryItem, status: 'Published' as const };
+      try {
+        // Update product status via API
+        const updatePayload = {
+          status: 'PUBLISHED' as InventoryStatus,
+        };
+
+        const updatedProduct = await updateInventoryProduct(inventoryItem.id, updatePayload);
+
+        // Update local state with API response
+        const updatedItem = {
+          ...inventoryItem,
+          status: 'Published' as const,
+        };
         setInventoryItem(updatedItem);
         
-      // Update localStorage
-      const storedItems = localStorage.getItem('inventoryItems');
-      if (storedItems) {
-        try {
-          const items: InventoryItem[] = JSON.parse(storedItems);
-          const updatedItems = items.map(item => 
-            item.id === updatedItem.id ? updatedItem : item
-          );
-          localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
-      } catch (error) {
-          console.error('Error updating stored inventory items:', error);
+        // Update localStorage
+        const storedItems = localStorage.getItem('inventoryItems');
+        if (storedItems) {
+          try {
+            const items: InventoryItem[] = JSON.parse(storedItems);
+            const updatedItems = items.map(item => 
+              item.id === updatedItem.id ? updatedItem : item
+            );
+            localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
+          } catch (error) {
+            console.error('Error updating stored inventory items:', error);
+          }
+        }
+        
+        showSuccess('Success', 'Product published successfully');
+      } catch (error: any) {
+        console.error('Error publishing product:', error);
+        showError('Error', error.message || 'Failed to publish product');
       }
-      }
-      
-      showSuccess('Success', 'Product published successfully');
     }
   };
 

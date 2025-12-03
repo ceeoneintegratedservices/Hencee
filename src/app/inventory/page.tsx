@@ -21,6 +21,7 @@ import {
   type InventoryDamageRecord,
   type InventoryDamageSummary,
   type InventoryDamageFilters,
+  type InventoryStatus,
 } from '@/services/inventory';
 import FilterByDateModal from '@/components/FilterByDateModal';
 import TimePeriodSelector from '@/components/TimePeriodSelector';
@@ -396,12 +397,37 @@ export default function InventoryPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const handleStatusChange = (index: number, newStatus: 'Published' | 'Unpublished' | 'Draft') => {
-    const updatedItems = [...inventoryItems];
-    updatedItems[index] = { ...updatedItems[index], status: newStatus };
-    setInventoryItems(updatedItems);
-    setShowStatusDropdown(null);
-    showSuccess('Success', `Product status changed to ${newStatus}`);
+  const handleStatusChange = async (index: number, newStatus: 'Published' | 'Unpublished' | 'Draft') => {
+    const item = inventoryItems[index];
+    if (!item) return;
+
+    try {
+      // Map frontend status to backend status
+      const statusMap: Record<string, 'PUBLISHED' | 'UNPUBLISHED' | 'DRAFT'> = {
+        'Published': 'PUBLISHED',
+        'Unpublished': 'UNPUBLISHED',
+        'Draft': 'DRAFT',
+      };
+
+      const backendStatus = statusMap[newStatus] || 'DRAFT';
+
+      // Update via API
+      await updateInventoryProduct(item.id, { status: backendStatus });
+
+      // Update local state
+      const updatedItems = [...inventoryItems];
+      updatedItems[index] = { ...updatedItems[index], status: newStatus };
+      setInventoryItems(updatedItems);
+      setShowStatusDropdown(null);
+      
+      // Refresh inventory data to ensure consistency
+      await fetchInventoryData(searchQuery);
+      
+      showSuccess('Success', `Product status changed to ${newStatus}`);
+    } catch (error: any) {
+      console.error('Error updating product status:', error);
+      showError('Error', error.message || `Failed to change product status to ${newStatus}`);
+    }
   };
 
   const handleSort = (column: string) => {
