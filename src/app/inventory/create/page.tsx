@@ -168,17 +168,18 @@ export default function CreateInventoryPage() {
         [field]: value,
       };
       
-      // Auto-fill piecesPerRoll with 12 when pricePerRoll is set and represents a dozen case
-      // This handles the requirement: "when dozen selected it should prefill with 12"
-      if (field === 'pricePerRoll' && value && typeof value === 'string' && value.trim() !== '') {
-        // If pricePerRoll is being set, check if piecesPerRoll is empty and auto-fill with 12 for dozen
-        if (!prev.piecesPerRoll || prev.piecesPerRoll.trim() === '') {
-          updated.piecesPerRoll = '12';
-        }
-      }
-      
       return updated;
     });
+  };
+
+  // Handle dozen checkbox for pieces per roll
+  const handleDozenCheckbox = (checked: boolean) => {
+    if (checked) {
+      updateForm('piecesPerRoll', '12');
+    } else {
+      // When unchecked, clear the field so user can enter their own value
+      updateForm('piecesPerRoll', '');
+    }
   };
 
   const handleWarehouseFieldChange = (field: keyof typeof newWarehouse, value: string) => {
@@ -644,14 +645,25 @@ export default function CreateInventoryPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                         Pieces per roll
                 </label>
-                        <input
-                        type="number"
-                        min="0"
-                        value={formData.piecesPerRoll}
-                        onChange={(e) => updateForm('piecesPerRoll', e.target.value)}
-                        placeholder="3"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
-                      />
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            value={formData.piecesPerRoll}
+                            onChange={(e) => updateForm('piecesPerRoll', e.target.value)}
+                            placeholder="3"
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                          />
+                          <label className="flex items-center gap-1.5 px-2 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={formData.piecesPerRoll === '12'}
+                              onChange={(e) => handleDozenCheckbox(e.target.checked)}
+                              className="w-3.5 h-3.5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
+                            />
+                            <span className="text-xs text-gray-700 whitespace-nowrap">Dozen</span>
+                          </label>
+                        </div>
                       </div>
                     </div>
                   </div>
