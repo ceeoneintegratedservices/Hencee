@@ -38,7 +38,7 @@ export interface Notification {
   title: string;
   message: string;
   time: string;
-  type: 'order' | 'inventory' | 'payment' | 'customer' | 'security' | 'system';
+  type: 'order' | 'inventory' | 'payment' | 'customer' | 'security' | 'user' | 'expense' | 'product' | 'system';
   unread: boolean;
   timestamp: Date;
 }
@@ -137,34 +137,129 @@ export function formatRelativeTime(timestamp: string): string {
 
 /**
  * Convert Activity to Notification format
+ * Handles ALL activity types for comprehensive activity logging
  */
 function activityToNotification(activity: Activity): Notification {
   let title = '';
   let type: Notification['type'] = 'system';
+  const action = activity.action?.toLowerCase() || '';
 
-  // Map activity types to notification types
-  if (activity.type === 'order') {
-    type = 'order';
-    title = 'New Order Received';
-  } else if (activity.type === 'payment') {
-    type = 'payment';
-    title = 'Payment Received';
-  } else if (activity.type === 'inventory') {
-    type = 'inventory';
-    title = 'Low Stock Alert';
-  } else if (activity.type === 'security') {
-    type = 'security';
-    const action = activity.action?.toLowerCase() || '';
-    if (action.includes('login')) {
-      title = 'New Login';
-    } else if (action.includes('password') || action.includes('reset')) {
-      title = 'Password Reset';
-    } else {
-      title = 'Security Alert';
-    }
+  // Map activity types to notification types and titles
+  switch (activity.type) {
+    case 'order':
+      type = 'order';
+      if (action.includes('create') || action.includes('new')) {
+        title = 'New Order Created';
+      } else if (action.includes('update') || action.includes('edit')) {
+        title = 'Order Updated';
+      } else if (action.includes('cancel')) {
+        title = 'Order Cancelled';
+      } else if (action.includes('complete')) {
+        title = 'Order Completed';
+      } else {
+        title = 'Order Activity';
+      }
+      break;
+    
+    case 'payment':
+      type = 'payment';
+      if (action.includes('approve')) {
+        title = 'Payment Approved';
+      } else if (action.includes('receive') || action.includes('record')) {
+        title = 'Payment Received';
+      } else if (action.includes('reject')) {
+        title = 'Payment Rejected';
+      } else if (action.includes('query')) {
+        title = 'Payment Queried';
+      } else {
+        title = 'Payment Activity';
+      }
+      break;
+    
+    case 'inventory':
+      type = 'inventory';
+      if (action.includes('low') || action.includes('stock')) {
+        title = 'Low Stock Alert';
+      } else if (action.includes('add') || action.includes('create')) {
+        title = 'Product Added';
+      } else if (action.includes('update') || action.includes('edit')) {
+        title = 'Product Updated';
+      } else if (action.includes('delete') || action.includes('remove')) {
+        title = 'Product Removed';
+      } else {
+        title = 'Inventory Activity';
+      }
+      break;
+    
+    case 'security':
+      type = 'security';
+      if (action.includes('login')) {
+        title = 'New Login';
+      } else if (action.includes('password') || action.includes('reset')) {
+        title = 'Password Reset';
+      } else if (action.includes('logout')) {
+        title = 'User Logged Out';
+      } else {
+        title = 'Security Activity';
+      }
+      break;
+    
+    case 'customer':
+      type = 'customer';
+      if (action.includes('create') || action.includes('new')) {
+        title = 'New Customer Added';
+      } else if (action.includes('update') || action.includes('edit')) {
+        title = 'Customer Updated';
+      } else {
+        title = 'Customer Activity';
+      }
+      break;
+    
+    case 'user':
+      type = 'system';
+      if (action.includes('create') || action.includes('new')) {
+        title = 'New User Created';
+      } else if (action.includes('update') || action.includes('edit')) {
+        title = 'User Updated';
+      } else if (action.includes('delete') || action.includes('remove')) {
+        title = 'User Removed';
+      } else {
+        title = 'User Activity';
+      }
+      break;
+    
+    case 'expense':
+      type = 'system';
+      if (action.includes('create') || action.includes('submit')) {
+        title = 'Expense Submitted';
+      } else if (action.includes('approve')) {
+        title = 'Expense Approved';
+      } else if (action.includes('reject')) {
+        title = 'Expense Rejected';
+      } else {
+        title = 'Expense Activity';
+      }
+      break;
+    
+    case 'product':
+      type = 'system';
+      if (action.includes('create') || action.includes('new')) {
+        title = 'New Product Added';
+      } else if (action.includes('update') || action.includes('edit')) {
+        title = 'Product Updated';
+      } else {
+        title = 'Product Activity';
+      }
+      break;
+    
+    default:
+      type = 'system';
+      title = activity.action || 'Activity';
+      break;
   }
 
-  const message = activity.description || activity.message || '';
+  // Use description or message, fallback to action if neither available
+  const message = activity.description || activity.message || activity.action || 'No description available';
   const timestamp = activity.timestamp || activity.createdAt || activity.date;
   const timeStr = formatRelativeTime(timestamp);
 
@@ -186,6 +281,7 @@ function activityToNotification(activity: Activity): Notification {
 
 /**
  * Fetch important notifications from dashboard activities
+ * Note: This function filters to show only important notifications (orders, payments, low stock, security)
  */
 export async function getImportantNotifications(
   timeframe: 'thisWeek' | 'lastWeek' | 'thisMonth' | 'last7days' | 'allTime' = 'thisWeek',
@@ -211,6 +307,36 @@ export async function getImportantNotifications(
     return notifications.slice(0, limit);
   } catch (error) {
     console.error('Error fetching notifications:', error);
+    // Return empty array on error
+    return [];
+  }
+}
+
+/**
+ * Fetch ALL notifications from dashboard activities (no filtering)
+ * This shows all activities in the app for the notifications bar
+ */
+export async function getAllNotifications(
+  timeframe: 'thisWeek' | 'lastWeek' | 'thisMonth' | 'last7days' | 'allTime' = 'allTime',
+  limit: number = 100
+): Promise<Notification[]> {
+  try {
+    // Fetch activities from API
+    const response = await fetchActivities(timeframe, limit);
+    
+    // Use recentActivities if available, fallback to activities
+    const allActivities = response.recentActivities || response.activities || [];
+    
+    // Convert ALL activities to Notification format (no filtering)
+    const notifications = allActivities.map(activityToNotification);
+    
+    // Sort by timestamp (newest first)
+    notifications.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    
+    // Limit to most recent (already limited by API, but ensure we don't exceed)
+    return notifications.slice(0, limit);
+  } catch (error) {
+    console.error('Error fetching all notifications:', error);
     // Return empty array on error
     return [];
   }

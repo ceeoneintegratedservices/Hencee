@@ -35,6 +35,8 @@ export interface OutsourcedDetails {
   sourceCostPrice?: number;
   liveSellingPrice?: number;
   notes?: string;
+  image?: string; // Image URL for outsourced product evidence
+  salePrice?: number; // Sale price when product is outsourced
 }
 
 export interface InventoryProduct {

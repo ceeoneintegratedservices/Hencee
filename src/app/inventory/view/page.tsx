@@ -82,13 +82,13 @@ function ViewInventoryContent() {
         const product = await getInventoryProductById(itemId);
 
         if (!mounted) return;
-
+        
         if (!product || !product.id) {
           setInventoryItem(null);
           showError('Error', 'Product not found');
           return;
         }
-
+        
         const piecesInStock =
           product.inventoryUnits?.piecesInStock ?? product.quantity ?? 0;
 
@@ -113,22 +113,22 @@ function ViewInventoryContent() {
           longDescription: product.description || '',
           additionalImages: [],
         } as InventoryItem;
-
+        
         setInventoryItem(item);
-
+        
         if (product.warehouseId) {
           try {
             const warehouse = await getWarehouse(product.warehouseId);
             setWarehouseInfo({ id: warehouse.id, name: warehouse.name });
           } catch (error) {
             console.error('Failed to fetch warehouse info:', error);
-            setWarehouseInfo({
+            setWarehouseInfo({ 
               id: product.warehouseId,
               name: product.warehouse ?? 'Unknown Warehouse',
             });
           }
         }
-
+        
         try {
           const purchaseHistory = await getProductPurchaseHistory(itemId as string, 20);
           if (!purchaseHistory || !Array.isArray(purchaseHistory.purchases)) {
@@ -136,7 +136,7 @@ function ViewInventoryContent() {
             setFilteredPurchases([]);
             return;
           }
-
+          
           const purchases: Purchase[] = purchaseHistory.purchases.map((purchase) => ({
             id: purchase.id || '',
             date: purchase.date || new Date().toISOString(),
@@ -149,13 +149,13 @@ function ViewInventoryContent() {
             customerPhone: purchase.customerPhone || '',
             saleReference: purchase.saleReference || '',
           }));
-
+          
           const sortedPurchases = purchases.sort(
             (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
           );
           setPurchases(sortedPurchases);
           setFilteredPurchases(sortedPurchases);
-
+          
           if (sortedPurchases.length > 0) {
             setInventoryItem((prev) =>
               prev ? { ...prev, lastOrder: sortedPurchases[0].date } : null
@@ -341,21 +341,21 @@ function ViewInventoryContent() {
         };
         setInventoryItem(updatedItem);
         
-        // Update localStorage
-        const storedItems = localStorage.getItem('inventoryItems');
-        if (storedItems) {
-          try {
-            const items: InventoryItem[] = JSON.parse(storedItems);
-            const updatedItems = items.map(item => 
-              item.id === updatedItem.id ? updatedItem : item
-            );
-            localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
-          } catch (error) {
-            console.error('Error updating stored inventory items:', error);
-          }
-        }
-        
-        showSuccess('Success', 'Product unpublished successfully');
+      // Update localStorage
+      const storedItems = localStorage.getItem('inventoryItems');
+      if (storedItems) {
+        try {
+          const items: InventoryItem[] = JSON.parse(storedItems);
+          const updatedItems = items.map(item => 
+            item.id === updatedItem.id ? updatedItem : item
+          );
+          localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
+      } catch (error) {
+          console.error('Error updating stored inventory items:', error);
+      }
+      }
+      
+      showSuccess('Success', 'Product unpublished successfully');
       } catch (error: any) {
         console.error('Error unpublishing product:', error);
         showError('Error', error.message || 'Failed to unpublish product');
@@ -380,21 +380,21 @@ function ViewInventoryContent() {
         };
         setInventoryItem(updatedItem);
         
-        // Update localStorage
-        const storedItems = localStorage.getItem('inventoryItems');
-        if (storedItems) {
-          try {
-            const items: InventoryItem[] = JSON.parse(storedItems);
-            const updatedItems = items.map(item => 
-              item.id === updatedItem.id ? updatedItem : item
-            );
-            localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
-          } catch (error) {
-            console.error('Error updating stored inventory items:', error);
-          }
-        }
-        
-        showSuccess('Success', 'Product published successfully');
+      // Update localStorage
+      const storedItems = localStorage.getItem('inventoryItems');
+      if (storedItems) {
+        try {
+          const items: InventoryItem[] = JSON.parse(storedItems);
+          const updatedItems = items.map(item => 
+            item.id === updatedItem.id ? updatedItem : item
+          );
+          localStorage.setItem('inventoryItems', JSON.stringify(updatedItems));
+      } catch (error) {
+          console.error('Error updating stored inventory items:', error);
+      }
+      }
+      
+      showSuccess('Success', 'Product published successfully');
       } catch (error: any) {
         console.error('Error publishing product:', error);
         showError('Error', error.message || 'Failed to publish product');

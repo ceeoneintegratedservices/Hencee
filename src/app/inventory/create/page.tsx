@@ -18,6 +18,7 @@ import {
   createWarehouse,
   type Warehouse,
 } from '@/services/warehouses';
+import { useCloudinaryUpload } from '@/hooks/useCloudinaryUpload';
 
 const SIZE_UNITS = ['mg', 'g', 'kg', 'ml', 'l', 'capsule', 'tablet', 'sachet', 'vial'];
 const STATUS_OPTIONS = [
@@ -53,6 +54,8 @@ interface FormData {
   sourceCostPrice: string;
   liveSellingPrice: string;
   outsourcedNotes: string;
+  outsourcedImage?: string; // Image URL for outsourced product evidence
+  outsourcedSalePrice: string; // Sale price when product is outsourced
   status: 'PUBLISHED' | 'DRAFT';
 }
 
@@ -84,6 +87,8 @@ const DEFAULT_FORM: FormData = {
   sourceCostPrice: '',
   liveSellingPrice: '',
   outsourcedNotes: '',
+  outsourcedImage: undefined,
+  outsourcedSalePrice: '',
   status: 'PUBLISHED',
 };
 
@@ -157,10 +162,23 @@ export default function CreateInventoryPage() {
   }, [useSameExpiryWarehouse, formData.warehouseId]);
 
   const updateForm = (field: keyof FormData, value: string | boolean) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setFormData((prev) => {
+      const updated = {
+        ...prev,
+        [field]: value,
+      };
+      
+      // Auto-fill piecesPerRoll with 12 when pricePerRoll is set and represents a dozen case
+      // This handles the requirement: "when dozen selected it should prefill with 12"
+      if (field === 'pricePerRoll' && value && typeof value === 'string' && value.trim() !== '') {
+        // If pricePerRoll is being set, check if piecesPerRoll is empty and auto-fill with 12 for dozen
+        if (!prev.piecesPerRoll || prev.piecesPerRoll.trim() === '') {
+          updated.piecesPerRoll = '12';
+        }
+      }
+      
+      return updated;
+    });
   };
 
   const handleWarehouseFieldChange = (field: keyof typeof newWarehouse, value: string) => {
@@ -259,6 +277,8 @@ export default function CreateInventoryPage() {
             sourceCostPrice: numberValue(formData.sourceCostPrice),
             liveSellingPrice: numberValue(formData.liveSellingPrice),
             notes: formData.outsourcedNotes.trim() || undefined,
+            image: formData.outsourcedImage || undefined,
+            salePrice: numberValue(formData.outsourcedSalePrice),
           }
         : undefined,
       status: formData.status,
@@ -848,6 +868,20 @@ export default function CreateInventoryPage() {
                     </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Sale price (when outsourced)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={formData.outsourcedSalePrice}
+                          onChange={(e) => updateForm('outsourcedSalePrice', e.target.value)}
+                          placeholder="5000"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
                           Internal notes
                         </label>
                         <textarea
@@ -858,6 +892,45 @@ export default function CreateInventoryPage() {
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
                         />
                     </div>
+                    <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Product image evidence
+                        </label>
+                        <div className="mt-1 flex items-center gap-4">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                try {
+                                  const result = await uploadImage(file, { folder: 'outsourced-products' });
+                                  updateForm('outsourcedImage', result.secure_url);
+                                  showSuccess('Success', 'Image uploaded successfully');
+                                } catch (error: any) {
+                                  showError('Error', error.message || 'Failed to upload image');
+                                }
+                              }
+                            }}
+                            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                          />
+                          {formData.outsourcedImage && (
+                            <div className="relative">
+                              <img src={formData.outsourcedImage} alt="Product evidence" className="h-20 w-20 object-cover rounded-lg border border-gray-300" />
+                              <button
+                                type="button"
+                                onClick={() => updateForm('outsourcedImage', undefined)}
+                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {uploadProgress.isUploading && (
+                          <p className="mt-1 text-sm text-gray-500">Uploading... {uploadProgress.progress}%</p>
+                        )}
+                      </div>
                   </div>
                 )}
               </div>

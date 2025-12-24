@@ -122,9 +122,9 @@ export async function authFetch(pathOrUrl: string, options: RequestInit = {}) {
           localStorage.removeItem("refreshToken");
           localStorage.removeItem("userData");
         } catch {}
-        if (typeof window !== "undefined") window.location.href = "/login";
-        throw new Error("Unauthorized (401). Please log in to continue.");
-      }
+    if (typeof window !== "undefined") window.location.href = "/login";
+    throw new Error("Unauthorized (401). Please log in to continue.");
+  }
       
       if (retryRes.status === 403) {
         throw new Error("Forbidden (403). You do not have permission to perform this action.");

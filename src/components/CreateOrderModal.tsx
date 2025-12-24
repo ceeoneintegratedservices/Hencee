@@ -7,6 +7,7 @@ import { getPharmaPresets } from "@/services/pharmaPresets";
 import { listCustomers, createCustomer } from "@/services/customers";
 import { listProducts } from "@/services/products";
 import { CreateCustomerBody } from "@/types/customers";
+import { useCloudinaryUpload } from '@/hooks/useCloudinaryUpload';
 
 interface CreateOrderModalProps {
   isOpen: boolean;
@@ -48,6 +49,7 @@ interface PaymentFormState {
   transactionReference: string;
   chequeNumber: string;
   accountName: string;
+  chequeImage?: string; // Image URL for cheque payment evidence
 }
 
 interface Product {
@@ -75,7 +77,7 @@ interface Customer {
   outstandingBalance?: number;
 }
 
-const FALLBACK_UNIT_OPTIONS: SaleUnitType[] = ["piece", "carton", "roll"];
+const FALLBACK_UNIT_OPTIONS: SaleUnitType[] = ["piece", "carton", "roll", "dozen"];
 const FALLBACK_PAYMENT_METHOD_OPTIONS: Array<{ value: PaymentMethod; label: string }> = [
   { value: "cash", label: "Cash" },
   { value: "card", label: "Card" },
@@ -131,6 +133,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
   });
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [customerBalance, setCustomerBalance] = useState<number | null>(null);
+  const { uploadImage, uploadProgress } = useCloudinaryUpload();
   const [paymentForm, setPaymentForm] = useState<PaymentFormState>({
     method: "",
     status: "PENDING",
@@ -140,6 +143,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
     transactionReference: "",
     chequeNumber: "",
     accountName: "",
+    chequeImage: undefined,
   });
   const [presetOptions, setPresetOptions] = useState({
     unitTypes: FALLBACK_UNIT_OPTIONS,
@@ -456,92 +460,215 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
       ? formatAmount(Number(paymentForm.amount))
       : formatAmount(calculateTotal());
     
+    // Show bank transfer transaction number if payment method is bank transfer
+    const bankTransferInfo = paymentForm.method === "bank_transfer" && paymentForm.transactionReference
+      ? `<p><strong>Transaction Reference:</strong> ${paymentForm.transactionReference}</p>`
+      : '';
+    
     return `
       <!DOCTYPE html>
       <html>
       <head>
+        <meta charset="UTF-8">
         <title>Invoice ${invoiceNumber}</title>
         <style>
-          body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
-          .invoice-header { text-align: center; margin-bottom: 30px; }
-          .invoice-title { font-size: 28px; font-weight: bold; color: #02016a; margin-bottom: 10px; }
-          .invoice-number { font-size: 16px; color: #666; }
-          .invoice-details { display: flex; justify-content: space-between; margin-bottom: 30px; }
-          .company-info, .customer-info { flex: 1; }
-          .company-info h3, .customer-info h3 { margin: 0 0 10px 0; color: #333; }
-          .company-info p, .customer-info p { margin: 5px 0; color: #666; }
-          .items-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-          .items-table th, .items-table td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-          .items-table th { background-color: #f8f9fa; font-weight: bold; }
-          .total-section { text-align: right; margin-top: 20px; }
-          .total-amount { font-size: 20px; font-weight: bold; color: #02016a; }
-          .footer { margin-top: 40px; text-align: center; color: #666; font-size: 12px; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            padding: 40px; 
+            background-color: #f5f5f5;
+            color: #333;
+          }
+          .invoice-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+          }
+          .invoice-header { 
+            text-align: center; 
+            margin-bottom: 40px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #02016a;
+          }
+          .invoice-title { 
+            font-size: 36px; 
+            font-weight: bold; 
+            color: #02016a; 
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+          }
+          .invoice-number { 
+            font-size: 18px; 
+            color: #666;
+            font-weight: 500;
+          }
+          .invoice-details { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-bottom: 40px;
+            gap: 40px;
+          }
+          .company-info, .customer-info { 
+            flex: 1;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+          }
+          .company-info h3, .customer-info h3 { 
+            margin: 0 0 15px 0; 
+            color: #02016a;
+            font-size: 18px;
+            border-bottom: 2px solid #02016a;
+            padding-bottom: 8px;
+          }
+          .company-info p, .customer-info p { 
+            margin: 8px 0; 
+            color: #555;
+            font-size: 14px;
+          }
+          .items-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          }
+          .items-table th, .items-table td { 
+            padding: 15px; 
+            text-align: left; 
+            border-bottom: 1px solid #e0e0e0;
+          }
+          .items-table th { 
+            background-color: #02016a;
+            color: white;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 1px;
+          }
+          .items-table td {
+            background-color: #fff;
+          }
+          .items-table tbody tr:hover {
+            background-color: #f8f9fa;
+          }
+          .total-section { 
+            text-align: right; 
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+          }
+          .total-amount { 
+            font-size: 28px; 
+            font-weight: bold; 
+            color: #02016a;
+          }
+          .payment-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e8f4f8;
+            border-left: 4px solid #02016a;
+            border-radius: 4px;
+          }
+          .payment-info p {
+            margin: 5px 0;
+            font-size: 14px;
+          }
+          .footer { 
+            margin-top: 50px; 
+            text-align: center; 
+            color: #666; 
+            font-size: 12px;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+          }
+          .notes-section {
+            margin-top: 30px;
+            padding: 15px;
+            background: #fff9e6;
+            border-left: 4px solid #ffc107;
+            border-radius: 4px;
+          }
+          .notes-section h3 {
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 16px;
+          }
         </style>
       </head>
       <body>
-        <div class="invoice-header">
-          <div class="invoice-title">INVOICE</div>
-          <div class="invoice-number">Invoice #${invoiceNumber}</div>
-        </div>
-        
-        <div class="invoice-details">
-          <div class="company-info">
-            <h3>Ceeone Wheels</h3>
-            <p>123 Business Street</p>
-            <p>Lagos, Nigeria</p>
-            <p>Phone: +234 800 123 4567</p>
-            <p>Email: info@ceeonewheels.com</p>
+        <div class="invoice-container">
+          <div class="invoice-header">
+            <div class="invoice-title">INVOICE</div>
+            <div class="invoice-number">Invoice #${invoiceNumber}</div>
           </div>
-          <div class="customer-info">
-            <h3>Bill To:</h3>
-            <p><strong>${orderData.customer || 'Customer Name'}</strong></p>
-            <p>Date: ${orderData.orderDate}</p>
-            <p>Time: ${orderData.orderTime}</p>
-            <p>Payment Method: ${paymentMethodLabel}</p>
-            <p>Payment Status: ${paymentStatusLabel}</p>
-            <p>Amount: ${formattedPaymentAmount}</p>
+          
+          <div class="invoice-details">
+            <div class="company-info">
+              <h3>Ceeone Wheels</h3>
+              <p>123 Business Street</p>
+              <p>Lagos, Nigeria</p>
+              <p>Phone: +234 800 123 4567</p>
+              <p>Email: info@ceeonewheels.com</p>
+            </div>
+            <div class="customer-info">
+              <h3>Bill To:</h3>
+              <p><strong>${orderData.customer || 'Customer Name'}</strong></p>
+              <p>Date: ${orderData.orderDate}</p>
+              <p>Time: ${orderData.orderTime}</p>
+            </div>
           </div>
-        </div>
-        
-        <table class="items-table">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Warehouse</th>
-              <th>Quantity</th>
-              <th>Price</th>
-              ${discountColumnHeader}
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${orderData.items.map(item => `
+          
+          <table class="items-table">
+            <thead>
               <tr>
-                <td>${item.name}</td>
-                <td>${item.warehouseNumber || 'N/A'}</td>
-                <td>${item.quantity}</td>
-                <td>${formatAmount(item.unitPrice)}</td>
-                ${showDiscountColumn ? `<td>${formatAmount(item.discountAmount || 0)}</td>` : ''}
-                <td>${formatAmount(item.total)}</td>
+                <th>Item</th>
+                <th>Warehouse</th>
+                <th>Quantity</th>
+                <th>Unit Price</th>
+                ${discountColumnHeader}
+                <th>Total</th>
               </tr>
-            `).join('')}
-          </tbody>
-        </table>
-        
-        <div class="total-section">
-          <div class="total-amount">Total: ₦${calculateTotal().toLocaleString()}</div>
-        </div>
-        
-        ${orderData.orderNote ? `
-          <div style="margin-top: 30px;">
-            <h3>Notes:</h3>
-            <p>${orderData.orderNote}</p>
+            </thead>
+            <tbody>
+              ${orderData.items.map(item => `
+                <tr>
+                  <td><strong>${item.name}</strong></td>
+                  <td>${item.warehouseNumber || 'N/A'}</td>
+                  <td>${item.quantity}</td>
+                  <td>${formatAmount(item.unitPrice)}</td>
+                  ${showDiscountColumn ? `<td>${formatAmount(item.discountAmount || 0)}</td>` : ''}
+                  <td><strong>${formatAmount(item.total)}</strong></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          
+          <div class="total-section">
+            <div class="total-amount">Total: ₦${calculateTotal().toLocaleString()}</div>
           </div>
-        ` : ''}
-        
-        <div class="footer">
-          <p>Thank you for your business!</p>
-          <p>Generated on ${currentDate} at ${currentTime}</p>
+          
+          <div class="payment-info">
+            <p><strong>Payment Method:</strong> ${paymentMethodLabel}</p>
+            <p><strong>Payment Status:</strong> ${paymentStatusLabel}</p>
+            <p><strong>Amount Paid:</strong> ${formattedPaymentAmount}</p>
+            ${bankTransferInfo}
+          </div>
+          
+          ${orderData.orderNote ? `
+            <div class="notes-section">
+              <h3>Notes:</h3>
+              <p>${orderData.orderNote}</p>
+            </div>
+          ` : ''}
+          
+          <div class="footer">
+            <p><strong>Thank you for your business!</strong></p>
+            <p>Generated on ${currentDate} at ${currentTime}</p>
+          </div>
         </div>
       </body>
       </html>
@@ -603,14 +730,26 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
   };
 
   const updateItemUnitType = (productId: string, unitType: SaleUnitType) => {
-    const updatedItems = orderData.items.map(item =>
-      item.id === productId
-        ? {
-            ...item,
-            unitType,
-          }
-        : item
-    );
+    const updatedItems = orderData.items.map(item => {
+      if (item.id === productId) {
+        // When dozen is selected, auto-set price per roll to 12 (since dozen = 12 pieces)
+        // This handles the case where pricePerRoll represents pieces per roll
+        const updatedItem = {
+          ...item,
+          unitType,
+        };
+        
+        // If dozen is selected and we need to handle price per roll logic
+        // Note: This assumes the product has pricePerRoll field available
+        if (unitType === "dozen") {
+          // Auto-adjust quantity or price calculation based on dozen (12 pieces)
+          // The actual price per roll handling would depend on product data structure
+        }
+        
+        return updatedItem;
+      }
+      return item;
+    });
     setOrderData(prev => ({ ...prev, items: updatedItems }));
   };
 
@@ -1258,6 +1397,47 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                         className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
                       />
                     </div>
+                  </div>
+                )}
+                {paymentForm.method === "cheque" && (
+                  <div className="mt-4">
+                    <label className="block text-[14px] text-[#45464e] mb-2">Cheque Image Evidence</label>
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            try {
+                              const result = await uploadImage(file, { folder: 'cheque-payments' });
+                              setPaymentForm((prev) => ({
+                                ...prev,
+                                chequeImage: result.secure_url,
+                              }));
+                            } catch (error: any) {
+                              console.error('Failed to upload cheque image:', error);
+                            }
+                          }
+                        }}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                      />
+                      {paymentForm.chequeImage && (
+                        <div className="relative">
+                          <img src={paymentForm.chequeImage} alt="Cheque evidence" className="h-20 w-20 object-cover rounded-lg border border-gray-300" />
+                          <button
+                            type="button"
+                            onClick={() => setPaymentForm((prev) => ({ ...prev, chequeImage: undefined }))}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {uploadProgress.isUploading && (
+                      <p className="mt-1 text-xs text-gray-500">Uploading... {uploadProgress.progress}%</p>
+                    )}
                   </div>
                 )}
               </div>

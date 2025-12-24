@@ -190,20 +190,20 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
           {/* Dynamic menu items based on permissions */}
           {mainMenuItems.length > 0 ? (
             mainMenuItems.map((item) => (
-              <Link
-                key={item.key}
-                href={getHref(item.key)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium relative hover:bg-[#02016a] hover:text-white transition-colors ${
-                  currentPage === item.key 
-                    ? 'bg-[#02016a] text-white' 
-                    : 'text-[#101828]'
-                }`}
-              >
-                <span className="w-5 h-5 flex items-center justify-center">
-                  {getIcon(item.icon)}
-                </span>
-                <span className="text-sm">{item.label}</span>
-              </Link>
+            <Link
+              key={item.key}
+              href={getHref(item.key)}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium relative hover:bg-[#02016a] hover:text-white transition-colors ${
+                currentPage === item.key 
+                  ? 'bg-[#02016a] text-white' 
+                  : 'text-[#101828]'
+              }`}
+            >
+              <span className="w-5 h-5 flex items-center justify-center">
+                {getIcon(item.icon)}
+              </span>
+              <span className="text-sm">{item.label}</span>
+            </Link>
             ))
           ) : (
             /* Fallback menu items when permissions aren't loaded */
@@ -269,19 +269,19 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
           {/* Logout section */}
           <div className="mt-8 pt-4 border-t border-gray-100">
             {/* Settings link - right above Logout */}
-            <Link 
-              href="/settings"
+              <Link 
+                href="/settings"
               className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium hover:bg-[#02016a] hover:text-white transition-colors ${
                 currentPage === 'settings' 
                   ? 'bg-[#02016a] text-white' 
                   : 'text-[#101828]'
               }`}
-            >
-              <span className="w-5 h-5 flex items-center justify-center">
-                {getIcon('settings')}
-              </span>
-              <span className="text-sm">Settings</span>
-            </Link>
+              >
+                <span className="w-5 h-5 flex items-center justify-center">
+                  {getIcon('settings')}
+                </span>
+                <span className="text-sm">Settings</span>
+              </Link>
             
             {/* Logout button - always show */}
             <button 

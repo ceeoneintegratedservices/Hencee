@@ -567,18 +567,70 @@ function ViewOrderContent() {
     const key = variant === "standard" ? "invoice:standard" : "invoice:outsourced";
     try {
       setActionInFlight(key);
+      
+      // Download the invoice blob
       const blob = await downloadSaleInvoice(finalOrderId, variant);
-      const url = window.URL.createObjectURL(blob);
+      
+      // Validate blob
+      if (!blob || blob.size === 0) {
+        throw new Error("Received empty or invalid PDF file");
+      }
+      
+      // Verify it's actually a PDF by checking size
+      // PDFs are usually at least a few KB, very small files are likely errors
+      if (blob.size < 100) {
+        // Clone blob before reading to avoid consuming it
+        const textBlob = blob.slice(0, 500);
+        const text = await textBlob.text();
+        if (text.includes('<html') || text.includes('{')) {
+          try {
+            const errorData = JSON.parse(text);
+            throw new Error(errorData?.message || errorData?.error || "Server error");
+          } catch {
+            throw new Error("Server returned an error page instead of PDF");
+          }
+        }
+        throw new Error("Received file is too small to be a valid PDF");
+      }
+      
+      // Create a new blob with explicit PDF type to ensure browser recognizes it
+      const pdfBlob = new Blob([blob], { 
+        type: 'application/pdf'
+      });
+      
+      // Create blob URL
+      const blobUrl = window.URL.createObjectURL(pdfBlob);
+      
+      // Verify URL was created successfully
+      if (!blobUrl) {
+        throw new Error("Failed to create download URL");
+      }
+      
+      // Create download link
       const link = document.createElement("a");
-      link.href = url;
+      link.href = blobUrl;
       link.download = `${order?.orderNumber || "order"}-${variant}-invoice.pdf`;
+      link.style.display = 'none';
+      link.setAttribute('download', `${order?.orderNumber || "order"}-${variant}-invoice.pdf`);
+      
+      // Append to body
       document.body.appendChild(link);
+      
+      // Trigger download
       link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      
+      // Cleanup after download starts
+      setTimeout(() => {
+        if (document.body.contains(link)) {
+          document.body.removeChild(link);
+        }
+        window.URL.revokeObjectURL(blobUrl);
+      }, 200);
+      
     } catch (error: any) {
       console.error("Invoice download failed:", error);
-      showError("Error", error?.message || "Unable to download invoice.");
+      const errorMessage = error?.message || "Unable to download invoice. Please check your connection and try again.";
+      showError("Download Failed", errorMessage);
     } finally {
       setActionInFlight(null);
     }

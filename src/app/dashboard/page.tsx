@@ -167,7 +167,7 @@ export default function AdminDashboard() {
       console.log('Can view dashboard:', canViewDashboard);
       
       if (canViewDashboard) {
-        fetchDashboardData();
+      fetchDashboardData();
       } else {
         // If no permissions, still set loading to false so the UI can show the access restricted message
         setLoading(false);
@@ -850,4 +850,4 @@ function BarChart({ data }: { data: { label: string; value: number }[] }) {
       </div>
     </div>
   );
-}
+} 

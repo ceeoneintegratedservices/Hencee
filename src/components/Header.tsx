@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { usePermissions } from "@/hooks/usePermissions";
-import { getImportantNotifications, type Notification } from "@/services/notifications";
+import { getAllNotifications, type Notification } from "@/services/notifications";
 
 interface HeaderProps {
   title: string;
@@ -47,14 +47,15 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
     }
   }, [isInitialized, user, getUserRole]);
 
-  // Fetch notifications
+  // Fetch notifications - Get ALL activities (not just filtered important ones)
   useEffect(() => {
     const fetchNotifications = async () => {
       if (!isInitialized) return;
       
       setNotificationsLoading(true);
       try {
-        const fetchedNotifications = await getImportantNotifications();
+        // Fetch ALL activities for the notifications bar
+        const fetchedNotifications = await getAllNotifications('allTime', 100);
         setNotifications(fetchedNotifications);
       } catch (error) {
         console.error('Error fetching notifications:', error);
@@ -240,10 +241,10 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
           
           {/* Notifications Modal */}
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
-              <div className="p-4 border-b border-gray-100">
+            <div className="absolute right-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50 flex flex-col max-h-[600px]">
+              <div className="p-4 border-b border-gray-100 flex-shrink-0">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">All Activities</h3>
                   <button 
                     onClick={() => setShowNotifications(false)}
                     className="text-gray-400 hover:text-gray-600"
@@ -255,45 +256,60 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
                 </div>
               </div>
               
-              <div className="max-h-80 overflow-y-auto">
-                {notifications.map((notification) => (
-                  <div 
-                    key={notification.id} 
-                    className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
-                      notification.unread ? 'bg-blue-50' : ''
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`w-2 h-2 rounded-full mt-2 ${
-                        notification.type === 'order' ? 'bg-green-500' :
-                        notification.type === 'inventory' ? 'bg-orange-500' :
-                        notification.type === 'payment' ? 'bg-blue-500' :
-                        'bg-purple-500'
-                      }`}></div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-sm font-medium text-gray-900 truncate">
-                            {notification.title}
-                          </h4>
-                          {notification.unread && (
-                            <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
-                          )}
+              {/* Scrollable notifications list */}
+              <div className="flex-1 overflow-y-auto min-h-0">
+                {notificationsLoading ? (
+                  <div className="p-8 flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#02016a]"></div>
+                  </div>
+                ) : notifications.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500">
+                    <p className="text-sm">No activities yet</p>
+                  </div>
+                ) : (
+                  notifications.map((notification) => (
+                    <div 
+                      key={notification.id} 
+                      className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
+                        notification.unread ? 'bg-blue-50' : ''
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
+                          notification.type === 'order' ? 'bg-green-500' :
+                          notification.type === 'inventory' ? 'bg-orange-500' :
+                          notification.type === 'payment' ? 'bg-blue-500' :
+                          notification.type === 'customer' ? 'bg-purple-500' :
+                          notification.type === 'security' ? 'bg-red-500' :
+                          notification.type === 'user' ? 'bg-indigo-500' :
+                          notification.type === 'expense' ? 'bg-yellow-500' :
+                          'bg-gray-500'
+                        }`}></div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-medium text-gray-900 truncate">
+                              {notification.title}
+                            </h4>
+                            {notification.unread && (
+                              <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                            {notification.message}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {notification.time}
+                          </p>
                         </div>
-                        <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                          {notification.message}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {notification.time}
-                        </p>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
               
-              <div className="p-4 border-t border-gray-100">
+              <div className="p-4 border-t border-gray-100 flex-shrink-0">
                 <button className="w-full text-center text-sm text-[#02016a] hover:text-[#03024a] font-medium">
-                  View All Notifications
+                  View All Notifications ({notifications.length})
                 </button>
               </div>
             </div>
