@@ -98,6 +98,7 @@ const numberValue = (value: string) =>
 export default function CreateInventoryPage() {
   const router = useRouter();
   const { notifications, removeNotification, showError, showSuccess } = useNotifications();
+  const { uploadImage, uploadProgress } = useCloudinaryUpload();
 
   const [formData, setFormData] = useState<FormData>(DEFAULT_FORM);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -161,7 +162,7 @@ export default function CreateInventoryPage() {
     }
   }, [useSameExpiryWarehouse, formData.warehouseId]);
 
-  const updateForm = (field: keyof FormData, value: string | boolean) => {
+  const updateForm = (field: keyof FormData, value: string | boolean | undefined) => {
     setFormData((prev) => {
       const updated = {
         ...prev,
@@ -931,7 +932,7 @@ export default function CreateInventoryPage() {
                               <img src={formData.outsourcedImage} alt="Product evidence" className="h-20 w-20 object-cover rounded-lg border border-gray-300" />
                               <button
                                 type="button"
-                                onClick={() => updateForm('outsourcedImage', undefined)}
+                                onClick={() => updateForm('outsourcedImage', '')}
                                 className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
                               >
                                 ×

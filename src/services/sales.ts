@@ -269,13 +269,13 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
   // Header
   doc.setFontSize(24);
   doc.setTextColor(2, 1, 106); // #02016a
-  doc.setFont(undefined, 'bold');
+  doc.setFont('helvetica', 'bold');
   doc.text('INVOICE', pageWidth / 2, yPos, { align: 'center' });
   yPos += 10;
   
   doc.setFontSize(12);
   doc.setTextColor(100, 100, 100);
-  doc.setFont(undefined, 'normal');
+  doc.setFont('helvetica', 'normal');
   const invoiceNumber = `Invoice #${invoiceData.saleId?.substring(0, 8).toUpperCase() || 'N/A'}`;
   doc.text(invoiceNumber, pageWidth / 2, yPos, { align: 'center' });
   yPos += 15;
@@ -283,13 +283,13 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
   // Company Info (Left)
   doc.setFontSize(14);
   doc.setTextColor(2, 1, 106);
-  doc.setFont(undefined, 'bold');
+  doc.setFont('helvetica', 'bold');
   doc.text('Ceeone Wheels', margin, yPos);
   yPos += lineHeight;
   
   doc.setFontSize(10);
   doc.setTextColor(80, 80, 80);
-  doc.setFont(undefined, 'normal');
+  doc.setFont('helvetica', 'normal');
   doc.text('123 Business Street', margin, yPos);
   yPos += lineHeight;
   doc.text('Lagos, Nigeria', margin, yPos);
@@ -302,13 +302,13 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
   yPos = 35;
   doc.setFontSize(14);
   doc.setTextColor(2, 1, 106);
-  doc.setFont(undefined, 'bold');
+  doc.setFont('helvetica', 'bold');
   doc.text('Bill To:', pageWidth - margin, yPos, { align: 'right' });
   yPos += lineHeight;
   
   doc.setFontSize(10);
   doc.setTextColor(80, 80, 80);
-  doc.setFont(undefined, 'normal');
+  doc.setFont('helvetica', 'normal');
   if (invoiceData.customer) {
     doc.text(invoiceData.customer.name || 'Customer Name', pageWidth - margin, yPos, { align: 'right' });
     yPos += lineHeight;
@@ -363,9 +363,9 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
         yPos = 20;
       }
       
-      doc.setFont(undefined, 'bold');
+      doc.setFont('helvetica', 'bold');
       doc.text(item.productName || 'Product', margin + 2, yPos);
-      doc.setFont(undefined, 'normal');
+      doc.setFont('helvetica', 'normal');
       doc.text(String(item.quantity || 0), margin + 80, yPos);
       doc.text(formatCurrency(item.unitPrice || 0), margin + 100, yPos);
       
@@ -373,9 +373,9 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
         doc.text(formatCurrency(item.discountAmount || 0), margin + 140, yPos);
       }
       
-      doc.setFont(undefined, 'bold');
+      doc.setFont('helvetica', 'bold');
       doc.text(formatCurrency(item.totalPrice || 0), pageWidth - margin - 2, yPos, { align: 'right' });
-      doc.setFont(undefined, 'normal');
+      doc.setFont('helvetica', 'normal');
       
       yPos += 8;
     });
@@ -388,7 +388,7 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
   
   if (invoiceData.totals) {
     doc.setFontSize(10);
-    doc.setFont(undefined, 'bold');
+    doc.setFont('helvetica', 'bold');
     
     if (invoiceData.showDiscountOnInvoice && invoiceData.totals.discount) {
       doc.text('Subtotal:', pageWidth - margin - 60, yPos, { align: 'right' });
@@ -409,7 +409,7 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
     if (invoiceData.totals.paid !== undefined) {
       doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
-      doc.setFont(undefined, 'normal');
+      doc.setFont('helvetica', 'normal');
       doc.text('Amount Paid:', pageWidth - margin - 60, yPos, { align: 'right' });
       doc.text(formatCurrency(invoiceData.totals.paid || 0), pageWidth - margin - 2, yPos, { align: 'right' });
       yPos += 8;
@@ -426,12 +426,12 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
   if (invoiceData.paymentSummary && Array.isArray(invoiceData.paymentSummary) && invoiceData.paymentSummary.length > 0) {
     yPos += 10;
     doc.setFontSize(10);
-    doc.setFont(undefined, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.setTextColor(2, 1, 106);
     doc.text('Payment Information:', margin, yPos);
     yPos += 8;
     
-    doc.setFont(undefined, 'normal');
+    doc.setFont('helvetica', 'normal');
     doc.setTextColor(0, 0, 0);
     invoiceData.paymentSummary.forEach((payment: any) => {
       if (yPos > pageHeight - 30) {
@@ -463,10 +463,10 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
   if (invoiceData.notes) {
     yPos += 5;
     doc.setFontSize(10);
-    doc.setFont(undefined, 'bold');
+    doc.setFont('helvetica', 'bold');
     doc.text('Notes:', margin, yPos);
     yPos += 8;
-    doc.setFont(undefined, 'normal');
+    doc.setFont('helvetica', 'normal');
     const notesLines = doc.splitTextToSize(invoiceData.notes, pageWidth - 2 * margin);
     doc.text(notesLines, margin, yPos);
   }
