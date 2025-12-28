@@ -40,6 +40,10 @@ type InventoryRow = InventoryItem & {
 };
 
 const splitCsvLine = (line: string): string[] => {
+  if (!line || line.trim() === '') {
+    return [];
+  }
+  
   const result: string[] = [];
   let current = '';
   let inQuotes = false;
@@ -54,31 +58,90 @@ const splitCsvLine = (line: string): string[] => {
         inQuotes = !inQuotes;
       }
     } else if (char === ',' && !inQuotes) {
-      result.push(current);
+      result.push(current.trim());
       current = '';
     } else {
       current += char;
     }
   }
-  result.push(current);
-  return result.map((value) => value.trim());
+  // Don't forget the last field (even if it's empty due to trailing comma)
+  result.push(current.trim());
+  
+  // Handle trailing comma - if line ends with comma, add empty field
+  if (line.trim().endsWith(',') && !inQuotes) {
+    // Already handled by the push above, but ensure we have the empty field
+  }
+  
+  return result;
 };
 
 const parseCsvText = (text: string): Record<string, string>[] => {
-  const rows = text
+  // Remove BOM if present (common in Excel exports)
+  const cleanText = text.replace(/^\uFEFF/, '').trim();
+  
+  if (!cleanText) {
+    return [];
+  }
+  
+  const rows = cleanText
     .split(/\r?\n/)
     .map((row) => row.trim())
-    .filter(Boolean);
+    .filter((row) => row.length > 0); // Filter out completely empty rows
 
-  if (rows.length === 0) return [];
+  if (rows.length === 0) {
+    return [];
+  }
+  
+  if (rows.length < 2) {
+    return [];
+  }
+  
   const headers = splitCsvLine(rows[0]);
-  return rows.slice(1).map((row) => {
-    const values = splitCsvLine(row);
-    return headers.reduce<Record<string, string>>((record, header, index) => {
-      record[header] = values[index] ?? '';
+  
+  if (headers.length === 0) {
+    return [];
+  }
+  
+  // Validate header row has content
+  if (headers.every(h => !h || h.trim() === '')) {
+    return [];
+  }
+  
+  const parsed = rows.slice(1)
+    .filter((row) => row.trim().length > 0) // Filter empty data rows
+    .map((row, rowIndex) => {
+      const rawValues = splitCsvLine(row);
+      
+      // Ensure values array matches headers length (pad with empty strings if needed, trim if too long)
+      const values = (() => {
+        const padded = [...rawValues];
+        while (padded.length < headers.length) {
+          padded.push('');
+        }
+        return padded.slice(0, headers.length);
+      })();
+      
+      const record: Record<string, string> = {};
+      
+      headers.forEach((header, index) => {
+        const headerKey = header.trim();
+        if (headerKey) {
+          // Get the value, defaulting to empty string if index is out of bounds
+          const rawValue = index < values.length ? (values[index] || '') : '';
+          const trimmedValue = rawValue.trim();
+          record[headerKey] = trimmedValue;
+        }
+      });
+      
+      // Validate that we have at least some fields
+      if (Object.keys(record).length === 0) {
+        throw new Error(`Row ${rowIndex + 2}: Failed to parse CSV row. No fields were extracted. Check that the row has data matching the header columns.`);
+      }
+      
       return record;
-    }, {});
-  });
+    });
+  
+  return parsed;
 };
 
 const mapApiProductToInventoryItem = (product: InventoryProduct): InventoryRow => {
@@ -193,6 +256,7 @@ export default function InventoryPage() {
   const [importResult, setImportResult] = useState<InventoryImportResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const validateFileInputRef = useRef<HTMLInputElement | null>(null);
   const [expiryAlerts, setExpiryAlerts] = useState<InventoryRow[]>([]);
   const [expiryThreshold, setExpiryThreshold] = useState(30);
   const [expiryLoading, setExpiryLoading] = useState(false);
@@ -259,7 +323,6 @@ export default function InventoryPage() {
       const summary = InventoryDataService.generateInventorySummary(mappedItems);
       setSummaryData(summary);
     } catch (err: any) {
-      console.error('Error fetching inventory:', err);
       setApiError(err.message || 'Failed to load inventory');
       showError('Error', err.message || 'Failed to load inventory');
       setInventoryItems([]);
@@ -309,7 +372,6 @@ export default function InventoryPage() {
         const data = await getWarehouses();
         setWarehouses(data);
       } catch (error) {
-        console.error('Failed to load warehouses', error);
       }
     };
     loadWarehouses();
@@ -323,7 +385,6 @@ export default function InventoryPage() {
       await fetchInventoryData(searchQuery);
       showSuccess('Success', 'Inventory item deleted successfully');
     } catch (err: any) {
-      console.error('Error deleting inventory item:', err);
       showError('Error', err.message || 'Failed to delete inventory item');
     }
   };
@@ -425,7 +486,6 @@ export default function InventoryPage() {
       
       showSuccess('Success', `Product status changed to ${newStatus}`);
     } catch (error: any) {
-      console.error('Error updating product status:', error);
       showError('Error', error.message || `Failed to change product status to ${newStatus}`);
     }
   };
@@ -443,26 +503,225 @@ export default function InventoryPage() {
     // Handle date filtering logic here
     showSuccess('Success', 'Date filter applied successfully');
   };
+
+  // Validation function that parses CSV and shows JSON without sending
+  const validateCsvFile = async (file: File) => {
+    try {
+      const text = await file.text();
+      
+      const records = parseCsvText(text);
+      
+      if (!records.length) {
+        throw new Error('The CSV file is empty.');
+      }
+
+      // Map records to payloads
+      const rows = records.map((record) => {
+        const payload = mapFlatRecordToPayload(record);
+        
+        // Remove null/undefined values for cleaner JSON (recursively)
+        const cleanPayload = (obj: any): any => {
+          if (obj === null || obj === undefined) {
+            return undefined;
+          }
+          if (Array.isArray(obj)) {
+            return obj.map(cleanPayload).filter(item => item !== undefined);
+          }
+          if (typeof obj === 'object') {
+            const cleaned: any = {};
+            for (const [key, value] of Object.entries(obj)) {
+              const cleanedValue = cleanPayload(value);
+              if (cleanedValue !== undefined && cleanedValue !== null) {
+                cleaned[key] = cleanedValue;
+              }
+            }
+            // Only return object if it has keys
+            return Object.keys(cleaned).length > 0 ? cleaned : undefined;
+          }
+          return obj;
+        };
+        
+        const cleaned = cleanPayload(payload);
+        
+        return cleaned || {};
+      });
+
+      // Final validation
+      const validationResults = rows.map((row, idx) => {
+        const issues: string[] = [];
+        const warnings: string[] = [];
+
+        if (!row.name) issues.push('Missing: name');
+        if (!row.sku) issues.push('Missing: sku');
+        if (!row.categoryName) issues.push('Missing: categoryName');
+        if (!row.warehouseId) issues.push('Missing: warehouseId');
+        if (!row.purchasePrice || Number(row.purchasePrice) <= 0) issues.push('Missing or invalid: purchasePrice');
+        if (!row.sellingPrice || Number(row.sellingPrice) <= 0) issues.push('Missing or invalid: sellingPrice');
+        if (!row.expiryDate) issues.push('Missing: expiryDate');
+
+        // Check for null/undefined values
+        const nullValues = Object.entries(row).filter(([_, value]) => value === null || value === undefined);
+        if (nullValues.length > 0) {
+          warnings.push(`Contains null/undefined values: ${nullValues.map(([key]) => key).join(', ')}`);
+        }
+
+        return {
+          rowNumber: idx + 1,
+          isValid: issues.length === 0,
+          issues,
+          warnings,
+          payload: row,
+        };
+      });
+
+      // Create final JSON payload
+      const finalPayload = { rows };
+      const jsonOutput = JSON.stringify(finalPayload, null, 2);
+
+      // Show in alert for easy copying
+      const summary = validationResults
+        .map(r => `Row ${r.rowNumber}: ${r.isValid ? '✅ Valid' : `❌ ${r.issues.join(', ')}`}`)
+        .join('\n');
+
+      alert(
+        `CSV Validation Complete!\n\n` +
+        `Total Rows: ${rows.length}\n` +
+        `Valid: ${validationResults.filter(r => r.isValid).length}\n` +
+        `Invalid: ${validationResults.filter(r => !r.isValid).length}\n\n` +
+        `Details:\n${summary}`
+      );
+
+      return {
+        success: true,
+        rows,
+        validationResults,
+        jsonOutput,
+      };
+    } catch (error: any) {
+      alert(`Validation Error: ${error.message}`);
+      throw error;
+    }
+  };
+
   const handleImportCsv = async (file: File) => {
     setImportingRows(true);
     setImportError(null);
     setImportResult(null);
     try {
       const text = await file.text();
+      
       const records = parseCsvText(text);
+      
       if (!records.length) {
         throw new Error('The CSV file is empty.');
       }
-      const rows = records.map((record) => mapFlatRecordToPayload(record));
+      
+      // Validate that records have data
+      if (records[0] && Object.keys(records[0]).length === 0) {
+        throw new Error('CSV parser returned empty objects. Check CSV format - ensure first row contains headers and data rows match header columns.');
+      }
+      
+      // Validate that records have data
+      if (records.length > 0 && records[0] && Object.keys(records[0]).length === 0) {
+        throw new Error('CSV parser returned empty objects. Please check your CSV format. Ensure the first row contains column headers and subsequent rows contain matching data.');
+      }
+      
+      // Validate required fields before mapping
+      const rows = records.map((record, index) => {
+        // Check if record is empty
+        if (!record || Object.keys(record).length === 0) {
+          throw new Error(`Row ${index + 2}: CSV parser returned empty object. Check that the CSV row has data matching the headers.`);
+        }
+        
+        const payload = mapFlatRecordToPayload(record);
+        
+        // Check if payload is empty after mapping
+        if (!payload || Object.keys(payload).length === 0) {
+          throw new Error(`Row ${index + 2}: Mapping resulted in empty payload. Check that CSV fields match expected field names. Original record: ${JSON.stringify(record)}`);
+        }
+        
+        // Validate that we have at least some top-level required fields
+        const hasRequiredFields = payload.name || payload.sku || payload.categoryName || payload.warehouseId;
+        if (!hasRequiredFields) {
+          throw new Error(`Row ${index + 2}: Payload has no required fields (name, sku, categoryName, warehouseId). This suggests a mapping issue. Payload: ${JSON.stringify(payload)}`);
+        }
+        
+        // Helper function to safely check string fields
+        const isEmptyString = (value: any): boolean => {
+          return !value || (typeof value === 'string' && value.trim() === '');
+        };
+        
+        // Check required fields
+        const missingFields: string[] = [];
+        if (isEmptyString(payload.name)) missingFields.push('name');
+        if (isEmptyString(payload.sku)) missingFields.push('sku');
+        if (isEmptyString(payload.categoryName)) missingFields.push('categoryName');
+        if (isEmptyString(payload.warehouseId)) missingFields.push('warehouseId');
+        if (payload.purchasePrice === undefined || payload.purchasePrice === null || Number(payload.purchasePrice) <= 0) missingFields.push('purchasePrice');
+        if (payload.sellingPrice === undefined || payload.sellingPrice === null || Number(payload.sellingPrice) <= 0) missingFields.push('sellingPrice');
+        if (isEmptyString(payload.expiryDate)) missingFields.push('expiryDate');
+        
+        if (missingFields.length > 0) {
+          throw new Error(`Row ${index + 2}: Missing required fields: ${missingFields.join(', ')}. Payload: ${JSON.stringify(payload)}`);
+        }
+        
+        // Validate warehouseId exists
+        if (payload.warehouseId && warehouses.length > 0) {
+          const warehouseExists = warehouses.some(w => w.id === payload.warehouseId);
+          if (!warehouseExists) {
+            throw new Error(`Row ${index + 2}: Warehouse ID "${payload.warehouseId}" does not exist. Available warehouses: ${warehouses.map(w => w.id).join(', ')}`);
+          }
+        }
+        
+        return payload;
+      });
+      
+      // Final validation before sending
+      if (rows.length === 0) {
+        throw new Error('No valid rows to import after validation.');
+      }
+      
+      // Check if any row is empty - comprehensive check
+      const emptyRows: number[] = [];
+      rows.forEach((row, idx) => {
+        if (!row || Object.keys(row).length === 0) {
+          emptyRows.push(idx + 1);
+        } else {
+          // Also check if row has any actual data (not just nested empty objects)
+          const hasData = Object.keys(row).some(key => {
+            const value = row[key as keyof typeof row];
+            if (value === null || value === undefined) return false;
+            if (typeof value === 'object' && Object.keys(value).length === 0) return false;
+            if (typeof value === 'string' && value.trim() === '') return false;
+            return true;
+          });
+          if (!hasData) {
+            emptyRows.push(idx + 1);
+          }
+        }
+      });
+      
+      if (emptyRows.length > 0) {
+        throw new Error(`Found ${emptyRows.length} empty row(s) after mapping (rows: ${emptyRows.join(', ')}). This indicates a parsing or mapping issue.`);
+      }
+      
       const result = await importInventoryProducts(rows as CreateInventoryProduct[]);
+      
       setImportResult(result);
-      showSuccess('Success', `Imported ${result.created} item(s)`);
+      
+      if (result.created > 0) {
+        showSuccess('Success', `Imported ${result.created} item(s) successfully`);
+      }
+      if (result.failed > 0) {
+        showError('Partial Import', `${result.created} created, ${result.failed} failed. Check results below.`);
+      }
+      
       await fetchInventoryData(searchQuery);
       await fetchExpiryAlerts(expiryThreshold);
     } catch (error: any) {
-      console.error('Import failed', error);
-      setImportError(error.message || 'Failed to import inventory');
-      showError('Error', error.message || 'Failed to import inventory');
+      const errorMessage = error.message || 'Failed to import inventory';
+      setImportError(errorMessage);
+      showError('Import Error', errorMessage);
     } finally {
       setImportingRows(false);
       if (fileInputRef.current) {
@@ -495,7 +754,6 @@ export default function InventoryPage() {
       await fetchInventoryData(searchQuery);
       await fetchExpiryAlerts(expiryThreshold);
     } catch (error: any) {
-      console.error('Damage recording failed', error);
       showError('Error', error.message || 'Failed to record damage');
     } finally {
       setRecordingDamage(false);
@@ -510,7 +768,6 @@ export default function InventoryPage() {
         const mapped = alerts.map(mapApiProductToInventoryItem);
         setExpiryAlerts(mapped);
       } catch (error: any) {
-        console.error('Failed to fetch expiry alerts', error);
         setExpiryAlerts([]);
         showError('Error', error.message || 'Failed to load expiry alerts');
       } finally {
@@ -527,7 +784,6 @@ export default function InventoryPage() {
       const summary = await getInventoryExpirySummary();
       setExpirySummary(summary);
     } catch (error: any) {
-      console.error('Failed to fetch expiry summary', error);
       setExpirySummary(null);
       setExpirySummaryError(error?.message || 'Unable to load expiry summary');
     } finally {
@@ -569,7 +825,6 @@ export default function InventoryPage() {
         setDamageLog(response.data || []);
         setDamageSummary(response.summary || null);
       } catch (error: any) {
-        console.error('Failed to fetch damage log', error);
         setDamageError(error?.message || 'Unable to load damage log');
         setDamageLog([]);
         setDamageSummary(null);
@@ -2007,48 +2262,106 @@ export default function InventoryPage() {
             </div>
 
             <div className="border border-dashed border-gray-300 rounded-lg p-4 text-center">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".csv,text/csv"
-                className="hidden"
-                id="import-csv-input"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    handleImportCsv(file);
-                  }
-                }}
-              />
-              <label
-                htmlFor="import-csv-input"
-                className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                {importingRows ? (
-                  <>
-                    <svg
-                      className="w-4 h-4 animate-spin text-gray-500"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M12 3v3m6.364-1.364l-2.121 2.121M21 12h-3m1.364 6.364l-2.121-2.121M12 21v-3m-6.364 1.364l2.121-2.121M3 12h3M4.636 5.636l2.121 2.121" />
+              <div className="flex gap-2 justify-center items-center flex-wrap">
+                {/* Validate CSV Button */}
+                <div>
+                  <input
+                    ref={validateFileInputRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="hidden"
+                    id="validate-csv-input"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        try {
+                          await validateCsvFile(file);
+                        } catch (error) {
+                        }
+                        // Reset input
+                        if (validateFileInputRef.current) {
+                          validateFileInputRef.current.value = '';
+                        }
+                      }
+                    }}
+                  />
+                  <label
+                    htmlFor="validate-csv-input"
+                    className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 border border-blue-300 rounded-lg text-sm font-medium text-blue-700 hover:bg-blue-50 transition-colors"
+                  >
+                    <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    Importing...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v16h16V4M4 4l8 8 8-8" />
-                    </svg>
-                    Choose CSV file
-                  </>
-                )}
-              </label>
-              <p className="text-xs text-gray-500 mt-2">
+                    Validate CSV (Preview JSON)
+                  </label>
+                </div>
+
+                {/* Import CSV Button */}
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="hidden"
+                    id="import-csv-input"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        handleImportCsv(file);
+                      }
+                    }}
+                  />
+                  <label
+                    htmlFor="import-csv-input"
+                    className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    {importingRows ? (
+                      <>
+                        <svg
+                          className="w-4 h-4 animate-spin text-gray-500"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M12 3v3m6.364-1.364l-2.121 2.121M21 12h-3m1.364 6.364l-2.121-2.121M12 21v-3m-6.364 1.364l2.121-2.121M3 12h3M4.636 5.636l2.121 2.121" />
+                        </svg>
+                        Importing...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v16h16V4M4 4l8 8 8-8" />
+                        </svg>
+                        Import CSV
+                      </>
+                    )}
+                  </label>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-3">
+                <strong>Tip:</strong> Use "Validate CSV" first to preview the JSON and check for errors before importing.
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
                 Required columns: name, sku, categoryName, warehouseId, purchasePrice, sellingPrice, expiryDate.
               </p>
+              <div className="mt-2 flex items-center gap-2">
+                <a
+                  href="/inventory-import-template.csv"
+                  download="inventory-import-template.csv"
+                  className="text-xs text-blue-600 hover:text-blue-800 underline"
+                >
+                  Download CSV template
+                </a>
+                <span className="text-xs text-gray-400">|</span>
+                <a
+                  href="/inventory-import-template-minimal.csv"
+                  download="inventory-import-template-minimal.csv"
+                  className="text-xs text-blue-600 hover:text-blue-800 underline"
+                >
+                  Download minimal template (required fields only)
+                </a>
+              </div>
             </div>
 
             {importError && (
@@ -2058,11 +2371,51 @@ export default function InventoryPage() {
             )}
 
             {importResult && (
-              <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 space-y-1 border border-gray-100">
-                <p>Processed rows: {importResult.total}</p>
-                <p className="text-green-600">Created: {importResult.created}</p>
+              <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 space-y-2 border border-gray-100">
+                <p><strong>Processed rows:</strong> {importResult.total}</p>
+                <p className="text-green-600 font-medium">✓ Created: {importResult.created}</p>
                 {importResult.failed > 0 && (
-                  <p className="text-red-600">Failed: {importResult.failed}</p>
+                  <>
+                    <p className="text-red-600 font-medium">✗ Failed: {importResult.failed}</p>
+                    {importResult.results && importResult.results.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-xs font-semibold text-gray-600">Failure details:</p>
+                        {importResult.results
+                          .filter((r: any) => !r.success)
+                          .map((result: any, idx: number) => {
+                            // Enhanced error message extraction
+                            let errorMsg = result.message || 
+                                          result.error || 
+                                          result.errorMessage ||
+                                          result.details || 
+                                          (result.errors && Array.isArray(result.errors) ? result.errors.join(', ') : undefined) ||
+                                          (result.raw && typeof result.raw === 'object' ? JSON.stringify(result.raw).substring(0, 150) : undefined) ||
+                                          'Unknown error';
+                            
+                            // Check if it's an empty object error
+                            if (result.raw && Object.keys(result.raw).length === 0) {
+                              errorMsg = 'Backend returned empty error object. This usually means the CSV data was not parsed correctly or the request payload was empty. Check browser console for details.';
+                            }
+                            
+                            // If still no message, try to stringify the whole result
+                            if (!errorMsg || errorMsg === 'Unknown error') {
+                              const resultStr = JSON.stringify(result);
+                              if (resultStr && resultStr !== '{}') {
+                                errorMsg = resultStr.substring(0, 200);
+                              } else {
+                                errorMsg = 'Empty error response from backend. Check that CSV data was parsed correctly.';
+                              }
+                            }
+                            
+                            return (
+                              <p key={idx} className="text-xs text-red-600 pl-2 break-words">
+                                • {result.sku || `Row ${idx + 1}`}: {errorMsg}
+                              </p>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}

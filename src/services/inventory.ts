@@ -13,13 +13,21 @@ const NUMBER_FIELDS = new Set([
   "pricePerRoll",
   "piecesPerCarton",
   "piecesPerRoll",
+  "piecesPerDozen", // Support for dozen
+  "pricePerDozen", // Support for dozen
   "inventoryUnits.piecesInStock",
   "inventoryUnits.cartonsInStock",
   "inventoryUnits.rollsInStock",
+  "piecesInStock", // Flat field mapping
+  "cartonInStock", // Flat field mapping (will be mapped to cartonsInStock)
+  "cartonsInStock", // Flat field mapping
+  "rollsInStock", // Flat field mapping
+  "dozensInStock", // Support for dozen (will be ignored if not supported)
   "reorderPoint",
   "outsourcedDetails.sourceCostPrice",
   "outsourcedDetails.liveSellingPrice",
   "expiryAlertThreshold",
+  "productSize",
 ]);
 
 export type InventoryStatus = "PUBLISHED" | "DRAFT" | "UNPUBLISHED";
@@ -295,12 +303,110 @@ export async function deleteInventoryProduct(id: string): Promise<void> {
 export async function importInventoryProducts(
   rows: CreateInventoryProduct[]
 ): Promise<InventoryImportResult> {
+  // Validate that rows is not empty
+  if (!rows || rows.length === 0) {
+    throw new Error('No rows to import. CSV parsing may have failed.');
+  }
+  
+  // Validate each row before sending
+  rows.forEach((row, idx) => {
+    if (!row || typeof row !== 'object') {
+      throw new Error(`Row ${idx + 1} is not a valid object: ${typeof row}`);
+    }
+    const keys = Object.keys(row);
+    if (keys.length === 0) {
+      throw new Error(`Row ${idx + 1} is empty (no keys). This should have been caught earlier.`);
+    }
+  });
+  
+  // Create a deep clone to ensure we're sending plain objects (no getters/setters/prototypes)
+  const cleanRows = rows.map(row => {
+    // Deep clone using JSON serialization to ensure plain objects
+    return JSON.parse(JSON.stringify(row));
+  });
+  
+  const requestBody = { rows: cleanRows };
+  const requestBodyString = JSON.stringify(requestBody);
+  
+  // Verify the request body structure
+  try {
+    const verifyBody = JSON.parse(requestBodyString);
+    
+    // Final check - ensure first row has data
+    if (verifyBody.rows?.[0] && Object.keys(verifyBody.rows[0]).length === 0) {
+      throw new Error('Request body contains empty rows. This should not happen.');
+    }
+  } catch (e) {
+    throw new Error('Request body verification failed');
+  }
+  
   const response = await authFetch(API_ENDPOINTS.inventoryImport, {
     method: "POST",
     headers: JSON_HEADERS,
-    body: JSON.stringify({ rows }),
+    body: requestBodyString,
   });
-  return parseResponse<InventoryImportResult>(response);
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    let errorMessage = 'Failed to import inventory';
+    
+    try {
+      const errorData = JSON.parse(errorText);
+      errorMessage = errorData?.message || errorData?.error || errorMessage;
+    } catch {
+      errorMessage = errorText || errorMessage;
+    }
+    throw new Error(errorMessage);
+  }
+  
+  // Parse response manually to better handle errors
+  const text = await response.text();
+  let result: InventoryImportResult;
+  
+  try {
+    result = text ? JSON.parse(text) : { total: 0, created: 0, failed: 0, results: [] };
+  } catch (e) {
+    throw new Error(`Invalid response from server: ${text.substring(0, 200)}`);
+  }
+  
+  // Ensure results array has proper error messages
+  if (result.results && Array.isArray(result.results)) {
+    result.results = result.results.map((r: any) => {
+      if (!r.success) {
+        // Check if it's an empty object
+        if (!r || Object.keys(r).length === 0) {
+          return {
+            ...r,
+            success: false,
+            message: 'Backend returned empty error object. This usually means the request payload was empty or malformed. Check that CSV data was parsed correctly.',
+            error: 'Empty error response',
+            raw: r,
+          };
+        }
+        
+        // Extract error message from various possible fields
+        const errorMsg = r.message || 
+                        r.error || 
+                        r.errorMessage || 
+                        r.details || 
+                        (r.errors && Array.isArray(r.errors) ? r.errors.join(', ') : undefined) ||
+                        (typeof r === 'string' ? r : undefined) ||
+                        (r.data && typeof r.data === 'string' ? r.data : undefined) ||
+                        (r.response && r.response.message ? r.response.message : undefined) ||
+                        'Validation failed - check required fields';
+        
+        return {
+          ...r,
+          success: false,
+          message: errorMsg,
+          raw: r,
+        };
+      }
+      return r;
+    });
+  }
+  
+  return result;
 }
 
 export async function getInventoryExpiryAlerts(
@@ -456,13 +562,41 @@ export function mapFlatRecordToPayload(
 ): Partial<CreateInventoryProduct> {
   const payload: Record<string, any> = {};
 
+  // Field name aliases/mappings
+  const fieldMappings: Record<string, string> = {
+    "cartonInStock": "cartonsInStock", // Fix singular to plural
+  };
+
   for (const [key, value] of Object.entries(record)) {
-    const coerced = coerceValue(key, value);
-    if (coerced === undefined) continue;
-    if (key.includes(".")) {
-      setNestedValue(payload, key, coerced);
+    // Skip if key is empty
+    if (!key || key.trim() === '') continue;
+    
+    // Apply field name mapping
+    const mappedKey = fieldMappings[key] || key;
+    
+    // Skip unsupported fields
+    if (mappedKey === "dozensInStock" || mappedKey === "pricePerDozen" || mappedKey === "piecesPerDozen") {
+      continue;
+    }
+    
+    const coerced = coerceValue(mappedKey, value);
+    
+    // Only skip if coerced is explicitly undefined (not 0 or empty string for required fields)
+    if (coerced === undefined) {
+      continue;
+    }
+    
+    // Map flat inventory unit fields to nested structure
+    if (mappedKey === "piecesInStock") {
+      setNestedValue(payload, "inventoryUnits.piecesInStock", coerced);
+    } else if (mappedKey === "cartonsInStock" || mappedKey === "cartonInStock") {
+      setNestedValue(payload, "inventoryUnits.cartonsInStock", coerced);
+    } else if (mappedKey === "rollsInStock") {
+      setNestedValue(payload, "inventoryUnits.rollsInStock", coerced);
+    } else if (mappedKey.includes(".")) {
+      setNestedValue(payload, mappedKey, coerced);
     } else {
-      payload[key] = coerced;
+      payload[mappedKey] = coerced;
     }
   }
 
