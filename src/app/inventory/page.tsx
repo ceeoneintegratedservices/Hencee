@@ -2362,6 +2362,44 @@ export default function InventoryPage() {
                   Download minimal template (required fields only)
                 </a>
               </div>
+
+              {/* Warehouse IDs Section */}
+              <div className="mt-4 border-t border-gray-200 pt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-semibold text-gray-900">Available Warehouse IDs</h4>
+                  <span className="text-xs text-gray-500">Click to copy ID</span>
+                </div>
+                {warehouses.length === 0 ? (
+                  <p className="text-xs text-gray-500">No warehouses available. Please create a warehouse first.</p>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {warehouses.map((warehouse) => (
+                      <div
+                        key={warehouse.id}
+                        className="flex items-center justify-between p-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors group"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-900 truncate">{warehouse.name}</p>
+                          <p className="text-xs text-gray-500 font-mono truncate">{warehouse.id}</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(warehouse.id);
+                            showSuccess('Copied', `Warehouse ID copied: ${warehouse.id}`);
+                          }}
+                          className="ml-2 px-2 py-1 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded border border-blue-200 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Copy warehouse ID"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-gray-500 mt-2">
+                  Use these warehouse IDs in the <code className="bg-gray-100 px-1 rounded">warehouseId</code> column of your CSV file.
+                </p>
+              </div>
             </div>
 
             {importError && (
