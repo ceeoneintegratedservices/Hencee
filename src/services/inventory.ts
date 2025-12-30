@@ -71,6 +71,7 @@ export interface InventoryProduct {
   inventoryUnits?: InventoryUnits;
   productSize?: string;
   productSizeUnit?: string;
+  packSize?: string;
   expiryDate?: string;
   expiryStatus?: "expired" | "critical" | "warning" | "healthy";
   reorderPoint?: number;
@@ -115,12 +116,15 @@ export interface BaseInventoryPayload {
   pricePerPiece?: number;
   pricePerCarton?: number;
   pricePerRoll?: number;
+  pricePerDozen?: number;
   piecesPerCarton?: number;
   piecesPerRoll?: number;
+  piecesPerDozen?: number;
   inventoryUnits?: InventoryUnitsPayload;
   expiryDate: string;
   productSize?: string;
   productSizeUnit?: string;
+  packSize?: string;
   reorderPoint?: number;
   isOutsourced?: boolean;
   outsourcedDetails?: OutsourcedDetails;
@@ -565,6 +569,16 @@ export function mapFlatRecordToPayload(
   // Field name aliases/mappings
   const fieldMappings: Record<string, string> = {
     "cartonInStock": "cartonsInStock", // Fix singular to plural
+    "unitOfSale": "packSize",
+    "packaging": "packSize",
+    "packType": "packSize",
+    "dispensingUnit": "packSize",
+    "salesUnit": "packSize",
+    "dosageStrength": "productSize", // Alternative name for productSize
+    "strength": "productSize",
+    "dosage": "productSize",
+    "concentration": "productSize",
+    "potency": "productSize",
   };
 
   for (const [key, value] of Object.entries(record)) {
@@ -575,7 +589,7 @@ export function mapFlatRecordToPayload(
     const mappedKey = fieldMappings[key] || key;
     
     // Skip unsupported fields
-    if (mappedKey === "dozensInStock" || mappedKey === "pricePerDozen" || mappedKey === "piecesPerDozen") {
+    if (mappedKey === "dozensInStock") {
       continue;
     }
     

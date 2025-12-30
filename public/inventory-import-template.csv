@@ -1,5 +1,5 @@
-name,sku,categoryName,warehouseId,purchasePrice,sellingPrice,expiryDate,barcode,description,pricePerPiece,pricePerCarton,pricePerRoll,piecesPerCarton,piecesPerRoll,piecesInStock,cartonsInStock,rollsInStock,productSize,productSizeUnit,reorderPoint,expiryAlertThreshold,isOutsourced,expiryWarehouseId
-Ibuprofen,AC-IBU-400,Tablets,9b40f144-e2e8-4d04-8ce9-598d396c2257,25000,35000,3/5/2026,1234567890123,AC-IBU 400mg Tablets,700,35000,7000,50,10,100,5,15,400,mg,7,40,false,
-Piroxicam,PIRO-CAP-20,Capsules,9b40f144-e2e8-4d04-8ce9-598d396c2257,25000,35000,3/5/2026,1234567890124,Fexidoncap Capsule 20mg,700,35000,7000,50,10,100,5,15,20,mg,7,40,false,
-Paracetamol,PARA-500,Tablets,9b40f144-e2e8-4d04-8ce9-598d396c2257,15000,25000,6/15/2026,1234567890125,Paracetamol 500mg,500,25000,5000,50,10,200,10,20,500,mg,10,30,false,
-Amoxicillin,AMOX-250,Capsules,9b40f144-e2e8-4d04-8ce9-598d396c2257,30000,45000,12/31/2026,1234567890126,Amoxicillin 250mg Capsules,900,45000,9000,50,10,150,8,12,250,mg,5,45,false,
+name,sku,categoryName,warehouseId,purchasePrice,sellingPrice,expiryDate,barcode,description,pricePerPiece,pricePerCarton,pricePerRoll,pricePerDozen,piecesPerCarton,piecesPerRoll,piecesPerDozen,piecesInStock,cartonsInStock,rollsInStock,productSize,productSizeUnit,packSize,reorderPoint,expiryAlertThreshold,isOutsourced,expiryWarehouseId
+Ibuprofen,AC-IBU-400,Tablets,9b40f144-e2e8-4d04-8ce9-598d396c2257,25000,35000,3/5/2026,1234567890123,AC-IBU 400mg Tablets,700,35000,7000,8400,50,10,12,100,5,15,400,mg,Tablet,7,40,false,
+Piroxicam,PIRO-CAP-20,Capsules,9b40f144-e2e8-4d04-8ce9-598d396c2257,25000,35000,3/5/2026,1234567890124,Fexidoncap Capsule 20mg,700,35000,7000,8400,50,10,12,100,5,15,20,mg,Capsule,7,40,false,
+Paracetamol,PARA-500,Tablets,9b40f144-e2e8-4d04-8ce9-598d396c2257,15000,25000,6/15/2026,1234567890125,Paracetamol 500mg,500,25000,5000,6000,50,10,12,200,10,20,500,mg,Tablet,10,30,false,
+Amoxicillin,AMOX-250,Capsules,9b40f144-e2e8-4d04-8ce9-598d396c2257,30000,45000,12/31/2026,1234567890126,Amoxicillin 250mg Capsules,900,45000,9000,10800,50,10,12,150,8,12,250,mg,Capsule,5,45,false,

@@ -26,14 +26,17 @@ These fields can be left empty (but column headers must be present):
 - **description** - Product description
 - **pricePerPiece** - Price per individual piece in cents
 - **pricePerCarton** - Price per carton in cents
-- **pricePerRoll** - Price per roll in cents
+- **pricePerRoll** - Price per roll in cents (separate from dozen price)
+- **pricePerDozen** - Price per dozen in cents (separate from roll price)
 - **piecesPerCarton** - Number of pieces in one carton
 - **piecesPerRoll** - Number of pieces in one roll
+- **piecesPerDozen** - Number of pieces in one dozen (typically 12)
 - **piecesInStock** - Current stock in pieces
 - **cartonsInStock** - Current stock in cartons
 - **rollsInStock** - Current stock in rolls
-- **productSize** - Product size (e.g., "400", "500")
-- **productSizeUnit** - Unit of measurement (e.g., "mg", "ml")
+- **productSize** - Dosage strength amount (e.g., "400", "500", "20")
+- **productSizeUnit** - Dosage strength unit (e.g., "mg", "ml", "g", "mcg", "IU", "mg/5ml")
+- **packSize** - Pack size / Unit of sale (e.g., "Tablet", "Capsule", "Sachet", "Bottle", "Strip", "Vial", "Box", "Pack")
 - **reorderPoint** - Minimum stock level before reordering
 - **expiryAlertThreshold** - Days before expiry to show alert
 - **isOutsourced** - "true" or "false" (or "1"/"0", "yes"/"no")
@@ -47,6 +50,26 @@ The frontend automatically maps some fields:
 - `piecesInStock` → `inventoryUnits.piecesInStock` (nested structure)
 - `cartonsInStock` → `inventoryUnits.cartonsInStock` (nested structure)
 - `rollsInStock` → `inventoryUnits.rollsInStock` (nested structure)
+
+### Field Aliases (Alternative Names)
+
+The system accepts alternative field names for convenience:
+
+**Pack Size / Unit of Sale:**
+- `packSize` (recommended)
+- `unitOfSale`
+- `packaging`
+- `packType`
+- `dispensingUnit`
+- `salesUnit`
+
+**Dosage Strength:**
+- `productSize` (recommended)
+- `dosageStrength`
+- `strength`
+- `dosage`
+- `concentration`
+- `potency`
 
 ## Date Format
 
@@ -78,8 +101,8 @@ You must use a valid warehouse UUID. To find available warehouses:
 ## Example CSV Row
 
 ```csv
-name,sku,categoryName,warehouseId,purchasePrice,sellingPrice,expiryDate,barcode,description,pricePerPiece,pricePerCarton,pricePerRoll,piecesPerCarton,piecesPerRoll,piecesInStock,cartonsInStock,rollsInStock,productSize,productSizeUnit,reorderPoint,expiryAlertThreshold,isOutsourced,expiryWarehouseId
-Ibuprofen,AC-IBU-400,Tablets,9b40f144-e2e8-4d04-8ce9-598d396c2257,25000,35000,3/5/2026,1234567890123,AC-IBU 400mg Tablets,700,35000,7000,50,10,100,5,15,400,mg,7,40,false,
+name,sku,categoryName,warehouseId,purchasePrice,sellingPrice,expiryDate,barcode,description,pricePerPiece,pricePerCarton,pricePerRoll,piecesPerCarton,piecesPerRoll,piecesInStock,cartonsInStock,rollsInStock,productSize,productSizeUnit,packSize,reorderPoint,expiryAlertThreshold,isOutsourced,expiryWarehouseId
+Ibuprofen,AC-IBU-400,Tablets,9b40f144-e2e8-4d04-8ce9-598d396c2257,25000,35000,3/5/2026,1234567890123,AC-IBU 400mg Tablets,700,35000,7000,50,10,100,5,15,400,mg,Tablet,7,40,false,
 ```
 
 ## Common Issues and Solutions
@@ -120,7 +143,9 @@ Ibuprofen,AC-IBU-400,Tablets,9b40f144-e2e8-4d04-8ce9-598d396c2257,25000,35000,3/
 
 ## Notes
 
-- Fields marked as "unsupported" (`dozensInStock`, `pricePerDozen`, `piecesPerDozen`) will be ignored
+- Fields marked as "unsupported" (`dozensInStock`) will be ignored
+- `pricePerRoll` and `pricePerDozen` are separate fields - you can set different prices for rolls vs dozens
+- `piecesPerRoll` and `piecesPerDozen` are separate fields - rolls and dozens can contain different quantities
 - Empty optional fields can be left blank (just leave the cell empty)
 - The system automatically handles BOM characters (common in Excel exports)
 - All numeric fields are parsed as numbers (no currency symbols)

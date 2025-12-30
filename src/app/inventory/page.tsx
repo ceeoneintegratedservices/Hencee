@@ -2345,6 +2345,9 @@ export default function InventoryPage() {
               <p className="text-xs text-gray-500 mt-1">
                 Required columns: name, sku, categoryName, warehouseId, purchasePrice, sellingPrice, expiryDate.
               </p>
+              <p className="text-xs text-gray-500 mt-1">
+                Optional: productSize, productSizeUnit (dosage strength), packSize (unit of sale: Tablet, Capsule, etc.)
+              </p>
               <div className="mt-2 flex items-center gap-2">
                 <a
                   href="/inventory-import-template.csv"

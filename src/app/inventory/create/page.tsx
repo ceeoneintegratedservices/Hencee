@@ -43,6 +43,7 @@ interface FormData {
   piecesPerRoll: string;
   productSize: string;
   productSizeUnit: string;
+  packSize: string;
   expiryDate: string;
   piecesInStock: string;
   cartonsInStock: string;
@@ -76,7 +77,8 @@ const DEFAULT_FORM: FormData = {
   piecesPerRoll: '',
   productSize: '',
   productSizeUnit: 'mg',
-    expiryDate: '',
+  packSize: '',
+  expiryDate: '',
   piecesInStock: '',
   cartonsInStock: '',
   rollsInStock: '',
@@ -270,6 +272,7 @@ export default function CreateInventoryPage() {
       expiryDate: formData.expiryDate,
       productSize: formData.productSize.trim() || undefined,
       productSizeUnit: formData.productSizeUnit,
+      packSize: formData.packSize.trim() || undefined,
       reorderPoint: numberValue(formData.reorderPoint),
       expiryAlertThreshold: numberValue(formData.expiryAlertThreshold),
       isOutsourced: formData.isOutsourced,
@@ -411,6 +414,67 @@ export default function CreateInventoryPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   />
                 </div>
+                <section className="mt-10">
+                <div className="flex flex-col gap-2 mb-6">
+                  <h2 className="text-xl font-semibold text-gray-900">Pharma specifics</h2>
+                  <p className="text-sm text-gray-500">
+                    Set the size and expiry so the dashboard can alert the team before stock spoils.
+                  </p>
+                      </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Dosage Strength (Amount)
+                </label>
+                      <input
+                      type="text"
+                      value={formData.productSize}
+                      onChange={(e) => updateForm('productSize', e.target.value)}
+                      placeholder="500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                      />
+                    </div>
+                  <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Dosage Unit
+                </label>
+                    <input
+                      type="text"
+                      value={formData.productSizeUnit}
+                      onChange={(e) => updateForm('productSizeUnit', e.target.value)}
+                      placeholder="mg, ml, g, mcg, IU, mg/5ml, etc."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">e.g., mg, ml, g, mcg, IU, mg/5ml</p>
+                    </div>
+                  <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Pack Size / Unit of Sale
+                </label>
+                      <input
+                      type="text"
+                      value={formData.packSize}
+                      onChange={(e) => updateForm('packSize', e.target.value)}
+                      placeholder="Tablet, Capsule, Sachet, etc."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">e.g., Tablet, Capsule, Sachet, Bottle, Strip</p>
+                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Expiry date <span className="text-red-500">*</span>
+                    </label>
+                      <input
+                      type="date"
+                      value={formData.expiryDate}
+                      onChange={(e) => updateForm('expiryDate', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                      required
+                      />
+                    </div>
+                </div>
+              </section>
+
               </section>
 
               <section>
@@ -762,57 +826,7 @@ export default function CreateInventoryPage() {
                   </div>
               </section>
 
-              <section>
-                <div className="flex flex-col gap-2 mb-6">
-                  <h2 className="text-xl font-semibold text-gray-900">Pharma specifics</h2>
-                  <p className="text-sm text-gray-500">
-                    Set the size and expiry so the dashboard can alert the team before stock spoils.
-                  </p>
-                      </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Product size
-                </label>
-                      <input
-                      type="text"
-                      value={formData.productSize}
-                      onChange={(e) => updateForm('productSize', e.target.value)}
-                      placeholder="625"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
-                      />
-                    </div>
-                  <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Size unit
-                </label>
-                    <select
-                      value={formData.productSizeUnit}
-                      onChange={(e) => updateForm('productSizeUnit', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
-                    >
-                      {SIZE_UNITS.map((unit) => (
-                        <option key={unit} value={unit}>
-                          {unit}
-                        </option>
-                      ))}
-                    </select>
-                    </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Expiry date <span className="text-red-500">*</span>
-                    </label>
-                      <input
-                      type="date"
-                      value={formData.expiryDate}
-                      onChange={(e) => updateForm('expiryDate', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
-                      required
-                      />
-                    </div>
-                </div>
-              </section>
-
+            
               <section>
                 <div className="flex flex-col gap-2 mb-6">
                   <h2 className="text-xl font-semibold text-gray-900">Outsourcing</h2>
