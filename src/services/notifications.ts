@@ -103,10 +103,30 @@ export function filterImportantActivities(activities: Activity[]): Activity[] {
 /**
  * Format ISO 8601 timestamp to relative time (e.g., "2 minutes ago")
  */
-export function formatRelativeTime(timestamp: string): string {
+export function formatRelativeTime(timestamp: string | undefined): string {
+  if (!timestamp) {
+    return 'Unknown time';
+  }
+
   const now = new Date();
-  const time = new Date(timestamp);
+  let time: Date;
+  
+  try {
+    time = new Date(timestamp);
+    // Check if date is valid
+    if (isNaN(time.getTime())) {
+      return 'Invalid date';
+    }
+  } catch (error) {
+    return 'Invalid date';
+  }
+
   const diffInSeconds = Math.floor((now.getTime() - time.getTime()) / 1000);
+
+  // Handle future dates
+  if (diffInSeconds < 0) {
+    return 'Just now';
+  }
 
   if (diffInSeconds < 60) {
     return 'Just now';
@@ -264,9 +284,20 @@ function activityToNotification(activity: Activity): Notification {
   const timeStr = formatRelativeTime(timestamp);
 
   // Mark as unread if activity is from last 24 hours
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  const activityDate = new Date(timestamp);
-  const unread = activityDate > oneDayAgo;
+  // Default to unread if timestamp is missing or invalid
+  let unread = true;
+  if (timestamp) {
+    try {
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const activityDate = new Date(timestamp);
+      if (!isNaN(activityDate.getTime())) {
+        unread = activityDate > oneDayAgo;
+      }
+    } catch (error) {
+      // If date parsing fails, default to unread
+      unread = true;
+    }
+  }
 
   return {
     id: activity.id,

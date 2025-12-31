@@ -23,6 +23,22 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
   const permissionsRef = useRef<HTMLDivElement>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  
+  // Load read notification IDs from localStorage
+  const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('readNotificationIds');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    }
+    return new Set();
+  });
+
+  // Save read notification IDs to localStorage whenever they change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('readNotificationIds', JSON.stringify(Array.from(readNotificationIds)));
+    }
+  }, [readNotificationIds]);
 
   useEffect(() => {
     if (isInitialized && user) {
@@ -232,9 +248,9 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
               className="w-5 h-5 object-contain" 
             />
             {/* Notification Badge */}
-            {notifications.filter(n => n.unread).length > 0 && (
+            {notifications.filter(n => n.unread && !readNotificationIds.has(n.id)).length > 0 && (
               <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
-                {notifications.filter(n => n.unread).length}
+                {notifications.filter(n => n.unread && !readNotificationIds.has(n.id)).length}
               </span>
             )}
           </button>
@@ -267,43 +283,54 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
                     <p className="text-sm">No activities yet</p>
                   </div>
                 ) : (
-                  notifications.map((notification) => (
-                    <div 
-                      key={notification.id} 
-                      className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer ${
-                        notification.unread ? 'bg-blue-50' : ''
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                          notification.type === 'order' ? 'bg-green-500' :
-                          notification.type === 'inventory' ? 'bg-orange-500' :
-                          notification.type === 'payment' ? 'bg-blue-500' :
-                          notification.type === 'customer' ? 'bg-purple-500' :
-                          notification.type === 'security' ? 'bg-red-500' :
-                          notification.type === 'user' ? 'bg-indigo-500' :
-                          notification.type === 'expense' ? 'bg-yellow-500' :
-                          'bg-gray-500'
-                        }`}></div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-sm font-medium text-gray-900 truncate">
-                              {notification.title}
-                            </h4>
-                            {notification.unread && (
-                              <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
-                            )}
+                  notifications.map((notification) => {
+                    const isRead = readNotificationIds.has(notification.id);
+                    const isUnread = notification.unread && !isRead;
+                    
+                    return (
+                      <div 
+                        key={notification.id} 
+                        onClick={() => {
+                          // Mark as read when clicked
+                          if (!isRead) {
+                            setReadNotificationIds(prev => new Set([...prev, notification.id]));
+                          }
+                        }}
+                        className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
+                          isUnread ? 'bg-blue-50' : ''
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
+                            notification.type === 'order' ? 'bg-green-500' :
+                            notification.type === 'inventory' ? 'bg-orange-500' :
+                            notification.type === 'payment' ? 'bg-blue-500' :
+                            notification.type === 'customer' ? 'bg-purple-500' :
+                            notification.type === 'security' ? 'bg-red-500' :
+                            notification.type === 'user' ? 'bg-indigo-500' :
+                            notification.type === 'expense' ? 'bg-yellow-500' :
+                            'bg-gray-500'
+                          }`}></div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between">
+                              <h4 className="text-sm font-medium text-gray-900 truncate">
+                                {notification.title}
+                              </h4>
+                              {isUnread && (
+                                <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                              {notification.message}
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              {notification.time}
+                            </p>
                           </div>
-                          <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                            {notification.message}
-                          </p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            {notification.time}
-                          </p>
                         </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
               

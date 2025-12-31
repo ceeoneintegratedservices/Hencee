@@ -43,7 +43,6 @@ interface FormData {
   piecesPerRoll: string;
   productSize: string;
   productSizeUnit: string;
-  packSize: string;
   expiryDate: string;
   piecesInStock: string;
   cartonsInStock: string;
@@ -77,7 +76,6 @@ const DEFAULT_FORM: FormData = {
   piecesPerRoll: '',
   productSize: '',
   productSizeUnit: 'mg',
-  packSize: '',
   expiryDate: '',
   piecesInStock: '',
   cartonsInStock: '',
@@ -272,7 +270,6 @@ export default function CreateInventoryPage() {
       expiryDate: formData.expiryDate,
       productSize: formData.productSize.trim() || undefined,
       productSizeUnit: formData.productSizeUnit,
-      packSize: formData.packSize.trim() || undefined,
       reorderPoint: numberValue(formData.reorderPoint),
       expiryAlertThreshold: numberValue(formData.expiryAlertThreshold),
       isOutsourced: formData.isOutsourced,
@@ -421,7 +418,7 @@ export default function CreateInventoryPage() {
                     Set the size and expiry so the dashboard can alert the team before stock spoils.
                   </p>
                       </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                       Dosage Strength (Amount)
@@ -446,19 +443,6 @@ export default function CreateInventoryPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
                     />
                     <p className="text-xs text-gray-500 mt-1">e.g., mg, ml, g, mcg, IU, mg/5ml</p>
-                    </div>
-                  <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Pack Size / Unit of Sale
-                </label>
-                      <input
-                      type="text"
-                      value={formData.packSize}
-                      onChange={(e) => updateForm('packSize', e.target.value)}
-                      placeholder="Tablet, Capsule, Sachet, etc."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">e.g., Tablet, Capsule, Sachet, Bottle, Strip</p>
                     </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">

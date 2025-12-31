@@ -32,6 +32,7 @@ function ViewInventoryContent() {
   const [inventoryItem, setInventoryItem] = useState<InventoryItem | null>(null);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [warehouseInfo, setWarehouseInfo] = useState<{ id: string; name: string } | null>(null);
+  const [productDetails, setProductDetails] = useState<any>(null); // Store full product data
   
   // UI states
   const [searchQuery, setSearchQuery] = useState('');
@@ -88,6 +89,9 @@ function ViewInventoryContent() {
           showError('Error', 'Product not found');
           return;
         }
+        
+        // Store full product details for display
+        setProductDetails(product);
         
         const piecesInStock =
           product.inventoryUnits?.piecesInStock ?? product.quantity ?? 0;
@@ -574,6 +578,62 @@ function ViewInventoryContent() {
               </div>
             </div>
           </div>
+
+          {/* Pricing Details Section */}
+          {productDetails && (productDetails.pricePerRoll || productDetails.pricePerDozen || productDetails.pricePerCarton || productDetails.pricePerPiece) && (
+            <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Pricing Details</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {productDetails.pricePerPiece && (
+                  <div className="border border-gray-200 rounded-lg p-4">
+                    <p className="text-sm text-gray-600 mb-1">Price per Piece</p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {InventoryDataService.formatCurrency(productDetails.pricePerPiece)}
+                    </p>
+                  </div>
+                )}
+                {productDetails.pricePerCarton && (
+                  <div className="border border-gray-200 rounded-lg p-4">
+                    <p className="text-sm text-gray-600 mb-1">Price per Carton</p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {InventoryDataService.formatCurrency(productDetails.pricePerCarton)}
+                    </p>
+                    {productDetails.piecesPerCarton && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        ({productDetails.piecesPerCarton} pieces)
+                      </p>
+                    )}
+                  </div>
+                )}
+                {productDetails.pricePerRoll && (
+                  <div className="border border-gray-200 rounded-lg p-4">
+                    <p className="text-sm text-gray-600 mb-1">Price per Roll</p>
+                    <p className="text-lg font-semibold text-gray-900">
+                      {InventoryDataService.formatCurrency(productDetails.pricePerRoll)}
+                    </p>
+                    {productDetails.piecesPerRoll && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        ({productDetails.piecesPerRoll} pieces)
+                      </p>
+                    )}
+                  </div>
+                )}
+                {productDetails.pricePerDozen && (
+                  <div className="border border-gray-200 rounded-lg p-4 bg-blue-50">
+                    <p className="text-sm text-gray-600 mb-1">Price per Dozen</p>
+                    <p className="text-lg font-semibold text-blue-900">
+                      {InventoryDataService.formatCurrency(productDetails.pricePerDozen)}
+                    </p>
+                    {productDetails.piecesPerDozen && (
+                      <p className="text-xs text-blue-600 mt-1 font-medium">
+                        ({productDetails.piecesPerDozen} pieces)
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Summary Statistics */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
