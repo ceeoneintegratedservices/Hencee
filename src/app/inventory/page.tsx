@@ -242,6 +242,8 @@ export default function InventoryPage() {
   const [sortBy, setSortBy] = useState('dateAdded');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [selectedTimePeriod, setSelectedTimePeriod] = useState<'This Week' | 'This Month' | 'All Time'>('This Week');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   
   // Dropdown states
   const [showStatusDropdown, setShowStatusDropdown] = useState<number | null>(null);
@@ -432,6 +434,8 @@ export default function InventoryPage() {
     filtered = InventoryDataService.sortItems(filtered, sortBy, sortOrder);
     
     setFilteredItems(filtered);
+    // Reset to page 1 when filters change
+    setCurrentPage(1);
   }, [inventoryItems, searchQuery, statusFilter, categoryFilter, alphabeticalFilter, priceFilter, sortBy, sortOrder]);
 
   // Click outside handlers
@@ -1896,7 +1900,11 @@ export default function InventoryPage() {
                       </td>
                     </tr>
                   ) : (
-                    filteredItems.slice(0, 10).map((item, index) => (
+                    (() => {
+                      const startIndex = (currentPage - 1) * itemsPerPage;
+                      const endIndex = startIndex + itemsPerPage;
+                      return filteredItems.slice(startIndex, endIndex);
+                    })().map((item, index) => (
                     <tr key={item.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => router.push(`/inventory/view?id=${item.id}`)}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <input type="checkbox" className="rounded border-gray-300" onClick={(e) => e.stopPropagation()} />
@@ -2067,7 +2075,11 @@ export default function InventoryPage() {
                   </div>
                 </div>
               ) : (
-                filteredItems.slice(0, 10).map((item, index) => (
+                (() => {
+                  const startIndex = (currentPage - 1) * itemsPerPage;
+                  const endIndex = startIndex + itemsPerPage;
+                  return filteredItems.slice(startIndex, endIndex);
+                })().map((item, index) => (
                 <div key={item.id} className="p-4 border-b border-gray-200 cursor-pointer hover:bg-gray-50" onClick={() => router.push(`/inventory/view?id=${item.id}`)}>
                   <div className="flex items-start gap-3">
                     <input type="checkbox" className="mt-1 rounded border-gray-300" onClick={(e) => e.stopPropagation()} />
@@ -2207,23 +2219,44 @@ export default function InventoryPage() {
             <div className="px-6 py-4 border-t border-gray-200">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="flex items-center gap-4">
-                  <select className="border border-gray-300 rounded-lg px-3 py-1 text-sm">
-                    <option>10 Items per page</option>
-                    <option>25 Items per page</option>
-                    <option>50 Items per page</option>
+                  <select 
+                    className="border border-gray-300 rounded-lg px-3 py-1 text-sm"
+                    value={itemsPerPage}
+                    onChange={(e) => {
+                      setItemsPerPage(Number(e.target.value));
+                      setCurrentPage(1); // Reset to first page when changing items per page
+                    }}
+                  >
+                    <option value={10}>10 Items per page</option>
+                    <option value={25}>25 Items per page</option>
+                    <option value={50}>50 Items per page</option>
                   </select>
                   <span className="text-sm text-gray-700">
-                    1-10 of {filteredItems.length} items
+                    {(() => {
+                      const startIndex = (currentPage - 1) * itemsPerPage + 1;
+                      const endIndex = Math.min(currentPage * itemsPerPage, filteredItems.length);
+                      return `${startIndex}-${endIndex} of ${filteredItems.length} items`;
+                    })()}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-700">1 of 44 pages</span>
-                  <button className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                  <span className="text-sm text-gray-700">
+                    {currentPage} of {Math.ceil(filteredItems.length / itemsPerPage) || 1} pages
+                  </span>
+                  <button 
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
                     <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                     </svg>
                   </button>
-                  <button className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                  <button 
+                    onClick={() => setCurrentPage(prev => Math.min(Math.ceil(filteredItems.length / itemsPerPage) || 1, prev + 1))}
+                    disabled={currentPage >= Math.ceil(filteredItems.length / itemsPerPage)}
+                    className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
                     <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>

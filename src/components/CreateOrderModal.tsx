@@ -8,6 +8,9 @@ import { listCustomers, createCustomer } from "@/services/customers";
 import { listProducts } from "@/services/products";
 import { CreateCustomerBody } from "@/types/customers";
 import { useCloudinaryUpload } from '@/hooks/useCloudinaryUpload';
+import { createUser } from "@/services/users";
+import { listRoles } from "@/services/permissions";
+import { useNotifications } from "@/components/Notification";
 
 interface CreateOrderModalProps {
   isOpen: boolean;
@@ -38,6 +41,8 @@ interface OrderItem {
   unitType: SaleUnitType;
   discountAmount: number;
   warehouseNumber?: string;
+  productSize?: string;
+  productSizeUnit?: string;
 }
 
 interface PaymentFormState {
@@ -61,6 +66,8 @@ interface Product {
   stock?: number;
   quantity?: number;
   description?: string;
+  productSize?: string;
+  productSizeUnit?: string;
 }
 
 interface Customer {
@@ -134,6 +141,16 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [customerBalance, setCustomerBalance] = useState<number | null>(null);
   const { uploadImage, uploadProgress } = useCloudinaryUpload();
+  const { showSuccess, showError } = useNotifications();
+  const [showCreateAccountModal, setShowCreateAccountModal] = useState(false);
+  const [createAccountForm, setCreateAccountForm] = useState({
+    email: "",
+    password: "",
+    confirmPassword: "",
+  });
+  const [creatingAccount, setCreatingAccount] = useState(false);
+  const [roles, setRoles] = useState<Array<{ id: string; name: string; roleType?: string }>>([]);
+  const [selectedRoleId, setSelectedRoleId] = useState<string>("");
   const [paymentForm, setPaymentForm] = useState<PaymentFormState>({
     method: "",
     status: "PENDING",
@@ -234,6 +251,8 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
           stock: Number(product.stock || product.quantity || 0),
           quantity: Number(product.quantity || product.stock || 0),
           description: String(product.description || ''),
+          productSize: product.productSize ? String(product.productSize) : undefined,
+          productSizeUnit: product.productSizeUnit ? String(product.productSizeUnit) : undefined,
         }));
         
         setProducts(mappedProducts);
@@ -248,6 +267,35 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
     };
 
     fetchProducts();
+  }, [isOpen]);
+
+  // Fetch roles for customer account creation
+  useEffect(() => {
+    const fetchRoles = async () => {
+      try {
+        const rolesList = await listRoles();
+        // Filter for customer-related roles or viewer role
+        const customerRoles = rolesList.filter((role: any) => 
+          role.roleType?.toLowerCase().includes('customer') || 
+          role.roleType?.toLowerCase().includes('viewer') ||
+          role.name?.toLowerCase().includes('customer') ||
+          role.name?.toLowerCase().includes('viewer')
+        );
+        if (customerRoles.length > 0) {
+          setRoles(customerRoles);
+          setSelectedRoleId(customerRoles[0].id);
+        } else if (rolesList.length > 0) {
+          // Fallback to first role if no customer role found
+          setRoles(rolesList);
+          setSelectedRoleId(rolesList[0].id);
+        }
+      } catch (error) {
+        console.error("Error fetching roles:", error);
+      }
+    };
+    if (isOpen) {
+      fetchRoles();
+    }
   }, [isOpen]);
 
   useEffect(() => {
@@ -447,6 +495,67 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
     }
   };
 
+  // Create customer account
+  const handleCreateCustomerAccount = async () => {
+    if (!explicitCustomerId && !orderData.customer) {
+      showError('Error', 'Please select a customer first');
+      return;
+    }
+
+    if (!createAccountForm.email || !createAccountForm.password) {
+      showError('Error', 'Please fill in email and password');
+      return;
+    }
+
+    if (createAccountForm.password !== createAccountForm.confirmPassword) {
+      showError('Error', 'Passwords do not match');
+      return;
+    }
+
+    if (!selectedRoleId) {
+      showError('Error', 'Please select a role');
+      return;
+    }
+
+    // Get customer details
+    let customerEmail = createAccountForm.email;
+    let customerName = orderData.customer;
+    let customerPhone = "";
+
+    // Try to get customer details from the selected customer
+    if (explicitCustomerId) {
+      try {
+        const customer = customers.find(c => c.id === explicitCustomerId);
+        if (customer) {
+          customerName = customer.name;
+          customerEmail = customer.email || createAccountForm.email;
+          customerPhone = customer.phone || "";
+        }
+      } catch (error) {
+        console.error("Error fetching customer details:", error);
+      }
+    }
+
+    setCreatingAccount(true);
+    try {
+      await createUser({
+        email: customerEmail,
+        name: customerName,
+        phone: customerPhone || "0000000000", // Default phone if not available
+        password: createAccountForm.password,
+        roleId: selectedRoleId,
+      });
+
+      showSuccess('Success', 'Customer account created successfully! Login credentials have been set up.');
+      setShowCreateAccountModal(false);
+      setCreateAccountForm({ email: "", password: "", confirmPassword: "" });
+    } catch (error: any) {
+      showError('Error', error.message || 'Failed to create customer account');
+    } finally {
+      setCreatingAccount(false);
+    }
+  };
+
   // Generate invoice HTML for printing
   const generateInvoiceHTML = () => {
     const currentDate = new Date().toLocaleDateString();
@@ -460,9 +569,19 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
       ? formatAmount(Number(paymentForm.amount))
       : formatAmount(calculateTotal());
     
-    // Show bank transfer transaction number if payment method is bank transfer
-    const bankTransferInfo = paymentForm.method === "bank_transfer" && paymentForm.transactionReference
-      ? `<p><strong>Transaction Reference:</strong> ${paymentForm.transactionReference}</p>`
+    // Show bank transfer details if payment method is bank transfer
+    const isBankTransfer = paymentForm.method === "bank_transfer";
+    const bankTransferInfo = isBankTransfer
+      ? (() => {
+          const parts = [];
+          if (paymentForm.senderName && paymentForm.senderName.trim()) {
+            parts.push(`<p><strong>Sender Name:</strong> ${paymentForm.senderName}</p>`);
+          }
+          if (paymentForm.transactionReference && paymentForm.transactionReference.trim()) {
+            parts.push(`<p><strong>Transaction Reference:</strong> ${paymentForm.transactionReference}</p>`);
+          }
+          return parts.join('');
+        })()
       : '';
     
     return `
@@ -636,7 +755,10 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
             <tbody>
               ${orderData.items.map(item => `
                 <tr>
-                  <td><strong>${item.name}</strong></td>
+                  <td>
+                    <strong>${item.name}</strong>
+                    ${item.productSize && item.productSizeUnit ? `<br><span style="font-size: 0.85em; color: #666;">${item.productSize} ${item.productSizeUnit}</span>` : ''}
+                  </td>
                   <td>${item.warehouseNumber || 'N/A'}</td>
                   <td>${item.quantity}</td>
                   <td>${formatAmount(item.unitPrice)}</td>
@@ -702,6 +824,8 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
         total: calculateLineTotal(productPrice, 0, 1),
         unitType: defaultUnitType,
         discountAmount: 0,
+        productSize: product.productSize,
+        productSizeUnit: product.productSizeUnit,
       };
       setOrderData(prev => ({ ...prev, items: [...prev.items, newItem] }));
     }
@@ -950,6 +1074,16 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                     <p className="text-gray-600">Payment Method: {getPaymentMethodLabel(paymentForm.method || orderData.paymentType)}</p>
                     <p className="text-gray-600">Payment Status: {getPaymentStatusLabel(paymentForm.status)}</p>
                     <p className="text-gray-600">Amount: {paymentForm.amount && paymentForm.amount.trim() !== '' ? formatAmount(Number(paymentForm.amount)) : formatAmount(calculateTotal())}</p>
+                    {paymentForm.method === "bank_transfer" && (
+                      <>
+                        {paymentForm.senderName && paymentForm.senderName.trim() && (
+                          <p className="text-gray-600">Sender Name: {paymentForm.senderName}</p>
+                        )}
+                        {paymentForm.transactionReference && paymentForm.transactionReference.trim() && (
+                          <p className="text-gray-600">Transaction Reference: {paymentForm.transactionReference}</p>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
                 
@@ -971,7 +1105,14 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                     <tbody>
                       {orderData.items.map((item, index) => (
                         <tr key={index}>
-                          <td className="border border-gray-300 px-4 py-3 text-gray-700">{item.name}</td>
+                          <td className="border border-gray-300 px-4 py-3 text-gray-700">
+                            <div>
+                              <div className="font-medium">{item.name}</div>
+                              {item.productSize && item.productSizeUnit && (
+                                <div className="text-xs text-gray-500 mt-1">{item.productSize} {item.productSizeUnit}</div>
+                              )}
+                            </div>
+                          </td>
                           <td className="border border-gray-300 px-4 py-3 text-gray-700">
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                               {item.warehouseNumber || 'N/A'}
@@ -1782,6 +1923,16 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
               </svg>
               Print Invoice
             </button>
+            <button
+              onClick={() => setShowCreateAccountModal(true)}
+              disabled={!explicitCustomerId && !orderData.customer}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-medium text-[14px] hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+              </svg>
+              Create Customer Account
+            </button>
           </div>
           <div className="flex items-center gap-4">
           <button
@@ -1805,6 +1956,116 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
           </button>
         </div>
       </div>
+
+      {/* Create Customer Account Modal */}
+      {showCreateAccountModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center px-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-gray-900">Create Customer Account</h2>
+              <button
+                onClick={() => {
+                  setShowCreateAccountModal(false);
+                  setCreateAccountForm({ email: "", password: "", confirmPassword: "" });
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Customer
+                </label>
+                <p className="text-sm text-gray-600 bg-gray-50 p-2 rounded-lg">
+                  {orderData.customer || 'No customer selected'}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  value={createAccountForm.email}
+                  onChange={(e) => setCreateAccountForm(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="customer@example.com"
+                  className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Password <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  value={createAccountForm.password}
+                  onChange={(e) => setCreateAccountForm(prev => ({ ...prev, password: e.target.value }))}
+                  placeholder="Enter password"
+                  className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Confirm Password <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  value={createAccountForm.confirmPassword}
+                  onChange={(e) => setCreateAccountForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                  placeholder="Confirm password"
+                  className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                />
+              </div>
+
+              {roles.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Role <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={selectedRoleId}
+                    onChange={(e) => setSelectedRoleId(e.target.value)}
+                    className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                  >
+                    {roles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name || role.roleType || 'Unknown Role'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3 pt-4">
+                <button
+                  onClick={handleCreateCustomerAccount}
+                  disabled={creatingAccount}
+                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg font-medium text-sm hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {creatingAccount ? 'Creating Account...' : 'Create Account'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCreateAccountModal(false);
+                    setCreateAccountForm({ email: "", password: "", confirmPassword: "" });
+                  }}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium text-sm hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </div>
     </>

@@ -35,6 +35,8 @@ export interface Order {
     orderTotal: number;
     status: "Pending" | "Processing" | "Shipped" | "Delivered" | "Cancelled" | "Completed" | "In-Progress" | "Returned" | "Damaged" | "Defective" | "Canceled";
     warehouseNumber?: string;
+    productSize?: string;
+    productSizeUnit?: string;
   }>;
   totalAmount: number;
   status: "Pending" | "Processing" | "Shipped" | "Delivered" | "Cancelled" | "Completed" | "In-Progress" | "Returned" | "Damaged" | "Defective" | "Canceled";

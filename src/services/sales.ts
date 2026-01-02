@@ -366,6 +366,16 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
       doc.setFont('helvetica', 'bold');
       doc.text(item.productName || 'Product', margin + 2, yPos);
       doc.setFont('helvetica', 'normal');
+      
+      // Add dosage size below product name if available
+      if (item.productSize && item.productSizeUnit) {
+        doc.setFontSize(8);
+        doc.setTextColor(120, 120, 120);
+        doc.text(`${item.productSize} ${item.productSizeUnit}`, margin + 2, yPos + 4);
+        doc.setFontSize(9);
+        doc.setTextColor(0, 0, 0);
+      }
+      
       doc.text(String(item.quantity || 0), margin + 80, yPos);
       doc.text(formatCurrency(item.unitPrice || 0), margin + 100, yPos);
       
@@ -377,7 +387,8 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
       doc.text(formatCurrency(item.totalPrice || 0), pageWidth - margin - 2, yPos, { align: 'right' });
       doc.setFont('helvetica', 'normal');
       
-      yPos += 8;
+      // Increase yPos more if dosage size was displayed to prevent overlap
+      yPos += item.productSize && item.productSizeUnit ? 10 : 8;
     });
   }
   
@@ -442,21 +453,28 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
       const method = payment.method || 'N/A';
       const status = payment.status || 'N/A';
       doc.text(`Method: ${method} | Status: ${status} | Amount: ${formatCurrency(payment.amount || 0)}`, margin, yPos);
+      yPos += 6;
+      
+      // Show reference if available
       if (payment.reference) {
-        yPos += 6;
         doc.text(`Reference: ${payment.reference}`, margin + 5, yPos);
+        yPos += 6;
       }
-      yPos += 8;
+      
+      // Show bank transfer specific details
+      if (method === 'BANK_TRANSFER' || method === 'bank_transfer') {
+        if (payment.senderName) {
+          doc.text(`Sender Name: ${payment.senderName}`, margin + 5, yPos);
+          yPos += 6;
+        }
+        if (payment.transactionReference) {
+          doc.text(`Transaction Reference: ${payment.transactionReference}`, margin + 5, yPos);
+          yPos += 6;
+        }
+      }
+      
+      yPos += 4; // Extra spacing between payments
     });
-    
-    // Bank transfer transaction reference if available
-    if (invoiceData.paymentSummary.some((p: any) => p.method === 'BANK_TRANSFER' && p.transactionReference)) {
-      const bankTransfer = invoiceData.paymentSummary.find((p: any) => p.method === 'BANK_TRANSFER');
-      if (bankTransfer?.transactionReference) {
-        doc.text(`Transaction Reference: ${bankTransfer.transactionReference}`, margin, yPos);
-        yPos += 8;
-      }
-    }
   }
   
   // Notes

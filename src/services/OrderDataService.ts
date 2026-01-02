@@ -9,6 +9,8 @@ export interface OrderItem {
   orderTotal: number;
   status: "Pending" | "Processing" | "Shipped" | "Delivered" | "Cancelled" | "Completed" | "In-Progress" | "Returned" | "Damaged" | "Defective" | "Canceled";
   warehouseNumber?: string;
+  productSize?: string;
+  productSizeUnit?: string;
 }
 
 export interface Customer {

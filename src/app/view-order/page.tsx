@@ -1233,7 +1233,11 @@ function ViewOrderContent() {
                           <div>
                             <span className="text-sm font-medium text-gray-900">{item.productName}</span>
                             <div className="text-xs text-gray-500 mt-1">
-                              {item.productName.split(' ')[0]} Brand
+                              {item.productSize && item.productSizeUnit ? (
+                                `${item.productSize} ${item.productSizeUnit}`
+                              ) : (
+                                `${item.productName.split(' ')[0]} Brand`
+                              )}
                             </div>
                           </div>
                         </div>
