@@ -39,8 +39,10 @@ interface FormData {
   pricePerPiece: string;
   pricePerCarton: string;
   pricePerRoll: string;
+  pricePerDozen: string;
   piecesPerCarton: string;
   piecesPerRoll: string;
+  piecesPerDozen: string;
   productSize: string;
   productSizeUnit: string;
   expiryDate: string;
@@ -72,8 +74,10 @@ const DEFAULT_FORM: FormData = {
   pricePerPiece: '',
   pricePerCarton: '',
   pricePerRoll: '',
+  pricePerDozen: '',
   piecesPerCarton: '',
   piecesPerRoll: '',
+  piecesPerDozen: '',
   productSize: '',
   productSizeUnit: 'mg',
   expiryDate: '',
@@ -173,15 +177,6 @@ export default function CreateInventoryPage() {
     });
   };
 
-  // Handle dozen checkbox for pieces per roll
-  const handleDozenCheckbox = (checked: boolean) => {
-    if (checked) {
-      updateForm('piecesPerRoll', '12');
-    } else {
-      // When unchecked, clear the field so user can enter their own value
-      updateForm('piecesPerRoll', '');
-    }
-  };
 
   const handleWarehouseFieldChange = (field: keyof typeof newWarehouse, value: string) => {
     setNewWarehouse((prev) => ({
@@ -260,8 +255,10 @@ export default function CreateInventoryPage() {
       pricePerPiece: numberValue(formData.pricePerPiece),
       pricePerCarton: numberValue(formData.pricePerCarton),
       pricePerRoll: numberValue(formData.pricePerRoll),
+      pricePerDozen: numberValue(formData.pricePerDozen),
       piecesPerCarton: numberValue(formData.piecesPerCarton),
       piecesPerRoll: numberValue(formData.piecesPerRoll),
+      piecesPerDozen: numberValue(formData.piecesPerDozen),
       inventoryUnits: {
         piecesInStock: numberValue(formData.piecesInStock) ?? 0,
         cartonsInStock: numberValue(formData.cartonsInStock) ?? 0,
@@ -676,6 +673,20 @@ export default function CreateInventoryPage() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
                     />
                 </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Price per dozen
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.pricePerDozen}
+                      onChange={(e) => updateForm('pricePerDozen', e.target.value)}
+                      placeholder="18000"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                    />
+                </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -694,25 +705,27 @@ export default function CreateInventoryPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                         Pieces per roll
                 </label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min="0"
-                            value={formData.piecesPerRoll}
-                            onChange={(e) => updateForm('piecesPerRoll', e.target.value)}
-                            placeholder="3"
-                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
-                          />
-                          <label className="flex items-center gap-1.5 px-2 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors shrink-0">
-                            <input
-                              type="checkbox"
-                              checked={formData.piecesPerRoll === '12'}
-                              onChange={(e) => handleDozenCheckbox(e.target.checked)}
-                              className="w-3.5 h-3.5 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 cursor-pointer"
-                            />
-                            <span className="text-xs text-gray-700 whitespace-nowrap">Dozen</span>
-                          </label>
-                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formData.piecesPerRoll}
+                          onChange={(e) => updateForm('piecesPerRoll', e.target.value)}
+                          placeholder="3"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                        />
+                      </div>
+                    <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Pieces per dozen
+                </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formData.piecesPerDozen}
+                          onChange={(e) => updateForm('piecesPerDozen', e.target.value)}
+                          placeholder="12"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
+                        />
                       </div>
                     </div>
                   </div>
