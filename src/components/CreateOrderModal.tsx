@@ -11,6 +11,7 @@ import { useCloudinaryUpload } from '@/hooks/useCloudinaryUpload';
 import { createUser } from "@/services/users";
 import { listRoles } from "@/services/permissions";
 import { useNotifications } from "@/components/Notification";
+import { getWarehouses, type Warehouse } from "@/services/warehouses";
 
 interface CreateOrderModalProps {
   isOpen: boolean;
@@ -41,6 +42,7 @@ interface OrderItem {
   unitType: SaleUnitType;
   discountAmount: number;
   warehouseNumber?: string;
+  warehouseName?: string;
   productSize?: string;
   productSizeUnit?: string;
 }
@@ -68,6 +70,8 @@ interface Product {
   description?: string;
   productSize?: string;
   productSizeUnit?: string;
+  warehouseId?: string;
+  warehouseName?: string;
 }
 
 interface Customer {
@@ -127,6 +131,8 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
   const [customersError, setCustomersError] = useState<string | null>(null);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsError, setProductsError] = useState<string | null>(null);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [warehouseMap, setWarehouseMap] = useState<Map<string, string>>(new Map());
   const [showInvoicePreview, setShowInvoicePreview] = useState(false);
 
   // New customer form state
@@ -236,24 +242,48 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
         const productsArray = Array.isArray(data) ? data : (data.data || []);
         
         // Debug: Log the actual structure of the API response
-        if (process.env.NODE_ENV === 'development') {
+        if (process.env.NODE_ENV === 'development' && productsArray.length > 0) {
+          console.log('=== PRODUCTS API RESPONSE DEBUG ===');
+          console.log('First product raw data:', productsArray[0]);
+          console.log('All product keys:', productsArray[0] ? Object.keys(productsArray[0]) : []);
         }
         
         // Map API response to expected structure
-        const mappedProducts = productsArray.map((product: any) => ({
-          id: String(product.id || ''),
-          name: String(product.name || 'Unknown Product'),
-          price: Number(product.price || product.sellingPrice || 0),
-          sellingPrice: Number(product.sellingPrice || product.price || 0),
-          category: typeof product.category === 'object' && product.category !== null 
-            ? ((product.category as any).name || (product.category as any).label || 'General')
-            : String(product.category || 'General'),
-          stock: Number(product.stock || product.quantity || 0),
-          quantity: Number(product.quantity || product.stock || 0),
-          description: String(product.description || ''),
-          productSize: product.productSize ? String(product.productSize) : undefined,
-          productSizeUnit: product.productSizeUnit ? String(product.productSizeUnit) : undefined,
-        }));
+        const mappedProducts = productsArray.map((product: any) => {
+          // Try multiple possible field names for dosage
+          const productSize = product.productSize || product.dosageSize || product.size || product.strength;
+          const productSizeUnit = product.productSizeUnit || product.dosageUnit || product.unit || product.sizeUnit;
+          const hasDosage = !!(productSize && productSizeUnit);
+          
+          // Log dosage availability for ALL products in development mode
+          if (process.env.NODE_ENV === 'development' && product.name) {
+            console.log(`Product: ${product.name}`, {
+              hasDosage,
+              productSize: productSize,
+              productSizeUnit: productSizeUnit,
+              'product.productSize': product.productSize,
+              'product.productSizeUnit': product.productSizeUnit,
+              rawProduct: product
+            });
+          }
+          
+          return {
+            id: String(product.id || ''),
+            name: String(product.name || 'Unknown Product'),
+            price: Number(product.price || product.sellingPrice || 0),
+            sellingPrice: Number(product.sellingPrice || product.price || 0),
+            category: typeof product.category === 'object' && product.category !== null 
+              ? ((product.category as any).name || (product.category as any).label || 'General')
+              : String(product.category || 'General'),
+            stock: Number(product.stock || product.quantity || 0),
+            quantity: Number(product.quantity || product.stock || 0),
+            description: String(product.description || ''),
+            productSize: productSize ? String(productSize) : undefined,
+            productSizeUnit: productSizeUnit ? String(productSizeUnit) : undefined,
+            warehouseId: product.warehouseId || product.warehouse?.id || undefined,
+            warehouseName: product.warehouseName || product.warehouse?.name || undefined,
+          };
+        });
         
         setProducts(mappedProducts);
       } catch (error) {
@@ -267,6 +297,28 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
     };
 
     fetchProducts();
+  }, [isOpen]);
+
+  // Fetch warehouses to map IDs to names
+  useEffect(() => {
+    const fetchWarehouses = async () => {
+      if (!isOpen) return;
+      
+      try {
+        const warehousesList = await getWarehouses();
+        setWarehouses(warehousesList);
+        // Create a map of warehouse ID to name for quick lookup
+        const map = new Map<string, string>();
+        warehousesList.forEach(warehouse => {
+          map.set(warehouse.id, warehouse.name);
+        });
+        setWarehouseMap(map);
+      } catch (error) {
+        console.error("Error fetching warehouses:", error);
+      }
+    };
+
+    fetchWarehouses();
   }, [isOpen]);
 
   // Fetch roles for customer account creation
@@ -759,7 +811,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                     <strong>${item.name}</strong>
                     ${item.productSize && item.productSizeUnit ? `<br><span style="font-size: 0.85em; color: #666;">${item.productSize} ${item.productSizeUnit}</span>` : ''}
                   </td>
-                  <td>${item.warehouseNumber || 'N/A'}</td>
+                  <td>${item.warehouseName || item.warehouseNumber || 'N/A'}</td>
                   <td>${item.quantity}</td>
                   <td>${formatAmount(item.unitPrice)}</td>
                   ${showDiscountColumn ? `<td>${formatAmount(item.discountAmount || 0)}</td>` : ''}
@@ -815,6 +867,12 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
       );
       setOrderData(prev => ({ ...prev, items: updatedItems }));
     } else {
+      // Get warehouse name from product or warehouse map
+      let warehouseName = product.warehouseName;
+      if (!warehouseName && product.warehouseId) {
+        warehouseName = warehouseMap.get(product.warehouseId);
+      }
+      
       const newItem: OrderItem = {
         id: product.id,
         name: product.name,
@@ -826,6 +884,8 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
         discountAmount: 0,
         productSize: product.productSize,
         productSizeUnit: product.productSizeUnit,
+        warehouseNumber: product.warehouseId,
+        warehouseName: warehouseName,
       };
       setOrderData(prev => ({ ...prev, items: [...prev.items, newItem] }));
     }
@@ -1115,7 +1175,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                           </td>
                           <td className="border border-gray-300 px-4 py-3 text-gray-700">
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              {item.warehouseNumber || 'N/A'}
+                              {item.warehouseName || item.warehouseNumber || 'N/A'}
                             </span>
                           </td>
                           <td className="border border-gray-300 px-4 py-3 text-gray-700">{item.quantity}</td>
@@ -1445,7 +1505,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                           }))
                         }
                         placeholder="Enter amount or leave blank"
-                      className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent pl-10"
+                      className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent pl-8"
                     />
                     <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-[14px]">₦</span>
                   </div>
@@ -1743,6 +1803,11 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                       <div className="flex justify-between items-center">
                         <div>
                               <h4 className="text-[14px] font-medium text-[#45464e]">{productName}</h4>
+                              {product.productSize && product.productSizeUnit ? (
+                                <p className="text-[12px] text-[#8b8d97] font-medium">
+                                  {product.productSize} {product.productSizeUnit}
+                                </p>
+                              ) : null}
                               {productCategory && <p className="text-[12px] text-[#8b8d97]">{productCategory}</p>}
                         </div>
                         <div className="text-right">
@@ -1780,6 +1845,13 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                       <div className="flex justify-between items-start mb-3">
                         <div className="flex-1">
                           <h5 className="text-[14px] font-medium text-[#45464e] mb-1">{item.name}</h5>
+                          {item.productSize && item.productSizeUnit ? (
+                            <p className="text-[12px] text-[#8b8d97] mb-1">
+                              {item.productSize} {item.productSizeUnit}
+                            </p>
+                          ) : (
+                            <p className="text-[11px] text-gray-400 italic mb-1">No dosage information</p>
+                          )}
                           <p className="text-[12px] text-[#8b8d97]">{formatAmount(item.unitPrice)} per unit</p>
                         </div>
                         <button

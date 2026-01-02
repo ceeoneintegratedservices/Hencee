@@ -33,12 +33,28 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
     return new Set();
   });
 
+  // Load cleared notification IDs from localStorage
+  const [clearedNotificationIds, setClearedNotificationIds] = useState<Set<string>>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('clearedNotificationIds');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    }
+    return new Set();
+  });
+
   // Save read notification IDs to localStorage whenever they change
   useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('readNotificationIds', JSON.stringify(Array.from(readNotificationIds)));
     }
   }, [readNotificationIds]);
+
+  // Save cleared notification IDs to localStorage whenever they change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('clearedNotificationIds', JSON.stringify(Array.from(clearedNotificationIds)));
+    }
+  }, [clearedNotificationIds]);
 
   useEffect(() => {
     if (isInitialized && user) {
@@ -248,9 +264,9 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
               className="w-5 h-5 object-contain" 
             />
             {/* Notification Badge */}
-            {notifications.filter(n => n.unread && !readNotificationIds.has(n.id)).length > 0 && (
+            {notifications.filter(n => n.unread && !readNotificationIds.has(n.id) && !clearedNotificationIds.has(n.id)).length > 0 && (
               <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
-                {notifications.filter(n => n.unread && !readNotificationIds.has(n.id)).length}
+                {notifications.filter(n => n.unread && !readNotificationIds.has(n.id) && !clearedNotificationIds.has(n.id)).length}
               </span>
             )}
           </button>
@@ -278,65 +294,121 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
                   <div className="p-8 flex items-center justify-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#02016a]"></div>
                   </div>
-                ) : notifications.length === 0 ? (
+                ) : notifications.filter(n => !clearedNotificationIds.has(n.id)).length === 0 ? (
                   <div className="p-8 text-center text-gray-500">
                     <p className="text-sm">No activities yet</p>
                   </div>
                 ) : (
-                  notifications.map((notification) => {
-                    const isRead = readNotificationIds.has(notification.id);
-                    const isUnread = notification.unread && !isRead;
-                    
-                    return (
-                      <div 
-                        key={notification.id} 
-                        onClick={() => {
-                          // Mark as read when clicked
-                          if (!isRead) {
-                            setReadNotificationIds(prev => new Set([...prev, notification.id]));
-                          }
-                        }}
-                        className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
-                          isUnread ? 'bg-blue-50' : ''
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                            notification.type === 'order' ? 'bg-green-500' :
-                            notification.type === 'inventory' ? 'bg-orange-500' :
-                            notification.type === 'payment' ? 'bg-blue-500' :
-                            notification.type === 'customer' ? 'bg-purple-500' :
-                            notification.type === 'security' ? 'bg-red-500' :
-                            notification.type === 'user' ? 'bg-indigo-500' :
-                            notification.type === 'expense' ? 'bg-yellow-500' :
-                            'bg-gray-500'
-                          }`}></div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                              <h4 className="text-sm font-medium text-gray-900 truncate">
-                                {notification.title}
-                              </h4>
-                              {isUnread && (
-                                <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
-                              )}
+                  notifications
+                    .filter(n => !clearedNotificationIds.has(n.id))
+                    .map((notification) => {
+                      const isRead = readNotificationIds.has(notification.id);
+                      const isUnread = notification.unread && !isRead;
+                      
+                      // Format timestamp for display
+                      const formatTimestamp = (date: Date) => {
+                        const now = new Date();
+                        const isToday = date.toDateString() === now.toDateString();
+                        const isYesterday = date.toDateString() === new Date(now.getTime() - 24 * 60 * 60 * 1000).toDateString();
+                        
+                        if (isToday) {
+                          return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                        } else if (isYesterday) {
+                          return `Yesterday ${date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`;
+                        } else {
+                          return date.toLocaleString('en-US', { 
+                            month: 'short', 
+                            day: 'numeric', 
+                            year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                          });
+                        }
+                      };
+                      
+                      return (
+                        <div 
+                          key={notification.id} 
+                          className={`p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors group ${
+                            isUnread ? 'bg-blue-50' : ''
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
+                              notification.type === 'order' ? 'bg-green-500' :
+                              notification.type === 'inventory' ? 'bg-orange-500' :
+                              notification.type === 'payment' ? 'bg-blue-500' :
+                              notification.type === 'customer' ? 'bg-purple-500' :
+                              notification.type === 'security' ? 'bg-red-500' :
+                              notification.type === 'user' ? 'bg-indigo-500' :
+                              notification.type === 'expense' ? 'bg-yellow-500' :
+                              'bg-gray-500'
+                            }`}></div>
+                            <div 
+                              className="flex-1 min-w-0 cursor-pointer"
+                              onClick={() => {
+                                // Mark as read when clicked
+                                if (!isRead) {
+                                  setReadNotificationIds(prev => new Set([...prev, notification.id]));
+                                }
+                              }}
+                            >
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-medium text-gray-900 truncate">
+                                  {notification.title}
+                                </h4>
+                                <div className="flex items-center gap-2">
+                                  {isUnread && (
+                                    <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
+                                  )}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setClearedNotificationIds(prev => new Set([...prev, notification.id]));
+                                    }}
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500 p-1"
+                                    title="Clear notification"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                  </button>
+                                </div>
+                              </div>
+                              <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                                {notification.message}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <p className="text-xs text-gray-400">
+                                  {notification.time}
+                                </p>
+                                <span className="text-xs text-gray-300">•</span>
+                                <p className="text-xs text-gray-400">
+                                  {formatTimestamp(notification.timestamp)}
+                                </p>
+                              </div>
                             </div>
-                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                              {notification.message}
-                            </p>
-                            <p className="text-xs text-gray-400 mt-1">
-                              {notification.time}
-                            </p>
                           </div>
                         </div>
-                      </div>
-                    );
-                  })
+                      );
+                    })
                 )}
               </div>
               
-              <div className="p-4 border-t border-gray-100 flex-shrink-0">
+              <div className="p-4 border-t border-gray-100 flex-shrink-0 space-y-2">
+                {notifications.filter(n => !clearedNotificationIds.has(n.id)).length > 0 && (
+                  <button 
+                    onClick={() => {
+                      const allIds = notifications.map(n => n.id);
+                      setClearedNotificationIds(prev => new Set([...prev, ...allIds]));
+                    }}
+                    className="w-full text-center text-sm text-red-600 hover:text-red-700 font-medium"
+                  >
+                    Clear All Notifications
+                  </button>
+                )}
                 <button className="w-full text-center text-sm text-[#02016a] hover:text-[#03024a] font-medium">
-                  View All Notifications ({notifications.length})
+                  View All Notifications ({notifications.filter(n => !clearedNotificationIds.has(n.id)).length})
                 </button>
               </div>
             </div>
