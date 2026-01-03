@@ -34,6 +34,9 @@ export interface SalesReportResponse {
       name: string;
       totalSold: number;
       revenue: number;
+      productSize?: string;
+      productSizeUnit?: string;
+      packSize?: string;
     }[];
   };
 }

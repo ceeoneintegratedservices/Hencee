@@ -22,6 +22,8 @@ import { getSalesReport, getFinanceReport, getDashboardOverview, getDashboardSal
 import { listCustomers } from "@/services/customers";
 import { getInventoryProducts } from "@/services/inventory";
 import { listProducts } from "@/services/products";
+import { fetchSalesDashboard } from "@/services/sales";
+import { fetchOrdersDashboard } from "@/services/orders";
 
 ChartJS.register(
   CategoryScale,
@@ -53,6 +55,9 @@ export default function ReportsPage() {
   const [selectedReports, setSelectedReports] = useState<string[]>([]);
   const [exportFormat, setExportFormat] = useState<"excel" | "doc">("excel");
   const [showCategoriesModal, setShowCategoriesModal] = useState(false);
+  const [showProductsModal, setShowProductsModal] = useState(false);
+  const [showSalesTransactionsModal, setShowSalesTransactionsModal] = useState(false);
+  const [showOrdersModal, setShowOrdersModal] = useState(false);
   const [sortBy, setSortBy] = useState<"name" | "turnover" | "increase" | "quantitySold">("turnover");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [chartZoom, setChartZoom] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
@@ -224,13 +229,19 @@ export default function ReportsPage() {
       const profit = turnover - (costPrice * (product.quantity || 0));
       const profitMargin = turnover > 0 ? (profit / turnover) * 100 : 0;
       
+      // Get dosage size from multiple possible field names
+      const productSize = product.productSize || product.dosageSize || product.size || product.strength;
+      const productSizeUnit = product.productSizeUnit || product.dosageUnit || product.unit || product.sizeUnit;
+      
       return {
         name: product.name || 'Unknown Product',
         id: product.id || 'N/A',
         category: product.category?.name || 'General',
         quantity: `${product.quantity || 0} units`,
         turnover: Math.round(turnover),
-        increase: Math.round(profitMargin * 100) / 100 // Round to 2 decimal places
+        increase: Math.round(profitMargin * 100) / 100, // Round to 2 decimal places
+        productSize: productSize ? String(productSize) : undefined,
+        productSizeUnit: productSizeUnit ? String(productSizeUnit) : undefined,
       };
     });
 
@@ -277,7 +288,7 @@ export default function ReportsPage() {
 
   const sampleData = getReportsData();
 
-  // Calculate real metrics from API data
+  // Calculate real metrics from API data - recalculates when timeframe or apiData changes
   const calculateMetrics = () => {
     const { salesReport, financeReport, customers, inventory, products } = apiData;
     
@@ -821,12 +832,12 @@ export default function ReportsPage() {
 
   // Export categories modal data
   const handleCategoriesExport = () => {
-    const filename = `tyre_categories_${timeframe}_${new Date().toISOString().split('T')[0]}`;
+    const filename = `product_categories_${timeframe}_${new Date().toISOString().split('T')[0]}`;
     
     if (exportFormat === "excel") {
-      generateExcelFile(sortedCategories, filename, "tyre_categories");
+      generateExcelFile(sortedCategories, filename, "product_categories");
     } else {
-      const docContent = generateDOC(sortedCategories, "tyre_categories");
+      const docContent = generateDOC(sortedCategories, "product_categories");
       downloadFile(docContent, `${filename}.doc`, 'application/msword');
     }
   };
@@ -916,7 +927,7 @@ export default function ReportsPage() {
                   <div className="relative">
                     <input
                       type="text"
-                      placeholder="Search tyres, brands, customers"
+                      placeholder="Search products, brands, customers"
                       className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <svg className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1038,7 +1049,7 @@ export default function ReportsPage() {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-4">
-                  <h3 className="text-lg font-semibold text-gray-800">Best selling tyres</h3>
+                  <h3 className="text-lg font-semibold text-gray-800">Best selling products</h3>
                   <button 
                     onClick={() => setShowCategoriesModal(true)}
                     className="text-blue-600 text-sm hover:underline"
@@ -1274,8 +1285,13 @@ export default function ReportsPage() {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-4">
-                  <h3 className="text-lg font-semibold text-gray-800">Best selling tyres</h3>
-                  <a href="#" className="text-blue-600 text-sm hover:underline">See All</a>
+                  <h3 className="text-lg font-semibold text-gray-800">Best selling products</h3>
+                  <button 
+                    onClick={() => setShowProductsModal(true)}
+                    className="text-blue-600 text-sm hover:underline"
+                  >
+                    See All
+                  </button>
                 </div>
                 <div className="flex items-center gap-2">
                   <input
@@ -1297,7 +1313,8 @@ export default function ReportsPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">Tyre Model</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">Product</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">Dosage Size</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-700">Product ID</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-700">Category</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-700">Stock Quantity</th>
@@ -1309,6 +1326,11 @@ export default function ReportsPage() {
                     {sampleData.products.map((product, index) => (
                       <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="py-3 px-4 text-gray-800">{product.name}</td>
+                        <td className="py-3 px-4 text-gray-800">
+                          {product.productSize && product.productSizeUnit 
+                            ? `${product.productSize} ${product.productSizeUnit}`
+                            : 'N/A'}
+                        </td>
                         <td className="py-3 px-4 text-gray-800">{product.id}</td>
                         <td className="py-3 px-4 text-gray-800">{product.category}</td>
                         <td className="py-3 px-4 text-gray-800">{product.quantity}</td>
@@ -1376,7 +1398,75 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          {/* ROW 5: Inventory Reports - Additional Report */}
+          {/* ROW 5: All Sales Transactions Report */}
+          <div className="mb-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <h3 className="text-lg font-semibold text-gray-800">All Sales Transactions</h3>
+                  <button 
+                    onClick={() => setShowSalesTransactionsModal(true)}
+                    className="text-blue-600 text-sm hover:underline"
+                  >
+                    See All
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedReports.includes("sales_transactions")}
+                    onChange={() => toggleReportSelection("sales_transactions")}
+                    className="rounded"
+                  />
+                  <button
+                    onClick={() => handleExport("sales_transactions")}
+                    className="px-3 py-1 bg-gray-100 text-gray-700 rounded-md text-sm hover:bg-gray-200 transition-colors"
+                  >
+                    Export
+                  </button>
+                </div>
+              </div>
+              <div className="text-sm text-gray-600">
+                <p>View all sales transactions for the selected timeframe. Click "See All" to view the complete list.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* ROW 6: All Orders Report */}
+          <div className="mb-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-4">
+                  <h3 className="text-lg font-semibold text-gray-800">All Orders</h3>
+                  <button 
+                    onClick={() => setShowOrdersModal(true)}
+                    className="text-blue-600 text-sm hover:underline"
+                  >
+                    See All
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedReports.includes("orders")}
+                    onChange={() => toggleReportSelection("orders")}
+                    className="rounded"
+                  />
+                  <button
+                    onClick={() => handleExport("orders")}
+                    className="px-3 py-1 bg-gray-100 text-gray-700 rounded-md text-sm hover:bg-gray-200 transition-colors"
+                  >
+                    Export
+                  </button>
+                </div>
+              </div>
+              <div className="text-sm text-gray-600">
+                <p>View all orders for the selected timeframe. Click "See All" to view the complete list.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* ROW 7: Inventory Reports - Additional Report */}
           <div className="mb-8">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-6">
@@ -1401,7 +1491,7 @@ export default function ReportsPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-gray-200">
-                      <th className="text-left py-3 px-4 font-medium text-gray-700">Tyre Model</th>
+                      <th className="text-left py-3 px-4 font-medium text-gray-700">Product</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-700">Current Stock</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-700">Min Stock</th>
                       <th className="text-left py-3 px-4 font-medium text-gray-700">Max Stock</th>
@@ -1440,13 +1530,74 @@ export default function ReportsPage() {
             </div>
           </div>
 
+          {/* Products Modal */}
+          {showProductsModal && (
+            <div className="fixed inset-0 flex items-start justify-center pt-20 z-50 bg-black bg-opacity-50" onClick={() => setShowProductsModal(false)}>
+              <div className="bg-white rounded-lg shadow-[0_20px_50px_rgba(0,0,0,0.15)] w-[90%] max-w-6xl max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                  <h2 className="text-xl font-semibold text-gray-800">All Products</h2>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => handleExport("products")}
+                      className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors"
+                    >
+                      Export
+                    </button>
+                    <button
+                      onClick={() => setShowProductsModal(false)}
+                      className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                      <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div className="p-6 overflow-y-auto max-h-[calc(80vh-100px)]">
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Product</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Dosage Size</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Product ID</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Category</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Stock Quantity</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Turn Over</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Increase By</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sampleData.products.map((product, index) => (
+                          <tr key={index} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="py-3 px-4 text-gray-800">{product.name}</td>
+                            <td className="py-3 px-4 text-gray-800">
+                              {product.productSize && product.productSizeUnit 
+                                ? `${product.productSize} ${product.productSizeUnit}`
+                                : 'N/A'}
+                            </td>
+                            <td className="py-3 px-4 text-gray-800">{product.id}</td>
+                            <td className="py-3 px-4 text-gray-800">{product.category}</td>
+                            <td className="py-3 px-4 text-gray-800">{product.quantity}</td>
+                            <td className="py-3 px-4 text-gray-800">₦{product.turnover.toLocaleString()}</td>
+                            <td className="py-3 px-4 text-green-600">{product.increase}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Categories Modal */}
           {showCategoriesModal && (
-            <div className="absolute inset-0 flex items-start justify-center pt-20 z-50" onClick={() => setShowCategoriesModal(false)}>
+            <div className="fixed inset-0 flex items-start justify-center pt-20 z-50 bg-black bg-opacity-50" onClick={() => setShowCategoriesModal(false)}>
               <div className="bg-white rounded-lg shadow-[0_20px_50px_rgba(0,0,0,0.15)] w-[800px] max-h-[600px] overflow-hidden" onClick={(e) => e.stopPropagation()}>
                 {/* Modal Header */}
                 <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                  <h2 className="text-xl font-semibold text-gray-800">All Tyre Categories</h2>
+                  <h2 className="text-xl font-semibold text-gray-800">All Product Categories</h2>
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-600">Sort by:</span>

@@ -363,9 +363,40 @@ export default function OutsourcedReportsPage() {
                       Orders, revenue, and margin by supplier (top {topSuppliers.length})
                     </p>
                   </div>
-                  <span className="text-xs text-gray-400">
-                    Total suppliers: {suppliers.length}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        const filename = `outsourced_suppliers_${activeFilters.dateRange}_${new Date().toISOString().split('T')[0]}`;
+                        const headers = ['Supplier', 'Orders', 'Revenue', 'Cost', 'Margin', 'Outstanding'];
+                        const csvContent = [
+                          headers.join(','),
+                          ...suppliers.map(s => [
+                            s.supplierName || 'N/A',
+                            s.orders ?? 0,
+                            s.revenue ?? 0,
+                            s.cost ?? 0,
+                            s.margin ?? 0,
+                            s.outstandingBalance ?? 0
+                          ].join(','))
+                        ].join('\n');
+                        const blob = new Blob([csvContent], { type: 'text/csv' });
+                        const url = URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = url;
+                        link.download = `${filename}.csv`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        URL.revokeObjectURL(url);
+                      }}
+                      className="px-4 py-2 rounded-lg bg-[#02016a] text-white text-sm font-medium hover:bg-[#03024a]"
+                    >
+                      Export
+                    </button>
+                    <span className="text-xs text-gray-400">
+                      Total suppliers: {suppliers.length}
+                    </span>
+                  </div>
                 </div>
                 {topSuppliers.length === 0 ? (
                   <div className="p-6 text-sm text-gray-500">No supplier data.</div>
