@@ -37,6 +37,19 @@ export interface SalesReportResponse {
       productSize?: string;
       productSizeUnit?: string;
       packSize?: string;
+      category?: {
+        id: string;
+        name: string;
+      };
+      categoryName?: string;
+      cost?: number;
+    }[];
+    topCategories?: {
+      id: string;
+      name: string;
+      totalRevenue: number;
+      totalQuantity: number;
+      productCount: number;
     }[];
   };
 }
@@ -67,6 +80,8 @@ export interface FinanceReportResponse {
     totalExpenses: number;
     totalProfit: number;
     profitMargin: number;
+    momProfit?: number;
+    yoyProfit?: number;
     paymentMethods: {
       method: string;
       amount: number;
@@ -147,10 +162,21 @@ export async function getSalesReport(params: SalesReportParams = {}): Promise<Sa
     if (params.categoryId) qp.set("categoryId", params.categoryId);
     
     const url = `${API_ENDPOINTS.reports.sales}${qp.toString() ? `?${qp.toString()}` : ""}`;
+    console.log('Fetching Sales Report from:', url);
     const res = await authFetch(url);
+    
+    if (!res.ok) {
+      console.error('Sales Report API Error:', res.status, res.statusText);
+      const errorText = await res.text();
+      console.error('Error Response:', errorText);
+      throw new Error(`Sales report API error: ${res.status} ${res.statusText}`);
+    }
+    
     const data = await res.json();
+    console.log('Sales Report Raw Response:', JSON.stringify(data, null, 2));
     return data;
   } catch (error) {
+    console.error('Error in getSalesReport:', error);
     throw error;
   }
 }
@@ -174,10 +200,21 @@ export async function getFinanceReport(params: FinanceReportParams = {}): Promis
     if (params.groupBy) qp.set("groupBy", params.groupBy);
     
     const url = `${API_ENDPOINTS.reports.finance}${qp.toString() ? `?${qp.toString()}` : ""}`;
+    console.log('Fetching Finance Report from:', url);
     const res = await authFetch(url);
+    
+    if (!res.ok) {
+      console.error('Finance Report API Error:', res.status, res.statusText);
+      const errorText = await res.text();
+      console.error('Error Response:', errorText);
+      throw new Error(`Finance report API error: ${res.status} ${res.statusText}`);
+    }
+    
     const data = await res.json();
+    console.log('Finance Report Raw Response:', JSON.stringify(data, null, 2));
     return data;
   } catch (error) {
+    console.error('Error in getFinanceReport:', error);
     throw error;
   }
 }

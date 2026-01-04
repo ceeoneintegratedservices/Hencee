@@ -22,8 +22,8 @@ import { getSalesReport, getFinanceReport, getDashboardOverview, getDashboardSal
 import { listCustomers } from "@/services/customers";
 import { getInventoryProducts } from "@/services/inventory";
 import { listProducts } from "@/services/products";
-import { fetchSalesDashboard } from "@/services/sales";
-import { fetchOrdersDashboard } from "@/services/orders";
+import { fetchSalesDashboard, getSalesByDateRange } from "@/services/sales";
+import { fetchOrdersDashboard, getOrdersByDateRange } from "@/services/orders";
 
 ChartJS.register(
   CategoryScale,
@@ -85,6 +85,12 @@ export default function ReportsPage() {
   });
   const [apiError, setApiError] = useState<string | null>(null);
   
+  // Modal data state
+  const [salesTransactions, setSalesTransactions] = useState<any[]>([]);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [loadingSalesTransactions, setLoadingSalesTransactions] = useState(false);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+  
   // Authentication check
   useEffect(() => {
     const token = localStorage.getItem('authToken');
@@ -115,27 +121,61 @@ export default function ReportsPage() {
       const backendTimeframe = timeframeMap[timeframe] || 'thisWeek';
 
       // Map timeframe to dateRange for reports
+      // Backend only accepts: today, yesterday, this_week, last_week, this_month, last_month, 
+      // this_quarter, last_quarter, this_year, last_year, custom
       const dateRangeMap: { [key: string]: string } = {
-        'daily': 'this_week',
+        'daily': 'today',
         'weekly': 'this_week', 
         'monthly': 'this_month',
-        'yearly': 'all_time'  // Use all_time for comprehensive data
+        'yearly': 'this_year'  // Use this_year instead of all_time (not supported by backend)
       };
       
       const dateRange = dateRangeMap[timeframe] || 'this_month';
 
       // Fetch data from working backend endpoints
       const [salesReport, financeReport, customers, inventory, products] = await Promise.allSettled([
-        getSalesReport({ dateRange }).catch(() => null),
-        getFinanceReport({ dateRange }).catch(() => null),
-        listCustomers().catch(() => []),
-        getInventoryProducts().catch(() => []),
-        listProducts().catch(() => [])
+        getSalesReport({ dateRange }).catch((err) => {
+          console.error('Error fetching sales report:', err);
+          return null;
+        }),
+        getFinanceReport({ dateRange }).catch((err) => {
+          console.error('Error fetching finance report:', err);
+          return null;
+        }),
+        listCustomers().catch((err) => {
+          console.error('Error fetching customers:', err);
+          return [];
+        }),
+        getInventoryProducts().catch((err) => {
+          console.error('Error fetching inventory:', err);
+          return [];
+        }),
+        listProducts().catch((err) => {
+          console.error('Error fetching products:', err);
+          return [];
+        })
       ]);
 
+      const salesData = salesReport.status === 'fulfilled' ? salesReport.value : null;
+      const financeData = financeReport.status === 'fulfilled' ? financeReport.value : null;
+      
+      // Comprehensive debug logging
+      console.log('=== REPORTS API RESPONSES ===');
+      console.log('Sales Report Status:', salesReport.status);
+      console.log('Sales Report Data:', JSON.stringify(salesData, null, 2));
+      console.log('Finance Report Status:', financeReport.status);
+      console.log('Finance Report Data:', JSON.stringify(financeData, null, 2));
+      
+      if (salesReport.status === 'rejected') {
+        console.error('Sales Report Error:', salesReport.reason);
+      }
+      if (financeReport.status === 'rejected') {
+        console.error('Finance Report Error:', financeReport.reason);
+      }
+
       setApiData({
-        salesReport: salesReport.status === 'fulfilled' ? salesReport.value : null,
-        financeReport: financeReport.status === 'fulfilled' ? financeReport.value : null,
+        salesReport: salesData,
+        financeReport: financeData,
         customers: customers.status === 'fulfilled' ? customers.value || [] : [],
         inventory:
           inventory.status === 'fulfilled'
@@ -168,6 +208,94 @@ export default function ReportsPage() {
     }
   }, [isAuthenticated, timeframe]);
 
+  // Fetch sales transactions when modal opens
+  useEffect(() => {
+    if (showSalesTransactionsModal && isAuthenticated) {
+      const fetchSalesTransactions = async () => {
+        setLoadingSalesTransactions(true);
+        try {
+          // Calculate date range based on timeframe
+          const now = new Date();
+          let dateFrom: string;
+          let dateTo: string = now.toISOString().split('T')[0];
+          
+          if (timeframe === 'daily') {
+            dateFrom = dateTo; // Today
+          } else if (timeframe === 'weekly') {
+            const weekAgo = new Date(now);
+            weekAgo.setDate(now.getDate() - 7);
+            dateFrom = weekAgo.toISOString().split('T')[0];
+          } else if (timeframe === 'monthly') {
+            const monthAgo = new Date(now);
+            monthAgo.setMonth(now.getMonth() - 1);
+            dateFrom = monthAgo.toISOString().split('T')[0];
+          } else if (timeframe === 'yearly') {
+            const yearAgo = new Date(now);
+            yearAgo.setFullYear(now.getFullYear() - 1);
+            dateFrom = yearAgo.toISOString().split('T')[0];
+          } else {
+            dateFrom = dateTo;
+          }
+          
+          const data = await getSalesByDateRange(dateFrom, dateTo);
+          setSalesTransactions(Array.isArray(data) ? data : []);
+        } catch (error: any) {
+          console.error('Error fetching sales transactions:', error);
+          showError('Error', error.message || 'Failed to load sales transactions');
+          setSalesTransactions([]);
+        } finally {
+          setLoadingSalesTransactions(false);
+        }
+      };
+      
+      fetchSalesTransactions();
+    }
+  }, [showSalesTransactionsModal, isAuthenticated, timeframe]);
+
+  // Fetch orders when modal opens
+  useEffect(() => {
+    if (showOrdersModal && isAuthenticated) {
+      const fetchOrders = async () => {
+        setLoadingOrders(true);
+        try {
+          // Calculate date range based on timeframe
+          const now = new Date();
+          let dateFrom: string;
+          let dateTo: string = now.toISOString().split('T')[0];
+          
+          if (timeframe === 'daily') {
+            dateFrom = dateTo; // Today
+          } else if (timeframe === 'weekly') {
+            const weekAgo = new Date(now);
+            weekAgo.setDate(now.getDate() - 7);
+            dateFrom = weekAgo.toISOString().split('T')[0];
+          } else if (timeframe === 'monthly') {
+            const monthAgo = new Date(now);
+            monthAgo.setMonth(now.getMonth() - 1);
+            dateFrom = monthAgo.toISOString().split('T')[0];
+          } else if (timeframe === 'yearly') {
+            const yearAgo = new Date(now);
+            yearAgo.setFullYear(now.getFullYear() - 1);
+            dateFrom = yearAgo.toISOString().split('T')[0];
+          } else {
+            dateFrom = dateTo;
+          }
+          
+          const data = await getOrdersByDateRange(dateFrom, dateTo);
+          setOrders(Array.isArray(data) ? data : []);
+        } catch (error: any) {
+          console.error('Error fetching orders:', error);
+          showError('Error', error.message || 'Failed to load orders');
+          setOrders([]);
+        } finally {
+          setLoadingOrders(false);
+        }
+      };
+      
+      fetchOrders();
+    }
+  }, [showOrdersModal, isAuthenticated, timeframe]);
+
   // Generate data from API or fallback to empty data
   const getReportsData = () => {
     if (loading || apiError) {
@@ -182,68 +310,141 @@ export default function ReportsPage() {
     const safeCustomers = Array.isArray(customers) ? customers : [];
     const safeInventory = Array.isArray(inventory) ? inventory : [];
 
+    // Get sales report data
+    const salesData = salesReport?.data || salesReport;
+    const salesSummary = salesData?.summary;
+
     // Transform API data to match the expected format - Group by categories
     const categoryMap = new Map();
     
-    // Group products by category and calculate totals
-    safeProducts.forEach((product: any) => {
-      const categoryName = product.category?.name || 'General';
-      const turnover = (product.sellingPrice || 0) * (product.quantity || 0);
-      const costPrice = product.purchasePrice || product.costPrice || 0;
-      const profit = turnover - (costPrice * (product.quantity || 0));
-      const profitMargin = turnover > 0 ? (profit / turnover) * 100 : 0;
-      
-      if (categoryMap.has(categoryName)) {
-        const existing = categoryMap.get(categoryName);
-        existing.turnover += turnover;
-        existing.profit += profit;
-        existing.quantitySold += product.quantity || 0;
-        existing.productCount += 1;
-      } else {
-        categoryMap.set(categoryName, {
-          name: categoryName,
-          turnover: turnover,
-          profit: profit,
-          quantitySold: product.quantity || 0,
-          productCount: 1,
-          brand: product.brand || 'Mixed'
+    // Use topCategories from sales report if available (most efficient)
+    if (salesSummary && salesSummary.topCategories && Array.isArray(salesSummary.topCategories) && salesSummary.topCategories.length > 0) {
+      // Use topCategories from summary (REAL DATA - most accurate)
+      salesSummary.topCategories.forEach((category: any) => {
+        categoryMap.set(category.name, {
+          name: category.name,
+          turnover: category.totalRevenue || 0,
+          quantitySold: category.totalQuantity || 0,
+          productCount: category.productCount || 0
         });
-      }
-    });
+      });
+    } else if (salesReport && salesData?.data && Array.isArray(salesData.data)) {
+      // Fallback: Group by category from actual sales data in time-series
+      salesData.data.forEach((period: any) => {
+        if (period.products && Array.isArray(period.products)) {
+          period.products.forEach((product: any) => {
+            // Try to get category from product or use 'General'
+            const categoryName = product.category?.name || product.categoryName || 'General';
+            const revenue = product.revenue || product.totalSold * (product.unitPrice || 0) || 0;
+            const quantitySold = product.totalSold || product.quantity || 0;
+            
+            if (categoryMap.has(categoryName)) {
+              const existing = categoryMap.get(categoryName);
+              existing.turnover += revenue;
+              existing.quantitySold += quantitySold;
+              existing.productCount += 1;
+            } else {
+              categoryMap.set(categoryName, {
+                name: categoryName,
+                turnover: revenue,
+                quantitySold: quantitySold,
+                productCount: 1
+              });
+            }
+          });
+        }
+      });
+    } else {
+      // Fallback: Group products by category and calculate totals (less accurate)
+      safeProducts.forEach((product: any) => {
+        const categoryName = product.category?.name || 'General';
+        const turnover = (product.sellingPrice || 0) * (product.quantity || 0);
+        const costPrice = product.purchasePrice || product.costPrice || 0;
+        const profit = turnover - (costPrice * (product.quantity || 0));
+        
+        if (categoryMap.has(categoryName)) {
+          const existing = categoryMap.get(categoryName);
+          existing.turnover += turnover;
+          existing.profit += profit;
+          existing.quantitySold += product.quantity || 0;
+          existing.productCount += 1;
+        } else {
+          categoryMap.set(categoryName, {
+            name: categoryName,
+            turnover: turnover,
+            profit: profit,
+            quantitySold: product.quantity || 0,
+            productCount: 1,
+            brand: product.brand || 'Mixed'
+          });
+        }
+      });
+    }
     
     // Convert to array and calculate final metrics
     const categories = Array.from(categoryMap.values())
       .map(category => ({
         name: category.name,
         turnover: Math.round(category.turnover),
-        increase: Math.round((category.turnover > 0 ? (category.profit / category.turnover) * 100 : 0) * 100) / 100, // Round to 2 decimal places
+        increase: category.profit !== undefined 
+          ? Math.round((category.turnover > 0 ? (category.profit / category.turnover) * 100 : 0) * 100) / 100
+          : 0, // Only calculate if profit is available
         brand: category.brand,
-        quantitySold: category.quantitySold
+        quantitySold: category.quantitySold || 0
       }))
       .sort((a, b) => b.turnover - a.turnover) // Sort by turnover descending
       .slice(0, 4); // Take top 4 categories
 
-    const transformedProducts = safeProducts.slice(0, 4).map((product: any) => {
-      const turnover = (product.sellingPrice || 0) * (product.quantity || 0);
-      const costPrice = product.purchasePrice || product.costPrice || 0;
-      const profit = turnover - (costPrice * (product.quantity || 0));
-      const profitMargin = turnover > 0 ? (profit / turnover) * 100 : 0;
-      
-      // Get dosage size from multiple possible field names
-      const productSize = product.productSize || product.dosageSize || product.size || product.strength;
-      const productSizeUnit = product.productSizeUnit || product.dosageUnit || product.unit || product.sizeUnit;
-      
-      return {
-        name: product.name || 'Unknown Product',
-        id: product.id || 'N/A',
-        category: product.category?.name || 'General',
-        quantity: `${product.quantity || 0} units`,
-        turnover: Math.round(turnover),
-        increase: Math.round(profitMargin * 100) / 100, // Round to 2 decimal places
-        productSize: productSize ? String(productSize) : undefined,
-        productSizeUnit: productSizeUnit ? String(productSizeUnit) : undefined,
-      };
-    });
+    // Use topProducts from sales report if available, otherwise use product list
+    let transformedProducts: any[] = [];
+    
+    if (salesSummary && salesSummary.topProducts && Array.isArray(salesSummary.topProducts) && salesSummary.topProducts.length > 0) {
+      // Use actual top products from sales report (REAL DATA)
+      transformedProducts = salesSummary.topProducts.slice(0, 4).map((product: any) => {
+        const productSize = product.productSize || product.dosageSize || product.size || product.strength;
+        const productSizeUnit = product.productSizeUnit || product.dosageUnit || product.unit || product.sizeUnit;
+        
+        // Calculate profit margin if we have cost data
+        const revenue = product.revenue || 0;
+        const totalSold = product.totalSold || 0;
+        const cost = product.cost || 0;
+        const profitMargin = revenue > 0 && cost > 0 ? ((revenue - cost) / revenue) * 100 : 0;
+        
+        return {
+          name: product.name || 'Unknown Product',
+          id: product.id || 'N/A',
+          category: product.category?.name || product.categoryName || 'General',
+          quantity: `${totalSold} units`,
+          turnover: Math.round(revenue),
+          increase: Math.round(profitMargin * 100) / 100,
+          productSize: productSize ? String(productSize) : undefined,
+          productSizeUnit: productSizeUnit ? String(productSizeUnit) : undefined,
+        };
+      });
+    } else {
+      // Fallback: Use product list (less accurate)
+      transformedProducts = safeProducts.slice(0, 4).map((product: any) => {
+        const turnover = (product.sellingPrice || 0) * (product.quantity || 0);
+        const costPrice = product.purchasePrice || product.costPrice || 0;
+        const profit = turnover - (costPrice * (product.quantity || 0));
+        const profitMargin = turnover > 0 ? (profit / turnover) * 100 : 0;
+        
+        // Get dosage size from multiple possible field names
+        const productSize = product.productSize || product.dosageSize || product.size || product.strength;
+        const productSizeUnit = product.productSizeUnit || product.dosageUnit || product.unit || product.sizeUnit;
+        
+        return {
+          name: product.name || 'Unknown Product',
+          id: product.id || 'N/A',
+          category: product.category?.name || 'General',
+          quantity: `${product.quantity || 0} units`,
+          turnover: Math.round(turnover),
+          increase: Math.round(profitMargin * 100) / 100, // Round to 2 decimal places
+          productSize: productSize ? String(productSize) : undefined,
+          productSizeUnit: productSizeUnit ? String(productSizeUnit) : undefined,
+        };
+      });
+    }
 
     const transformedCustomers = safeCustomers.slice(0, 4).map((customer: any) => {
       const totalSpent = customer.orderTotal || customer.totalSpent || 0;
@@ -292,19 +493,98 @@ export default function ReportsPage() {
   const calculateMetrics = () => {
     const { salesReport, financeReport, customers, inventory, products } = apiData;
     
-    // Calculate total revenue from sales report
+    // Extract metrics from finance report (primary source for overview metrics)
     let totalRevenue = 0;
-    if (salesReport && salesReport.data && Array.isArray(salesReport.data)) {
-      totalRevenue = salesReport.data.reduce((sum: number, item: any) => 
-        sum + (item.revenue || item.totalSales || 0), 0);
+    let totalProfit = 0;
+    let totalExpenses = 0;
+    let netPurchaseValue = 0;
+    let netSalesValue = 0;
+    
+    // Check if reports are null/undefined
+    if (!financeReport && !salesReport) {
+      console.warn('Both finance and sales reports are null/undefined');
     }
     
-    // Calculate total profit from finance report
-    let totalProfit = 0;
-    if (financeReport && financeReport.data && Array.isArray(financeReport.data)) {
-      totalProfit = financeReport.data.reduce((sum: number, item: any) => 
+    if (financeReport) {
+      // Handle case where response might be wrapped in a 'data' property
+      const reportData = financeReport.data || financeReport;
+      
+      // Try to get from summary object first (preferred)
+      if (reportData.summary) {
+        totalRevenue = reportData.summary.totalRevenue || 0;
+        totalProfit = reportData.summary.totalProfit || 0;
+        totalExpenses = reportData.summary.totalExpenses || 0;
+        // Net purchase value might be in expenses or calculated
+        netPurchaseValue = totalExpenses || 0;
+        netSalesValue = totalRevenue || 0;
+      }
+      
+      // If summary doesn't have all fields, try to calculate from data array
+      if (reportData.data && Array.isArray(reportData.data) && reportData.data.length > 0) {
+        if (totalRevenue === 0) {
+          totalRevenue = reportData.data.reduce((sum: number, item: any) => 
+            sum + (item.revenue || item.totalRevenue || 0), 0);
+        }
+        if (totalProfit === 0) {
+          totalProfit = reportData.data.reduce((sum: number, item: any) => 
         sum + (item.profit || item.netIncome || 0), 0);
+        }
+        if (totalExpenses === 0) {
+          totalExpenses = reportData.data.reduce((sum: number, item: any) => 
+            sum + (item.expenses || item.totalExpenses || 0), 0);
+          netPurchaseValue = totalExpenses;
+        }
+        if (netSalesValue === 0) {
+          netSalesValue = totalRevenue;
+        }
+      }
+      
+      // Check root level fields as fallback
+      if (totalRevenue === 0 && typeof reportData.totalRevenue === 'number') {
+        totalRevenue = reportData.totalRevenue;
+      }
+      if (totalProfit === 0 && typeof reportData.totalProfit === 'number') {
+        totalProfit = reportData.totalProfit;
+      }
+      if (totalExpenses === 0 && typeof reportData.totalExpenses === 'number') {
+        totalExpenses = reportData.totalExpenses;
+        netPurchaseValue = totalExpenses;
+      }
     }
+    
+    // Fallback to sales report for revenue if finance report doesn't have it
+    if (totalRevenue === 0 && salesReport) {
+      const salesData = salesReport.data || salesReport;
+      
+      if (salesData.summary && typeof salesData.summary.totalSales === 'number') {
+        totalRevenue = salesData.summary.totalSales;
+        netSalesValue = totalRevenue;
+      } else if (salesData.data && Array.isArray(salesData.data) && salesData.data.length > 0) {
+        totalRevenue = salesData.data.reduce((sum: number, item: any) => 
+          sum + (item.totalSales || item.revenue || item.totalRevenue || 0), 0);
+        netSalesValue = totalRevenue;
+      } else if (typeof salesData.totalSales === 'number') {
+        totalRevenue = salesData.totalSales;
+        netSalesValue = totalRevenue;
+      }
+    }
+    
+    // Comprehensive debug logging
+    console.log('=== METRICS CALCULATION ===');
+    console.log('Finance Report:', financeReport);
+    console.log('Finance Report Summary:', financeReport?.summary || financeReport?.data?.summary);
+    console.log('Finance Report Data Array:', financeReport?.data);
+    console.log('Sales Report:', salesReport);
+    console.log('Sales Report Summary:', salesReport?.summary || salesReport?.data?.summary);
+    console.log('Sales Report Data Array:', salesReport?.data);
+    console.log('Calculated Metrics:', { 
+      totalRevenue, 
+      totalProfit, 
+      totalExpenses, 
+      netPurchaseValue, 
+      netSalesValue 
+    });
+    console.log('========================');
     
     // Calculate total customers
     const totalCustomers = Array.isArray(customers) ? customers.length : 0;
@@ -315,6 +595,9 @@ export default function ReportsPage() {
     return {
       totalRevenue,
       totalProfit,
+      totalExpenses,
+      netPurchaseValue,
+      netSalesValue,
       totalCustomers,
       totalProducts
     };
@@ -352,26 +635,28 @@ export default function ReportsPage() {
         allRevenueData.push(0);
       }
     } else {
-      // Fallback: Generate minimal data based on timeframe
+      // No API data available - show empty state
+      // Generate minimal structure for empty state display
       if (chartZoom === 'daily') {
         const now = new Date();
         const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
         allLabels = Array.from({ length: daysInMonth }, (_, i) => `${i + 1}`);
         allRevenueData = Array(daysInMonth).fill(0);
         allProfitData = Array(daysInMonth).fill(0);
-    } else if (chartZoom === 'monthly') {
-      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      allLabels = months;
+      } else if (chartZoom === 'monthly') {
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        allLabels = months;
         allRevenueData = Array(12).fill(0);
         allProfitData = Array(12).fill(0);
-    } else if (chartZoom === 'yearly') {
-      const years = [];
-      for (let year = 2025; year <= 2036; year++) {
-        years.push(year.toString());
-      }
-      allLabels = years;
-        allRevenueData = Array(12).fill(0);
-        allProfitData = Array(12).fill(0);
+      } else if (chartZoom === 'yearly') {
+        const years = [];
+        const currentYear = new Date().getFullYear();
+        for (let year = currentYear - 5; year <= currentYear + 5; year++) {
+          years.push(year.toString());
+        }
+        allLabels = years;
+        allRevenueData = Array(years.length).fill(0);
+        allProfitData = Array(years.length).fill(0);
       }
     }
     
@@ -573,14 +858,91 @@ export default function ReportsPage() {
     }
   };
   
+  // Calculate MoM and YoY profit from finance report data
+  const calculateMoMAndYoYProfit = () => {
+    const { financeReport } = apiData;
+    let momProfit = 0;
+    let yoyProfit = 0;
+    
+    // First, try to use backend-provided values (most accurate)
+    const reportData = financeReport?.data || financeReport;
+    if (reportData?.summary) {
+      if (typeof reportData.summary.momProfit === 'number') {
+        momProfit = reportData.summary.momProfit;
+      }
+      if (typeof reportData.summary.yoyProfit === 'number') {
+        yoyProfit = reportData.summary.yoyProfit;
+      }
+    }
+    
+    // If backend didn't provide values, calculate from data array
+    if ((momProfit === 0 || yoyProfit === 0) && financeReport?.data && Array.isArray(financeReport.data) && financeReport.data.length > 0) {
+      // Sort data by period to get current and previous periods
+      const sortedData = [...financeReport.data].sort((a: any, b: any) => {
+        const dateA = new Date(a.period || a.date || 0);
+        const dateB = new Date(b.period || b.date || 0);
+        return dateB.getTime() - dateA.getTime(); // Most recent first
+      });
+      
+      // Calculate MoM if not provided by backend
+      if (momProfit === 0 && sortedData.length >= 2) {
+        const currentPeriod = sortedData[0];
+        const previousPeriod = sortedData[1];
+        
+        const currentProfit = currentPeriod.profit || currentPeriod.netIncome || 0;
+        const previousProfit = previousPeriod.profit || previousPeriod.netIncome || 0;
+        
+        // Calculate MoM (Month-over-Month) - compare current with previous
+        momProfit = currentProfit - previousProfit;
+      } else if (momProfit === 0 && sortedData.length === 1) {
+        // Only one period available, use it as MoM
+        momProfit = sortedData[0].profit || sortedData[0].netIncome || 0;
+      }
+      
+      // Calculate YoY if not provided by backend
+      if (yoyProfit === 0 && sortedData.length > 0) {
+        const currentPeriod = sortedData[0];
+        const currentDate = new Date(currentPeriod.period || currentPeriod.date || Date.now());
+        const lastYearDate = new Date(currentDate);
+        lastYearDate.setFullYear(currentDate.getFullYear() - 1);
+        
+        // Find matching period from last year
+        const lastYearPeriod = sortedData.find((item: any) => {
+          const itemDate = new Date(item.period || item.date || 0);
+          return itemDate.getMonth() === lastYearDate.getMonth() && 
+                 itemDate.getFullYear() === lastYearDate.getFullYear();
+        });
+        
+        if (lastYearPeriod) {
+          const currentProfit = currentPeriod.profit || currentPeriod.netIncome || 0;
+          const lastYearProfit = lastYearPeriod.profit || lastYearPeriod.netIncome || 0;
+          yoyProfit = currentProfit - lastYearProfit;
+        } else {
+          // If no matching period found, use current profit
+          yoyProfit = currentPeriod.profit || currentPeriod.netIncome || 0;
+        }
+      }
+    }
+    
+    // Final fallback: use total profit if calculations didn't work
+    if (momProfit === 0 && yoyProfit === 0) {
+      momProfit = metrics.totalProfit;
+      yoyProfit = metrics.totalProfit;
+    }
+    
+    return { momProfit, yoyProfit };
+  };
+
+  const { momProfit, yoyProfit } = calculateMoMAndYoYProfit();
+
   const overviewData = {
     totalProfit: metrics.totalProfit,
     revenue: metrics.totalRevenue,
-    sales: metrics.totalRevenue, // Using revenue as sales for now
-    netPurchaseValue: 0, // Would need purchase data from API
-    netSalesValue: metrics.totalRevenue,
-    momProfit: metrics.totalProfit, // Using total profit for now
-    yoyProfit: metrics.totalProfit // Using total profit for now
+    sales: metrics.totalRevenue, // Revenue and sales are the same
+    netPurchaseValue: metrics.netPurchaseValue, // From expenses in finance report
+    netSalesValue: metrics.netSalesValue, // Same as revenue
+    momProfit: momProfit, // Calculated from finance report periods
+    yoyProfit: yoyProfit // Calculated from finance report periods
   };
 
   // Export functionality
@@ -1666,6 +2028,164 @@ export default function ReportsPage() {
                       </tbody>
                     </table>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* All Sales Transactions Modal */}
+          {showSalesTransactionsModal && (
+            <div className="fixed inset-0 flex items-start justify-center pt-20 z-50 bg-black bg-opacity-50" onClick={() => setShowSalesTransactionsModal(false)}>
+              <div className="bg-white rounded-lg shadow-[0_20px_50px_rgba(0,0,0,0.15)] w-[90%] max-w-6xl max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                  <h2 className="text-xl font-semibold text-gray-800">All Sales Transactions</h2>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => handleExport("sales_transactions")}
+                      className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors"
+                    >
+                      Export
+                    </button>
+                    <button
+                      onClick={() => setShowSalesTransactionsModal(false)}
+                      className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                      <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div className="p-6 overflow-y-auto max-h-[calc(80vh-100px)]">
+                  {loadingSalesTransactions ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="text-gray-500">Loading sales transactions...</div>
+                    </div>
+                  ) : salesTransactions.length === 0 ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="text-gray-500">No sales transactions found for the selected timeframe.</div>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-gray-200">
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">Transaction ID</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">Customer</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">Date</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">Total Amount</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">Payment Method</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {salesTransactions.map((transaction, index) => (
+                            <tr key={transaction.id || transaction.saleId || index} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="py-3 px-4 text-gray-800">{transaction.id || transaction.saleId || 'N/A'}</td>
+                              <td className="py-3 px-4 text-gray-800">{transaction.customerName || transaction.customer?.name || 'N/A'}</td>
+                              <td className="py-3 px-4 text-gray-800">
+                                {transaction.createdAt 
+                                  ? new Date(transaction.createdAt).toLocaleDateString()
+                                  : transaction.date || 'N/A'}
+                              </td>
+                              <td className="py-3 px-4">
+                                <span className={`px-2 py-1 rounded-full text-xs ${
+                                  transaction.status === 'COMPLETED' || transaction.status === 'APPROVED' 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : transaction.status === 'PENDING'
+                                    ? 'bg-yellow-100 text-yellow-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {transaction.status || 'N/A'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-gray-800">₦{(transaction.totalAmount || transaction.total || 0).toLocaleString()}</td>
+                              <td className="py-3 px-4 text-gray-800">{transaction.paymentMethod || transaction.payment?.method || 'N/A'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* All Orders Modal */}
+          {showOrdersModal && (
+            <div className="fixed inset-0 flex items-start justify-center pt-20 z-50 bg-black bg-opacity-50" onClick={() => setShowOrdersModal(false)}>
+              <div className="bg-white rounded-lg shadow-[0_20px_50px_rgba(0,0,0,0.15)] w-[90%] max-w-6xl max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                  <h2 className="text-xl font-semibold text-gray-800">All Orders</h2>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => handleExport("orders")}
+                      className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors"
+                    >
+                      Export
+                    </button>
+                    <button
+                      onClick={() => setShowOrdersModal(false)}
+                      className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                      <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div className="p-6 overflow-y-auto max-h-[calc(80vh-100px)]">
+                  {loadingOrders ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="text-gray-500">Loading orders...</div>
+                    </div>
+                  ) : orders.length === 0 ? (
+                    <div className="flex items-center justify-center py-12">
+                      <div className="text-gray-500">No orders found for the selected timeframe.</div>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-gray-200">
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">Order ID</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">Customer</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">Date</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">Status</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">Total Amount</th>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">Items</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {orders.map((order, index) => (
+                            <tr key={order.id || index} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="py-3 px-4 text-gray-800">{order.id || order.orderId || 'N/A'}</td>
+                              <td className="py-3 px-4 text-gray-800">{order.customerName || order.customer?.name || 'N/A'}</td>
+                              <td className="py-3 px-4 text-gray-800">
+                                {order.createdAt 
+                                  ? new Date(order.createdAt).toLocaleDateString()
+                                  : order.date || 'N/A'}
+                              </td>
+                              <td className="py-3 px-4">
+                                <span className={`px-2 py-1 rounded-full text-xs ${
+                                  order.status === 'COMPLETED' || order.status === 'APPROVED' 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : order.status === 'PENDING'
+                                    ? 'bg-yellow-100 text-yellow-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {order.status || 'N/A'}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-gray-800">₦{(order.totalAmount || order.total || 0).toLocaleString()}</td>
+                              <td className="py-3 px-4 text-gray-800">{order.items?.length || order.itemCount || 0} items</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

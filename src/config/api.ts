@@ -170,7 +170,8 @@ export const API_ENDPOINTS = {
     inventory: `${API_BASE_URL}${CEEONE_PREFIX}/reports/inventory`,
     customers: `${API_BASE_URL}${CEEONE_PREFIX}/reports/customers`,
     payments: `${API_BASE_URL}${CEEONE_PREFIX}/reports/payments`,
-    finance: `${API_BASE_URL}${CEEONE_PREFIX}/reports/finance`,
+    finance: `${API_BASE_URL}${CEEONE_PREFIX}/reports/financial`, // Updated to match backend endpoint
+    financial: `${API_BASE_URL}${CEEONE_PREFIX}/reports/financial`, // Alias for clarity
     outsourced: `${API_BASE_URL}${CEEONE_PREFIX}/reports/outsourced`,
   },
   
