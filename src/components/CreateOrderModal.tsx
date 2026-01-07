@@ -596,6 +596,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
         phone: customerPhone || "0000000000", // Default phone if not available
         password: createAccountForm.password,
         roleId: selectedRoleId,
+        isEmailVerified: true // Auto-verify admin-created users to prevent login issues
       });
 
       showSuccess('Success', 'Customer account created successfully! Login credentials have been set up.');

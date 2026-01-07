@@ -160,6 +160,7 @@ export const API_ENDPOINTS = {
   
   // Users endpoints (Pharma/CeeOne)
   users: `${API_BASE_URL}${CEEONE_PREFIX}/users`,
+  userVerifyEmail: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/users/${id}/verify-email`,
   
   // Audit logs endpoints (Pharma/CeeOne)
   auditLogs: `${API_BASE_URL}${CEEONE_PREFIX}/audit-logs`,

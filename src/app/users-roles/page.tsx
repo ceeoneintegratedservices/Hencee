@@ -65,7 +65,7 @@ export default function UsersRolesPage() {
   // UI: user permission drawer/modal
   const [showUserPermissions, setShowUserPermissions] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
-
+  
   const defaultRoles: Role[] = useMemo(() => ([
     { id: 'admin', name: 'Administrator', description: 'Full access to all features', isSystem: true },
     { id: 'manager', name: 'Manager', description: 'Manage operations and approvals' },
@@ -74,6 +74,17 @@ export default function UsersRolesPage() {
   ]), []);
 
   const [roles, setRoles] = useState<Role[]>(defaultRoles);
+  
+  // UI: create user modal
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [createUserForm, setCreateUserForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    roleId: ''
+  });
+  const [creatingUser, setCreatingUser] = useState(false);
   const [selectedRoleId, setSelectedRoleId] = useState<string>('admin');
   const [users, setUsers] = useState<AppUser[]>([]);
 
@@ -526,9 +537,30 @@ export default function UsersRolesPage() {
 
           {/* Users table */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 mt-6">
-            <div className="p-6 border-b border-gray-200 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-              <h2 className="text-lg font-semibold text-gray-900">Users</h2>
-              <div className="flex flex-wrap items-center gap-2">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <h2 className="text-lg font-semibold text-gray-900">Users</h2>
+                  <button
+                    onClick={() => {
+                      setCreateUserForm({
+                        name: '',
+                        email: '',
+                        phone: '',
+                        password: '',
+                        roleId: roles.length > 0 ? roles[0].id : ''
+                      });
+                      setShowCreateUserModal(true);
+                    }}
+                    className="bg-[#02016a] text-white px-5 py-2.5 rounded-lg hover:bg-[#03024a] transition-colors flex items-center justify-center gap-2 text-sm font-semibold shadow-sm w-full sm:w-auto"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add New User
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
                 <input
                   placeholder="Search users..."
                   value={userSearch}
@@ -563,6 +595,7 @@ export default function UsersRolesPage() {
                   <option value="25">25</option>
                   <option value="50">50</option>
                 </select>
+                </div>
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -579,7 +612,7 @@ export default function UsersRolesPage() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {pagedUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center">
+                      <td colSpan={5} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
@@ -655,6 +688,138 @@ export default function UsersRolesPage() {
       </main>
 
       <NotificationContainer notifications={notifications} onRemove={removeNotification} />
+
+      {/* Create User Modal */}
+      {showCreateUserModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50" onClick={(e) => { if (e.target === e.currentTarget) setShowCreateUserModal(false); }}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-gray-900">Add New User</h3>
+                <button
+                  onClick={() => setShowCreateUserModal(false)}
+                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  aria-label="Close"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!createUserForm.name || !createUserForm.email || !createUserForm.phone || !createUserForm.password || !createUserForm.roleId) {
+                  showSuccess('Error', 'Please fill in all fields');
+                  return;
+                }
+                setCreatingUser(true);
+                try {
+                  await createUser({
+                    name: createUserForm.name,
+                    email: createUserForm.email,
+                    phone: createUserForm.phone,
+                    password: createUserForm.password,
+                    roleId: createUserForm.roleId,
+                    isEmailVerified: true // Auto-verify admin-created users to prevent login issues
+                  });
+                  showSuccess('Success', 'User created successfully');
+                  setShowCreateUserModal(false);
+                  setCreateUserForm({
+                    name: '',
+                    email: '',
+                    phone: '',
+                    password: '',
+                    roleId: roles.length > 0 ? roles[0].id : ''
+                  });
+                  fetchUsers(); // Refresh the users list
+                } catch (err: any) {
+                  showSuccess('Error', err.message || 'Failed to create user');
+                } finally {
+                  setCreatingUser(false);
+                }
+              }}
+              className="p-6 space-y-4"
+            >
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name *</label>
+                <input
+                  type="text"
+                  value={createUserForm.name}
+                  onChange={(e) => setCreateUserForm({ ...createUserForm, name: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter full name"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
+                <input
+                  type="email"
+                  value={createUserForm.email}
+                  onChange={(e) => setCreateUserForm({ ...createUserForm, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter email address"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
+                <input
+                  type="tel"
+                  value={createUserForm.phone}
+                  onChange={(e) => setCreateUserForm({ ...createUserForm, phone: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter phone number"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password *</label>
+                <input
+                  type="password"
+                  value={createUserForm.password}
+                  onChange={(e) => setCreateUserForm({ ...createUserForm, password: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter password"
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
+                <select
+                  value={createUserForm.roleId}
+                  onChange={(e) => setCreateUserForm({ ...createUserForm, roleId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  {roles.filter(r => r.id !== 'viewer').map(role => (
+                    <option key={role.id} value={role.id}>{role.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-3 pt-4">
+                <button
+                  type="submit"
+                  disabled={creatingUser}
+                  className="flex-1 bg-[#02016a] text-white py-2 rounded-lg hover:bg-[#03024a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                >
+                  {creatingUser ? 'Creating...' : 'Create User'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateUserModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* User Permissions Drawer/Modal */}
       {showUserPermissions && selectedUser && (

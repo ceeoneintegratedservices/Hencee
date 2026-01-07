@@ -136,11 +136,16 @@ export default function AdminDashboard() {
         getDashboardSales(timeframe)
       ]);
       
+      console.log('Dashboard activities response:', activitiesData);
+      console.log('Activities array:', activitiesData?.activities);
+      console.log('Recent activities array:', activitiesData?.recentActivities);
+      
       setDashboardData(overviewData);
       setActivities(activitiesData);
       setOrdersData(ordersData);
       setSalesData(salesData);
     } catch (err: any) {
+      console.error('Error fetching dashboard data:', err);
       setError(err.message || 'Failed to load dashboard data');
       showError('Error', err.message || 'Failed to load dashboard data');
     } finally {
@@ -691,62 +696,97 @@ export default function AdminDashboard() {
               </div>
                 
                 <div className="flex flex-col gap-3 w-full overflow-y-auto max-h-[400px] pr-2">
-                  {!activities || activities.activities.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center flex-1 py-8">
-                      <div className="w-[120px] h-[120px] rounded-full bg-[#f4f5fa] flex items-center justify-center mb-6">
-                        <div className="w-[50px] h-[50px] flex items-center justify-center">
-                          <svg className="w-full h-full" fill="none" viewBox="0 0 24 24">
-                            <path 
-                              d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.89 1 3 1.89 3 3V21C3 22.11 3.89 23 5 23H19C20.11 23 21 22.11 21 21V9M19 9H14V4L19 9Z" 
-                              fill="#8b8d97"
-                            />
-                          </svg>
-                        </div>
-                      </div>
-                      <span className="font-poppins text-[18px] text-black mb-2 font-semibold">No Activities Yet</span>
-                      <span className="text-[#8b8d97] text-[13px] text-center mb-4 max-w-[200px]">
-                        Activities from Orders, Inventory, Customers, Approvals, and Users & Roles will appear here automatically.
-                      </span>
-                      {loading && (
-                        <div className="flex items-center gap-2 text-[#8b8d97] text-[12px]">
-                          <div className="w-3 h-3 border border-[#8b8d97] border-t-transparent rounded-full animate-spin"></div>
-                          Loading activities...
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    activities.activities.map((activity) => (
-                      <div key={activity.id} className="bg-[#f4f5fa] rounded-lg px-4 py-3 text-[#45464e] text-sm shadow-sm">
-                        <div className="flex items-start justify-between">
-                          <span className="flex-1">{activity.description}</span>
-                          <span className="text-[10px] text-[#8b8d97] ml-2 whitespace-nowrap">
-                            {new Date(activity.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  {(() => {
+                    // Check both activities.activities and activities.recentActivities for compatibility
+                    const activitiesList = activities?.activities || activities?.recentActivities || [];
+                    const hasActivities = activitiesList.length > 0;
+                    
+                    if (!hasActivities && !loading) {
+                      return (
+                        <div className="flex flex-col items-center justify-center flex-1 py-8">
+                          <div className="w-[120px] h-[120px] rounded-full bg-[#f4f5fa] flex items-center justify-center mb-6">
+                            <div className="w-[50px] h-[50px] flex items-center justify-center">
+                              <svg className="w-full h-full" fill="none" viewBox="0 0 24 24">
+                                <path 
+                                  d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.89 1 3 1.89 3 3V21C3 22.11 3.89 23 5 23H19C20.11 23 21 22.11 21 21V9M19 9H14V4L19 9Z" 
+                                  fill="#8b8d97"
+                                />
+                              </svg>
+                            </div>
+                          </div>
+                          <span className="font-poppins text-[18px] text-black mb-2 font-semibold">No Activities Yet</span>
+                          <span className="text-[#8b8d97] text-[13px] text-center mb-4 max-w-[200px]">
+                            Activities from Orders, Inventory, Customers, Approvals, and Users & Roles will appear here automatically.
                           </span>
                         </div>
-                        <div className="flex items-center justify-between mt-1">
-                          <span className="text-[10px] text-[#8b8d97]">
-                            {activityCategories[activity.type] || activity.type}
-                          </span>
-                          {activity.amount && (
-                            <span className="text-[10px] text-[#519c66] font-medium">
-                              ₦{activity.amount.toLocaleString()}
+                      );
+                    }
+                    
+                    if (loading) {
+                      return (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="flex items-center gap-2 text-[#8b8d97] text-[12px]">
+                            <div className="w-3 h-3 border border-[#8b8d97] border-t-transparent rounded-full animate-spin"></div>
+                            Loading activities...
+                          </div>
+                        </div>
+                      );
+                    }
+                    
+                    return activitiesList.map((activity) => {
+                      // Handle different timestamp formats
+                      const timestamp = activity.timestamp || activity.createdAt || activity.date;
+                      const activityDate = timestamp ? new Date(timestamp) : new Date();
+                      
+                      return (
+                        <div key={activity.id} className="bg-[#f4f5fa] rounded-lg px-4 py-3 text-[#45464e] text-sm shadow-sm">
+                          <div className="flex items-start justify-between">
+                            <span className="flex-1">{activity.description || activity.message || 'Activity'}</span>
+                            <span className="text-[10px] text-[#8b8d97] ml-2 whitespace-nowrap">
+                              {activityDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
-                          )}
+                          </div>
+                          <div className="flex items-center justify-between mt-1">
+                            <span className="text-[10px] text-[#8b8d97]">
+                              {activityCategories[activity.type] || activity.type || 'Other'}
+                            </span>
+                            {activity.amount && (
+                              <span className="text-[10px] text-[#519c66] font-medium">
+                                ₦{activity.amount.toLocaleString()}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))
-                  )}
+                      );
+                    });
+                  })()}
                 </div>
                 
                 <div className="flex flex-col gap-2 w-full">
                   <button 
-                    className="bg-[#02016a] text-white rounded-xl py-2 font-semibold w-full shadow hover:bg-[#03024a] transition-colors"
-                    onClick={(e) => e.stopPropagation()}
-                  >+ New Product</button>
+                    className="bg-[#02016a] text-white rounded-xl py-2 font-semibold w-full shadow hover:bg-[#03024a] transition-colors flex items-center justify-center gap-2"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push('/inventory/create');
+                    }}
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    + New Product
+                  </button>
                   <button 
-                    className="bg-[#02016a] text-white rounded-xl py-2 font-semibold w-full shadow hover:bg-[#03024a] transition-colors"
-                    onClick={(e) => e.stopPropagation()}
-                  >+ Add New User</button>
+                    className="bg-[#02016a] text-white rounded-xl py-2 font-semibold w-full shadow hover:bg-[#03024a] transition-colors flex items-center justify-center gap-2"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      router.push('/users-roles');
+                    }}
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    + Add New User
+                  </button>
                 </div>
               </div>
             </div>

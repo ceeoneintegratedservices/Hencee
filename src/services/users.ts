@@ -43,6 +43,7 @@ export interface CreateUserPayload {
   phone: string;
   password: string;
   roleId: string;
+  isEmailVerified?: boolean; // Optional: defaults to true for admin-created users
 }
 
 export interface UpdateUserPayload {
@@ -178,6 +179,23 @@ export async function deleteUser(id: string): Promise<void> {
       const data = await res.json();
       return data;
     }
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Verify a user's email (admin endpoint)
+ */
+export async function verifyUserEmail(userId: string): Promise<User> {
+  try {
+    const url = API_ENDPOINTS.userVerifyEmail(userId);
+    const res = await authFetch(url, {
+      method: "POST"
+    });
+    const data = await res.json();
+    // Backend may return { message, user } or just the user object
+    return data.user || data;
   } catch (error) {
     throw error;
   }
