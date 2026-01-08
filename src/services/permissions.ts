@@ -26,7 +26,7 @@ export class PermissionService {
       if (this.userPermissions.includes(jwtFormat)) {
         return true;
       }
-      
+
       // Special handling: inventory.view should also check for view_products
       // and products.view should also check for view_inventory
       if (entity === 'inventory' && action === 'view') {
@@ -47,7 +47,7 @@ export class PermissionService {
       if (this.userPermissions.includes(internalFormat)) {
         return true;
       }
-      
+
       // Special handling: view_products should also grant inventory.view
       // and view_inventory should also grant products.view
       if (action === 'view' && entity === 'products') {
@@ -184,7 +184,8 @@ export const ROLES = {
   MANAGING_DIRECTOR: 'managing_director',
   SALES: 'sales_staff',
   SUPPORT: 'technical_support',
-  VIEWER: 'viewer'
+  VIEWER: 'viewer',
+  BOOK_STOREKEEPER: 'book_storekeeper'
 };
 
 // Default permissions by role
@@ -259,6 +260,17 @@ export const getDefaultPermissions = (role: string): string[] => {
         PERMISSIONS.PRODUCTS_VIEW,
         PERMISSIONS.INVENTORY_VIEW,
         PERMISSIONS.REPORTS_VIEW
+      ];
+    case ROLES.BOOK_STOREKEEPER:
+      return [
+        PERMISSIONS.DASHBOARD_VIEW,
+        PERMISSIONS.PRODUCTS_CREATE,
+        PERMISSIONS.INVENTORY_MANAGE,
+        PERMISSIONS.PRODUCTS_EDIT,
+        PERMISSIONS.CUSTOMERS_VIEW,
+        PERMISSIONS.PRODUCTS_VIEW,
+        PERMISSIONS.SALES_VIEW,
+        PERMISSIONS.INVENTORY_VIEW
       ];
     default:
       return [];

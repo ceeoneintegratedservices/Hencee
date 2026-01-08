@@ -288,8 +288,8 @@ function activityToNotification(activity: Activity): Notification {
   let unread = true;
   if (timestamp) {
     try {
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-      const activityDate = new Date(timestamp);
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const activityDate = new Date(timestamp);
       if (!isNaN(activityDate.getTime())) {
         unread = activityDate > oneDayAgo;
       }

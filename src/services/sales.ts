@@ -460,7 +460,7 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
         doc.text(`Reference: ${payment.reference}`, margin + 5, yPos);
         yPos += 6;
       }
-      
+    
       // Show bank transfer specific details
       if (method === 'BANK_TRANSFER' || method === 'bank_transfer') {
         if (payment.senderName) {
@@ -470,8 +470,8 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
         if (payment.transactionReference) {
           doc.text(`Transaction Reference: ${payment.transactionReference}`, margin + 5, yPos);
           yPos += 6;
-        }
       }
+    }
       
       yPos += 4; // Extra spacing between payments
     });

@@ -268,16 +268,16 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
           }
           
           return {
-            id: String(product.id || ''),
-            name: String(product.name || 'Unknown Product'),
-            price: Number(product.price || product.sellingPrice || 0),
-            sellingPrice: Number(product.sellingPrice || product.price || 0),
-            category: typeof product.category === 'object' && product.category !== null 
-              ? ((product.category as any).name || (product.category as any).label || 'General')
-              : String(product.category || 'General'),
-            stock: Number(product.stock || product.quantity || 0),
-            quantity: Number(product.quantity || product.stock || 0),
-            description: String(product.description || ''),
+          id: String(product.id || ''),
+          name: String(product.name || 'Unknown Product'),
+          price: Number(product.price || product.sellingPrice || 0),
+          sellingPrice: Number(product.sellingPrice || product.price || 0),
+          category: typeof product.category === 'object' && product.category !== null 
+            ? ((product.category as any).name || (product.category as any).label || 'General')
+            : String(product.category || 'General'),
+          stock: Number(product.stock || product.quantity || 0),
+          quantity: Number(product.quantity || product.stock || 0),
+          description: String(product.description || ''),
             productSize: productSize ? String(productSize) : undefined,
             productSizeUnit: productSizeUnit ? String(productSizeUnit) : undefined,
             warehouseId: product.warehouseId || product.warehouse?.id || undefined,

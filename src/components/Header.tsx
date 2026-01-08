@@ -23,7 +23,7 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
   const permissionsRef = useRef<HTMLDivElement>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
-  
+
   // Load read notification IDs from localStorage
   const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(() => {
     if (typeof window !== 'undefined') {
@@ -327,23 +327,23 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
                       };
                       
                       return (
-                        <div 
-                          key={notification.id} 
+                    <div 
+                      key={notification.id} 
                           className={`p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors group ${
                             isUnread ? 'bg-blue-50' : ''
-                          }`}
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                              notification.type === 'order' ? 'bg-green-500' :
-                              notification.type === 'inventory' ? 'bg-orange-500' :
-                              notification.type === 'payment' ? 'bg-blue-500' :
-                              notification.type === 'customer' ? 'bg-purple-500' :
-                              notification.type === 'security' ? 'bg-red-500' :
-                              notification.type === 'user' ? 'bg-indigo-500' :
-                              notification.type === 'expense' ? 'bg-yellow-500' :
-                              'bg-gray-500'
-                            }`}></div>
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
+                          notification.type === 'order' ? 'bg-green-500' :
+                          notification.type === 'inventory' ? 'bg-orange-500' :
+                          notification.type === 'payment' ? 'bg-blue-500' :
+                          notification.type === 'customer' ? 'bg-purple-500' :
+                          notification.type === 'security' ? 'bg-red-500' :
+                          notification.type === 'user' ? 'bg-indigo-500' :
+                          notification.type === 'expense' ? 'bg-yellow-500' :
+                          'bg-gray-500'
+                        }`}></div>
                             <div 
                               className="flex-1 min-w-0 cursor-pointer"
                               onClick={() => {
@@ -353,14 +353,14 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
                                 }
                               }}
                             >
-                              <div className="flex items-center justify-between">
-                                <h4 className="text-sm font-medium text-gray-900 truncate">
-                                  {notification.title}
-                                </h4>
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-medium text-gray-900 truncate">
+                              {notification.title}
+                            </h4>
                                 <div className="flex items-center gap-2">
                                   {isUnread && (
-                                    <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
-                                  )}
+                              <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
+                            )}
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -374,22 +374,22 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
                                     </svg>
                                   </button>
                                 </div>
-                              </div>
-                              <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                                {notification.message}
-                              </p>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                            {notification.message}
+                          </p>
                               <div className="flex items-center gap-2 mt-1">
                                 <p className="text-xs text-gray-400">
-                                  {notification.time}
-                                </p>
+                            {notification.time}
+                          </p>
                                 <span className="text-xs text-gray-300">•</span>
                                 <p className="text-xs text-gray-400">
                                   {formatTimestamp(notification.timestamp)}
                                 </p>
                               </div>
-                            </div>
-                          </div>
                         </div>
+                      </div>
+                    </div>
                       );
                     })
                 )}

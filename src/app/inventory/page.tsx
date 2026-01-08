@@ -117,7 +117,7 @@ const parseCsvText = (text: string): Record<string, string>[] => {
         const padded = [...rawValues];
         while (padded.length < headers.length) {
           padded.push('');
-        }
+      }
         return padded.slice(0, headers.length);
       })();
       
@@ -701,9 +701,9 @@ export default function InventoryPage() {
           });
           if (!hasData) {
             emptyRows.push(idx + 1);
+            }
           }
-        }
-      });
+        });
       
       if (emptyRows.length > 0) {
         throw new Error(`Found ${emptyRows.length} empty row(s) after mapping (rows: ${emptyRows.join(', ')}). This indicates a parsing or mapping issue.`);
@@ -2331,45 +2331,45 @@ export default function InventoryPage() {
 
                 {/* Import CSV Button */}
                 <div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv,text/csv"
-                    className="hidden"
-                    id="import-csv-input"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        handleImportCsv(file);
-                      }
-                    }}
-                  />
-                  <label
-                    htmlFor="import-csv-input"
-                    className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    {importingRows ? (
-                      <>
-                        <svg
-                          className="w-4 h-4 animate-spin text-gray-500"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <path d="M12 3v3m6.364-1.364l-2.121 2.121M21 12h-3m1.364 6.364l-2.121-2.121M12 21v-3m-6.364 1.364l2.121-2.121M3 12h3M4.636 5.636l2.121 2.121" />
-                        </svg>
-                        Importing...
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v16h16V4M4 4l8 8 8-8" />
-                        </svg>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                id="import-csv-input"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    handleImportCsv(file);
+                  }
+                }}
+              />
+              <label
+                htmlFor="import-csv-input"
+                className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                {importingRows ? (
+                  <>
+                    <svg
+                      className="w-4 h-4 animate-spin text-gray-500"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M12 3v3m6.364-1.364l-2.121 2.121M21 12h-3m1.364 6.364l-2.121-2.121M12 21v-3m-6.364 1.364l2.121-2.121M3 12h3M4.636 5.636l2.121 2.121" />
+                    </svg>
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v16h16V4M4 4l8 8 8-8" />
+                    </svg>
                         Import CSV
-                      </>
-                    )}
-                  </label>
+                  </>
+                )}
+              </label>
                 </div>
               </div>
               <p className="text-xs text-gray-500 mt-3">

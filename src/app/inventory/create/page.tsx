@@ -80,7 +80,7 @@ const DEFAULT_FORM: FormData = {
   piecesPerDozen: '',
   productSize: '',
   productSizeUnit: 'mg',
-  expiryDate: '',
+    expiryDate: '',
   piecesInStock: '',
   cartonsInStock: '',
   rollsInStock: '',
@@ -705,20 +705,20 @@ export default function CreateInventoryPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                         Pieces per roll
                 </label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={formData.piecesPerRoll}
-                          onChange={(e) => updateForm('piecesPerRoll', e.target.value)}
-                          placeholder="3"
+                          <input
+                            type="number"
+                            min="0"
+                            value={formData.piecesPerRoll}
+                            onChange={(e) => updateForm('piecesPerRoll', e.target.value)}
+                            placeholder="3"
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus-border-transparent"
-                        />
+                          />
                       </div>
                     <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                         Pieces per dozen
                 </label>
-                        <input
+                            <input
                           type="number"
                           min="0"
                           value={formData.piecesPerDozen}
@@ -823,7 +823,7 @@ export default function CreateInventoryPage() {
                   </div>
               </section>
 
-            
+
               <section>
                 <div className="flex flex-col gap-2 mb-6">
                   <h2 className="text-xl font-semibold text-gray-900">Outsourcing</h2>
