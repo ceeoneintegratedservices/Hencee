@@ -181,11 +181,16 @@ export const PERMISSIONS = {
 export const ROLES = {
   ADMIN: 'admin',
   MANAGER: 'manager',
+  GENERAL_MANAGER: 'general_manager',
   MANAGING_DIRECTOR: 'managing_director',
   SALES: 'sales_staff',
+  SALES_REPRESENTATIVE: 'sales_representative',
   SUPPORT: 'technical_support',
   VIEWER: 'viewer',
-  BOOK_STOREKEEPER: 'book_storekeeper'
+  BOOK_STOREKEEPER: 'book_storekeeper',
+  ACCOUNTANT: 'accountant',
+  AUDITOR: 'auditor',
+  CASHIER: 'cashier'
 };
 
 // Default permissions by role
@@ -217,6 +222,19 @@ export const getDefaultPermissions = (role: string): string[] => {
         PERMISSIONS.SETTINGS_VIEW,
         PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE, PERMISSIONS.EXPENSES_EDIT
       ];
+    case ROLES.GENERAL_MANAGER:
+      // General Manager has same permissions as Manager
+      return [
+        PERMISSIONS.DASHBOARD_VIEW,
+        PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_EDIT,
+        PERMISSIONS.CUSTOMERS_VIEW, PERMISSIONS.CUSTOMERS_CREATE, PERMISSIONS.CUSTOMERS_EDIT,
+        PERMISSIONS.APPROVALS_VIEW,
+        PERMISSIONS.PRODUCTS_VIEW, PERMISSIONS.PRODUCTS_EDIT,
+        PERMISSIONS.INVENTORY_VIEW,
+        PERMISSIONS.REPORTS_VIEW,
+        PERMISSIONS.SETTINGS_VIEW,
+        PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE, PERMISSIONS.EXPENSES_EDIT
+      ];
     case ROLES.MANAGING_DIRECTOR:
       // Mirror manager defaults to ensure access to Expenses page
       return [
@@ -231,6 +249,7 @@ export const getDefaultPermissions = (role: string): string[] => {
         PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE, PERMISSIONS.EXPENSES_EDIT
       ];
     case ROLES.SALES:
+    case ROLES.SALES_REPRESENTATIVE:
       return [
         PERMISSIONS.DASHBOARD_VIEW,
         PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE,
@@ -253,13 +272,17 @@ export const getDefaultPermissions = (role: string): string[] => {
         PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE
       ];
     case ROLES.VIEWER:
+    case ROLES.AUDITOR:
+      // Auditor has read-only access (same as viewer)
       return [
         PERMISSIONS.DASHBOARD_VIEW,
         PERMISSIONS.SALES_VIEW,
         PERMISSIONS.CUSTOMERS_VIEW,
         PERMISSIONS.PRODUCTS_VIEW,
         PERMISSIONS.INVENTORY_VIEW,
-        PERMISSIONS.REPORTS_VIEW
+        PERMISSIONS.REPORTS_VIEW,
+        PERMISSIONS.EXPENSES_VIEW,
+        PERMISSIONS.AUDIT_VIEW_LOGS
       ];
     case ROLES.BOOK_STOREKEEPER:
       return [
@@ -271,6 +294,30 @@ export const getDefaultPermissions = (role: string): string[] => {
         PERMISSIONS.PRODUCTS_VIEW,
         PERMISSIONS.SALES_VIEW,
         PERMISSIONS.INVENTORY_VIEW
+      ];
+    case ROLES.ACCOUNTANT:
+      // Accountant: Financial operations, payments, reports, expenses
+      return [
+        PERMISSIONS.DASHBOARD_VIEW,
+        PERMISSIONS.SALES_VIEW,
+        PERMISSIONS.CUSTOMERS_VIEW,
+        PERMISSIONS.PRODUCTS_VIEW,
+        PERMISSIONS.REPORTS_VIEW,
+        PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE, PERMISSIONS.EXPENSES_EDIT,
+        PERMISSIONS.APPROVALS_VIEW,
+        // Accountants can process payments and refunds (handled via sales permissions)
+        PERMISSIONS.SALES_EDIT
+      ];
+    case ROLES.CASHIER:
+      // Cashier: Sales operations, payments, customers
+      return [
+        PERMISSIONS.DASHBOARD_VIEW,
+        PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_EDIT,
+        PERMISSIONS.CUSTOMERS_VIEW, PERMISSIONS.CUSTOMERS_CREATE, PERMISSIONS.CUSTOMERS_EDIT,
+        PERMISSIONS.PRODUCTS_VIEW,
+        PERMISSIONS.INVENTORY_VIEW,
+        // Cashiers process payments (handled via sales permissions)
+        // Cannot delete sales, manage inventory, or view reports
       ];
     default:
       return [];

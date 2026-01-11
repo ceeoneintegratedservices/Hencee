@@ -2,6 +2,8 @@
  * Error handler utility for consistent API error handling
  */
 
+import { redirectToLogin } from "./tokenUtils";
+
 interface ApiError {
   statusCode?: number;
   message?: string | string[];
@@ -18,12 +20,9 @@ export function handleApiError(error: any): string {
     
     if (status === 401) {
       // Unauthorized - token refresh should handle this, but if we get here, redirect to login
+      // Use utility function to prevent multiple redirects
       if (typeof window !== "undefined") {
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("authToken");
-        localStorage.removeItem("refreshToken");
-        localStorage.removeItem("userData");
-        window.location.href = "/login";
+        redirectToLogin();
       }
       return "Session expired. Please login again.";
     }

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { usePermissions } from "@/hooks/usePermissions";
 import { getAllNotifications, type Notification } from "@/services/notifications";
+import { hasValidAuth } from "@/utils/tokenUtils";
 
 interface HeaderProps {
   title: string;
@@ -84,12 +85,25 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
     const fetchNotifications = async () => {
       if (!isInitialized) return;
       
+      // Check if we have valid auth before making the request
+      // This prevents the login/logout loop when tokens are expired
+      if (!hasValidAuth()) {
+        // No valid auth, stop fetching notifications
+        return;
+      }
+      
       setNotificationsLoading(true);
       try {
         // Fetch ALL activities for the notifications bar
         const fetchedNotifications = await getAllNotifications('allTime', 100);
         setNotifications(fetchedNotifications);
       } catch (error) {
+        // If error is about session expired, stop polling
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes('Session expired') || errorMessage.includes('Unauthorized')) {
+          // Session expired, stop polling
+          return;
+        }
         console.error('Error fetching notifications:', error);
         // Keep empty array on error
         setNotifications([]);
@@ -100,8 +114,12 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
 
     fetchNotifications();
     
-    // Refresh notifications every 30 seconds
-    const interval = setInterval(fetchNotifications, 30000);
+    // Refresh notifications every 30 seconds, but only if we have valid auth
+    const interval = setInterval(() => {
+      if (hasValidAuth()) {
+        fetchNotifications();
+      }
+    }, 30000);
     
     return () => clearInterval(interval);
   }, [isInitialized]);
