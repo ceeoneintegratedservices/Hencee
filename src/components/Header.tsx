@@ -92,6 +92,14 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
         return;
       }
       
+      // Check if user has dashboard.view permission before calling activities endpoint
+      // If not, skip fetching notifications to avoid 403 errors
+      if (!hasPermission('dashboard.view')) {
+        console.log('User does not have dashboard.view permission, skipping notifications fetch');
+        setNotifications([]);
+        return;
+      }
+      
       setNotificationsLoading(true);
       try {
         // Fetch ALL activities for the notifications bar

@@ -6,8 +6,9 @@ import Header from '@/components/Header';
 import Breadcrumb from '@/components/Breadcrumb';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import TimePeriodSelector from '@/components/TimePeriodSelector';
-import { listUsers, createUser, updateUser, deleteUser, assignUserRole, activateUser, deactivateUser, type User as APIUser } from '@/services/users';
-import { listRoles as apiListRoles, saveUserPermissions, type RoleSummary } from '@/services/permissions';
+import { listUsers, createUser, updateUser, deleteUser, assignUserRole, activateUser, deactivateUser, verifyUserEmail, type User as APIUser } from '@/services/users';
+import { listRoles as apiListRoles, saveUserPermissions, type RoleSummary, ROLES } from '@/services/permissions';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface Role {
   id: string;
@@ -28,6 +29,7 @@ interface AppUser {
   email: string;
   status: 'Active' | 'Inactive';
   roleId: string; // value used by <select>
+  isEmailVerified?: boolean;
   // raw role info from API for reconciliation
   roleUuid?: string;
   roleSlug?: string;
@@ -55,6 +57,7 @@ function buildPermissionKey(entity: string, action: string) {
 
 export default function UsersRolesPage() {
   const { notifications, removeNotification, showSuccess } = useNotifications();
+  const { hasRole, isInitialized: permissionsInitialized } = usePermissions();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -166,6 +169,7 @@ export default function UsersRolesPage() {
         name: user.name, // API already provides name field
         email: user.email,
         status: user.isActive ? 'Active' : 'Inactive',
+        isEmailVerified: user.isEmailVerified ?? false,
         roleId: (user as any)?.role?.id || (user as any)?.role?.name || 'admin',
         roleUuid: (user as any)?.role?.id,
         roleSlug: (user as any)?.role?.name,
@@ -604,6 +608,7 @@ export default function UsersRolesPage() {
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email Verified</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
@@ -612,7 +617,7 @@ export default function UsersRolesPage() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {pagedUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center">
+                      <td colSpan={6} className="px-6 py-12 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <svg className="w-12 h-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
@@ -624,12 +629,17 @@ export default function UsersRolesPage() {
                     </tr>
                   ) : (
                     pagedUsers.map(u => (
-                    <tr key={u.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => { setSelectedUser(u); setShowUserPermissions(true); }}>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                    <tr key={u.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap cursor-pointer" onClick={() => { setSelectedUser(u); setShowUserPermissions(true); }}>
                         <div className="text-sm font-medium text-gray-900">{u.name}</div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{u.email}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 cursor-pointer" onClick={() => { setSelectedUser(u); setShowUserPermissions(true); }}>{u.email}</td>
+                      <td className="px-6 py-4 whitespace-nowrap cursor-pointer" onClick={() => { setSelectedUser(u); setShowUserPermissions(true); }}>
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${u.isEmailVerified ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                          {u.isEmailVerified ? 'Verified' : 'Unverified'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap cursor-pointer" onClick={() => { setSelectedUser(u); setShowUserPermissions(true); }}>
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${u.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-700'}`}>
                           {u.status}
                         </span>
@@ -638,6 +648,7 @@ export default function UsersRolesPage() {
                         <select
                           value={u.roleId}
                           onChange={(e) => handleAssignRole(u.id, e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
                           className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           {roles.filter(r => r.id !== 'viewer').map(r => (
@@ -646,25 +657,46 @@ export default function UsersRolesPage() {
                         </select>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <button
-                          onClick={async () => {
-                            const isCurrentlyActive = u.status === 'Active';
-                            try {
-                              if (isCurrentlyActive) {
-                                await deactivateUser(u.id);
-                                setUsers(prev => prev.map(x => x.id === u.id ? { ...x, status: 'Inactive' } : x));
-                                showSuccess('Updated', 'User deactivated');
-                              } else {
-                                await activateUser(u.id);
-                                setUsers(prev => prev.map(x => x.id === u.id ? { ...x, status: 'Active' } : x));
-                                showSuccess('Updated', 'User activated');
-                              }
-                            } catch (e: any) {}
-                          }}
-                          className="px-3 py-1.5 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
-                        >
-                          {u.status === 'Active' ? 'Deactivate' : 'Activate'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {permissionsInitialized && hasRole(ROLES.ADMIN) && !u.isEmailVerified && (
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  await verifyUserEmail(u.id);
+                                  setUsers(prev => prev.map(x => x.id === u.id ? { ...x, isEmailVerified: true } : x));
+                                  showSuccess('Email Verified', `${u.name}'s email has been verified`);
+                                } catch (err: any) {
+                                  showSuccess('Error', err.message || 'Failed to verify email');
+                                }
+                              }}
+                              className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 transition-colors"
+                              title="Verify Email"
+                            >
+                              Verify Email
+                            </button>
+                          )}
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const isCurrentlyActive = u.status === 'Active';
+                              try {
+                                if (isCurrentlyActive) {
+                                  await deactivateUser(u.id);
+                                  setUsers(prev => prev.map(x => x.id === u.id ? { ...x, status: 'Inactive' } : x));
+                                  showSuccess('Updated', 'User deactivated');
+                                } else {
+                                  await activateUser(u.id);
+                                  setUsers(prev => prev.map(x => x.id === u.id ? { ...x, status: 'Active' } : x));
+                                  showSuccess('Updated', 'User activated');
+                                }
+                              } catch (e: any) {}
+                            }}
+                            className="px-3 py-1.5 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
+                          >
+                            {u.status === 'Active' ? 'Deactivate' : 'Activate'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                     ))

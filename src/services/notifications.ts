@@ -45,6 +45,7 @@ export interface Notification {
 
 /**
  * Fetch activities from the dashboard activities endpoint
+ * Returns empty activities if user doesn't have dashboard.view permission (403 error)
  */
 export async function fetchActivities(
   timeframe: 'thisWeek' | 'lastWeek' | 'thisMonth' | 'last7days' | 'allTime' = 'thisWeek',
@@ -57,12 +58,33 @@ export async function fetchActivities(
     });
 
     if (!response.ok) {
+      // If 403 Forbidden, user doesn't have dashboard.view permission
+      // Return empty activities instead of throwing error
+      if (response.status === 403) {
+        console.log('User does not have dashboard.view permission, returning empty activities');
+        return {
+          activities: [],
+          recentActivities: [],
+          message: null,
+          description: null
+        };
+      }
       throw new Error(`Failed to fetch activities: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
     return data;
-  } catch (error) {
+  } catch (error: any) {
+    // If error is 403, return empty activities
+    if (error.message?.includes('403') || error.message?.includes('Forbidden')) {
+      console.log('User does not have dashboard.view permission, returning empty activities');
+      return {
+        activities: [],
+        recentActivities: [],
+        message: null,
+        description: null
+      };
+    }
     console.error('Error fetching activities:', error);
     throw error;
   }

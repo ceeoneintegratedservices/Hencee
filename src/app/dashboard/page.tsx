@@ -129,21 +129,55 @@ export default function AdminDashboard() {
     
     try {
       const timeframe = getTimeFrame(selectedTimePeriod);
-      const [overviewData, activitiesData, ordersData, salesData] = await Promise.all([
-        getDashboardOverview(timeframe),
-        getDashboardActivities(timeframe),
-        getDashboardOrders(timeframe),
-        getDashboardSales(timeframe)
-      ]);
       
-      console.log('Dashboard activities response:', activitiesData);
-      console.log('Activities array:', activitiesData?.activities);
-      console.log('Recent activities array:', activitiesData?.recentActivities);
+      // Check if user has dashboard.view permission before calling activities endpoint
+      const hasDashboardView = isInitialized && hasPermission('dashboard.view');
       
-      setDashboardData(overviewData);
-      setActivities(activitiesData);
-      setOrdersData(ordersData);
-      setSalesData(salesData);
+      // Fetch dashboard data - conditionally include activities
+      const fetchPromises: Promise<any>[] = [
+        getDashboardOverview(timeframe).catch(err => {
+          console.error('Error fetching overview:', err);
+          return null;
+        }),
+        getDashboardOrders(timeframe).catch(err => {
+          console.error('Error fetching orders:', err);
+          return null;
+        }),
+        getDashboardSales(timeframe).catch(err => {
+          console.error('Error fetching sales:', err);
+          return null;
+        })
+      ];
+      
+      // Only fetch activities if user has dashboard.view permission
+      if (hasDashboardView) {
+        fetchPromises.push(
+          getDashboardActivities(timeframe).catch(err => {
+            console.error('Error fetching activities:', err);
+            // Return empty activities on error
+            return { activities: [], recentActivities: [] };
+          })
+        );
+      }
+      
+      const results = await Promise.all(fetchPromises);
+      
+      // Set dashboard data
+      if (results[0]) setDashboardData(results[0]);
+      if (results[1]) setOrdersData(results[1]);
+      if (results[2]) setSalesData(results[2]);
+      
+      // Set activities (either from API or empty if no permission)
+      if (hasDashboardView && results[3]) {
+        const activitiesData = results[3];
+        console.log('Dashboard activities response:', activitiesData);
+        console.log('Activities array:', activitiesData?.activities);
+        console.log('Recent activities array:', activitiesData?.recentActivities);
+        setActivities(activitiesData);
+      } else {
+        // Set empty activities if user doesn't have permission
+        setActivities({ activities: [], recentActivities: [] });
+      }
     } catch (err: any) {
       console.error('Error fetching dashboard data:', err);
       setError(err.message || 'Failed to load dashboard data');
