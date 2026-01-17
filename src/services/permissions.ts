@@ -286,7 +286,6 @@ export const getDefaultPermissions = (role: string): string[] => {
       ];
     case ROLES.BOOK_STOREKEEPER:
       return [
-        PERMISSIONS.DASHBOARD_VIEW,
         PERMISSIONS.PRODUCTS_CREATE,
         PERMISSIONS.INVENTORY_MANAGE,
         PERMISSIONS.PRODUCTS_EDIT,

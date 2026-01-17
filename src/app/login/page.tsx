@@ -178,10 +178,19 @@ export default function LoginPage() {
                 roleTypeLower === 'sales_rep' ||
                 roleTypeLower.includes('sales')) {
               router.push('/orders');
+            }
+            // Storekeeper should go to inventory page
+            else if (roleTypeLower === 'book_storekeeper' || 
+                roleTypeLower === 'storekeeper' || 
+                roleTypeLower.includes('storekeeper') ||
+                roleTypeLower.includes('inventory clerk')) {
+              router.push('/inventory');
             } else if (permissions.includes('view_expenses') || permissions.includes('expenses.view')) {
               router.push('/expenses');
             } else if (permissions.includes('view_reports') || permissions.includes('reports.view')) {
               router.push('/reports');
+            } else if (permissions.includes('view_inventory') || permissions.includes('inventory.view')) {
+              router.push('/inventory');
             } else {
               // Default fallback - dashboard for everyone else
               router.push('/dashboard');

@@ -6,7 +6,6 @@ The **Book Storekeeper** role (`book_storekeeper`) is designed for inventory man
 ## Permissions
 Based on the default permissions defined in `src/services/permissions.ts`, the Book Storekeeper role has the following permissions:
 
-- `dashboard.view` - View dashboard
 - `products.create` - Create new products
 - `inventory.manage` - Manage inventory (adjust stock, record movements, etc.)
 - `products.edit` - Edit existing products
@@ -18,10 +17,6 @@ Based on the default permissions defined in `src/services/permissions.ts`, the B
 ## Accessible Pages
 
 Based on the menu items defined in `PermissionService.getMenuItems()`, the Book Storekeeper can access:
-
-### ✅ **Dashboard**
-- **Permission**: `dashboard.view`
-- **Access**: Full access to dashboard overview
 
 ### ✅ **Orders (Sales)**
 - **Permission**: `sales.view`
@@ -46,6 +41,9 @@ Based on the menu items defined in `PermissionService.getMenuItems()`, the Book 
 
 The Book Storekeeper role **cannot** access:
 
+### ❌ **Dashboard**
+- **Reason**: No `dashboard.view` permission
+
 ### ❌ **Approvals**
 - **Reason**: No `approvals.view` or related approval permissions
 
@@ -66,11 +64,10 @@ The Book Storekeeper role **cannot** access:
 
 ## Summary
 
-**Total Accessible Pages**: 4
-1. Dashboard
-2. Orders (Sales)
-3. Customers
-4. Inventory
+**Total Accessible Pages**: 3
+1. Orders (Sales)
+2. Customers
+3. Inventory
 
 **Primary Responsibilities**:
 - Manage inventory levels
