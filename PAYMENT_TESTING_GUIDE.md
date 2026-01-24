@@ -1,7 +1,6 @@
 # Payment Testing Guide
 
-This guide covers how to test payment functionality in the CeeoneApp-pharma application.
-
+This guide covers how to test payment functionality in the CeeoneApp-pharma application
 ---
 
 ## Prerequisites
