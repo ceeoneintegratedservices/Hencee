@@ -460,20 +460,29 @@ export interface InventoryExpirySummary {
 }
 
 export async function getInventoryExpirySummary(): Promise<InventoryExpirySummary> {
-  const response = await authFetch(API_ENDPOINTS.inventoryExpirySummary);
-  const data = await parseResponse<any>(response);
-  if (data && typeof data === "object") {
-    return {
-      totals: data.totals ?? data.summary ?? {},
-      warehouses: Array.isArray(data.warehouses)
-        ? data.warehouses
-        : Array.isArray(data.breakdown)
-        ? data.breakdown
-        : [],
-      upcoming: Array.isArray(data.upcoming) ? data.upcoming : [],
-    };
+  try {
+    const response = await authFetch(API_ENDPOINTS.inventoryExpirySummary);
+    const data = await parseResponse<any>(response);
+    if (data && typeof data === "object") {
+      return {
+        totals: data.totals ?? data.summary ?? {},
+        warehouses: Array.isArray(data.warehouses)
+          ? data.warehouses
+          : Array.isArray(data.breakdown)
+          ? data.breakdown
+          : [],
+        upcoming: Array.isArray(data.upcoming) ? data.upcoming : [],
+      };
+    }
+    return {};
+  } catch (error: any) {
+    // Handle 403 Forbidden errors gracefully - return empty summary instead of throwing
+    if (error?.status === 403 || error?.statusCode === 403 || error?.message?.includes('403') || error?.message?.includes('Forbidden')) {
+      return {};
+    }
+    // Re-throw other errors
+    throw error;
   }
-  return {};
 }
 
 export async function listInventoryDamages(

@@ -131,10 +131,28 @@ export async function assignUserRole(userId: string, roleId: string): Promise<Us
       method: "PUT",
       body: JSON.stringify({ roleId })
     });
+    
+    // Check if response is OK before parsing
+    if (!res.ok) {
+      const errorText = await res.text();
+      let errorMessage = `Failed to assign role: ${res.status} ${res.statusText}`;
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData?.message || errorData?.error || errorMessage;
+      } catch {
+        errorMessage = errorText || errorMessage;
+      }
+      throw new Error(errorMessage);
+    }
+    
     const data = await res.json();
     return data;
-  } catch (error) {
-    throw error;
+  } catch (error: any) {
+    // Re-throw with more context if it's not already an Error
+    if (error instanceof Error) {
+      throw error;
+    }
+    throw new Error(error?.message || 'Failed to assign role to user');
   }
 }
 

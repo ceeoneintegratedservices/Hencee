@@ -789,7 +789,12 @@ export default function InventoryPage() {
       setExpirySummary(summary);
     } catch (error: any) {
       setExpirySummary(null);
-      setExpirySummaryError(error?.message || 'Unable to load expiry summary');
+      // Handle 403 Forbidden errors gracefully - user doesn't have permission for expiry summary
+      if (error?.status === 403 || error?.message?.includes('403') || error?.message?.includes('Forbidden')) {
+        setExpirySummaryError(null); // Don't show error for permission issues
+      } else {
+        setExpirySummaryError(error?.message || 'Unable to load expiry summary');
+      }
     } finally {
       setExpirySummaryLoading(false);
     }

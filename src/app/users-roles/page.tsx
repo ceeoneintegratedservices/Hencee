@@ -396,11 +396,19 @@ export default function UsersRolesPage() {
 
   const handleAssignRole = async (userId: string, roleId: string) => {
     try {
-      await assignUserRole(userId, roleId);
-      setUsers(prev => prev.map(u => u.id === userId ? { ...u, roleId } : u));
-      showSuccess('Updated', 'User role updated');
+      setApiLoading(true);
+      const updatedUser = await assignUserRole(userId, roleId);
+      // Refresh users list to get the latest data from backend
+      await fetchUsers();
+      showSuccess('Updated', 'User role updated successfully');
     } catch (e: any) {
-      // no-op; you could show an error toast if desired
+      console.error('Error assigning role:', e);
+      const errorMessage = e?.message || e?.error || 'Failed to update user role';
+      showSuccess('Error', errorMessage);
+      // Revert the UI change by refreshing users
+      await fetchUsers();
+    } finally {
+      setApiLoading(false);
     }
   };
 
