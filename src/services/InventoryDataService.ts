@@ -42,6 +42,7 @@ export interface Purchase {
   customerName: string;
   customerPhone: string;
   saleReference: string;
+  items?: SaleItem[];
 }
 
 export class InventoryDataService {

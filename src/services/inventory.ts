@@ -136,6 +136,17 @@ export interface BaseInventoryPayload {
 export type CreateInventoryProduct = BaseInventoryPayload;
 export type UpdateInventoryProduct = Partial<BaseInventoryPayload>;
 
+export interface SaleItem {
+  id: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  status: "PENDING" | "COMPLETED" | "RETURNED" | "DAMAGED" | "CANCELED";
+  unitType?: string;
+}
+
 export interface PurchaseHistoryItem {
   id: string;
   date: string;
@@ -147,6 +158,7 @@ export interface PurchaseHistoryItem {
   customerName: string;
   customerPhone: string;
   saleReference: string;
+  items?: SaleItem[];
 }
 
 export interface PurchaseHistoryResponse {
@@ -528,11 +540,16 @@ export async function recordProductDamage(
 
 export async function getProductPurchaseHistory(
   id: string,
-  limit: number = 20
+  limit: number = 20,
+  filters?: { status?: string }
 ): Promise<PurchaseHistoryResponse> {
-  const response = await authFetch(
-    `${API_ENDPOINTS.inventoryById(id)}/purchase-history?limit=${limit}`
-  );
+  let url = `${API_ENDPOINTS.inventoryById(id)}/purchase-history?limit=${limit}`;
+  
+  if (filters?.status) {
+    url += `&status=${encodeURIComponent(filters.status)}`;
+  }
+  
+  const response = await authFetch(url);
   return parseResponse<PurchaseHistoryResponse>(response);
 }
 

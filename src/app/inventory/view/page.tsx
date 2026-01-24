@@ -9,6 +9,7 @@ import {
   updateInventoryProduct,
   getProductPurchaseHistory,
   type InventoryStatus,
+  type SaleItem,
 } from '@/services/inventory';
 import { getWarehouse } from '@/services/warehouses';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
@@ -16,6 +17,7 @@ import FilterByDateModal from '@/components/FilterByDateModal';
 import EditProductModal from '@/components/EditProductModal';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
+import StatusBadge from '@/components/StatusBadge';
 
 function ViewInventoryContent() {
   const router = useRouter();
@@ -33,9 +35,11 @@ function ViewInventoryContent() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [warehouseInfo, setWarehouseInfo] = useState<{ id: string; name: string } | null>(null);
   const [productDetails, setProductDetails] = useState<any>(null); // Store full product data
+  const [productId, setProductId] = useState<string | null>(null);
   
   // UI states
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('All Status');
   const [filteredPurchases, setFilteredPurchases] = useState<Purchase[]>([]);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showBulkActionDropdown, setShowBulkActionDropdown] = useState(false);
@@ -60,29 +64,25 @@ function ViewInventoryContent() {
     setLoading(false);
   }, [router]);
 
+  // Extract product ID once - must run before other effects
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (id) {
+      setProductId(id);
+    }
+  }, []);
+
   // Load inventory item data
   useEffect(() => {
-    // Don't fetch if not authenticated
-    if (!isAuthenticated) return;
-    
-    // Get product ID from URL
-    const itemId = searchParams.get('id');
-    if (!itemId) {
-      showError('Error', 'No product ID provided');
-      return;
-    }
+    // Don't fetch if not authenticated or no product ID
+    if (!isAuthenticated || !productId) return;
     
     // Track if component is mounted
     let mounted = true;
     
     async function fetchProductDetails() {
       try {
-        if (!itemId) {
-          showError('Error', 'No product ID provided');
-          return;
-        }
-        
-        const product = await getInventoryProductById(itemId);
+        const product = await getInventoryProductById(productId as string);
 
         if (!mounted) return;
         
@@ -134,49 +134,9 @@ function ViewInventoryContent() {
             });
           }
         }
-        
-        try {
-          const purchaseHistory = await getProductPurchaseHistory(itemId as string, 20);
-          if (!purchaseHistory || !Array.isArray(purchaseHistory.purchases)) {
-            setPurchases([]);
-            setFilteredPurchases([]);
-            return;
-          }
-          
-          const purchases: Purchase[] = purchaseHistory.purchases.map((purchase) => ({
-            id: purchase.id || '',
-            date: purchase.date || new Date().toISOString(),
-            price: purchase.price || 0,
-            quantity: purchase.quantity || 0,
-            totalAmount: purchase.totalAmount || 0,
-            status: purchase.status || 'PENDING',
-            orderType: purchase.orderType || 'Standard',
-            customerName: purchase.customerName || 'Unknown Customer',
-            customerPhone: purchase.customerPhone || '',
-            saleReference: purchase.saleReference || '',
-          }));
-          
-          const sortedPurchases = purchases.sort(
-            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-          );
-          setPurchases(sortedPurchases);
-          setFilteredPurchases(sortedPurchases);
-          
-          if (sortedPurchases.length > 0) {
-            setInventoryItem((prev) =>
-              prev ? { ...prev, lastOrder: sortedPurchases[0].date } : null
-            );
-          }
-        } catch (error) {
-          console.error('Failed to fetch purchase history:', error);
-          setPurchases([]);
-          setFilteredPurchases([]);
-        }
       } catch (error: any) {
         if (mounted) {
           setInventoryItem(null);
-          setPurchases([]);
-          setFilteredPurchases([]);
           showError('Error', error.message || 'Failed to load product details');
         }
       }
@@ -186,13 +146,11 @@ function ViewInventoryContent() {
     
     // Cleanup function to prevent state updates after unmount
     return () => { mounted = false; };
-  }, [isAuthenticated, searchParams.get('id')]); // Only depend on the actual ID value, not the entire searchParams object
+  }, [isAuthenticated, productId]);
 
   // Fallback: Load from localStorage if API fails
   useEffect(() => {
-    if (isAuthenticated && !inventoryItem) {
-      const itemId = searchParams.get('id') || 'item-1';
-      
+    if (isAuthenticated && !inventoryItem && productId) {
       // Try to load the actual item from localStorage first
       const storedItems = localStorage.getItem('inventoryItems');
       let item: InventoryItem | null = null;
@@ -200,7 +158,7 @@ function ViewInventoryContent() {
       if (storedItems) {
         try {
           const items: InventoryItem[] = JSON.parse(storedItems);
-          item = items.find(i => i.id === itemId) || null;
+          item = items.find(i => i.id === productId) || null;
         } catch (error) {
           console.error('Error parsing stored inventory items:', error);
         }
@@ -208,7 +166,7 @@ function ViewInventoryContent() {
       
       // If not found in localStorage, generate a new one (fallback)
       if (!item) {
-        item = InventoryDataService.generateInventoryItem(itemId);
+        item = InventoryDataService.generateInventoryItem(productId);
       }
       
       setInventoryItem(item);
@@ -220,30 +178,105 @@ function ViewInventoryContent() {
           name: item.warehouseNumber 
         });
       }
-      
-      // Generate sample purchases
-      const samplePurchases = InventoryDataService.generatePurchases(itemId, 20);
-      setPurchases(samplePurchases);
-      setFilteredPurchases(samplePurchases);
     }
-  }, [isAuthenticated, searchParams.get('id')]); // Only depend on the ID, not the entire searchParams object or inventoryItem
+  }, [isAuthenticated, productId]); // Only depend on the ID, not the entire searchParams object or inventoryItem
 
-  // Filter purchases
+  // Fetch purchases once when component mounts or productId changes
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredPurchases(purchases);
-      return;
+    if (!isAuthenticated || !productId) return;
+    
+    let mounted = true;
+    
+    async function fetchPurchases() {
+      try {
+        const purchaseHistory = await getProductPurchaseHistory(productId as string, 20);
+        
+        if (!mounted) return;
+        
+        const responseData = purchaseHistory as any;
+        const items = responseData?.data;
+        
+        if (!Array.isArray(items) || items.length === 0) {
+          setPurchases([]);
+          setFilteredPurchases([]);
+          return;
+        }
+        
+        // Group items by saleId to create purchase objects
+        const purchaseMap = new Map<string, Purchase>();
+        
+        items.forEach((item: any) => {
+          const saleId = item.saleId;
+          if (!saleId) return;
+          
+          if (!purchaseMap.has(saleId)) {
+            const sale = item.sale || {};
+            const customer = sale.customer || {};
+            
+            purchaseMap.set(saleId, {
+              id: saleId,
+              date: sale.createdAt || item.createdAt || new Date().toISOString(),
+              price: item.unitPrice || 0,
+              quantity: 0,
+              totalAmount: sale.totalAmount || 0,
+              status: sale.status || 'PENDING',
+              orderType: sale.orderType || 'Standard',
+              customerName: customer.name || 'Unknown Customer',
+              customerPhone: customer.phone || '',
+              saleReference: sale.saleReference || sale.id?.substring(0, 8) || '',
+              items: [],
+            });
+          }
+          
+          const purchase = purchaseMap.get(saleId)!;
+          purchase.items = purchase.items || [];
+          purchase.items.push({
+            id: item.id,
+            productId: item.productId,
+            productName: item.productName || responseData.productName || 'Product',
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            totalPrice: item.totalPrice,
+            status: item.status || purchase.status || 'PENDING',
+            unitType: item.selectedUnit,
+          });
+          purchase.quantity += item.quantity;
+        });
+        
+        const purchases = Array.from(purchaseMap.values()).sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        
+        setPurchases(purchases);
+        setFilteredPurchases(purchases);
+        setCurrentPage(1);
+      } catch (error) {
+        console.error('Failed to fetch purchase history:', error);
+        setPurchases([]);
+        setFilteredPurchases([]);
+      }
     }
     
-    const filtered = purchases.filter(purchase => 
-      purchase.date.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      purchase.orderType.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      purchase.status.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      purchase.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      purchase.saleReference.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    fetchPurchases();
+    return () => { mounted = false; };
+  }, [isAuthenticated, productId]);
+
+  // Apply search and status filter to already fetched purchases
+  useEffect(() => {
+    let filtered = purchases;
+    
+    // Only apply search filter - always show all items
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(purchase => 
+        purchase.date.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        purchase.orderType.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        purchase.status.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        purchase.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        purchase.saleReference.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    
     setFilteredPurchases(filtered);
-    // Reset to page 1 when search changes
     setCurrentPage(1);
   }, [searchQuery, purchases]);
 
@@ -264,6 +297,135 @@ function ViewInventoryContent() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Calculate item-level statistics for summary cards
+  const getItemStatistics = () => {
+    const stats = {
+      total: 0,
+      pending: 0,
+      completed: 0,
+      returned: 0,
+      damaged: 0,
+      canceled: 0,
+      totalValue: 0,
+    };
+
+    purchases.forEach(purchase => {
+      if (purchase.items && Array.isArray(purchase.items)) {
+        purchase.items.forEach(item => {
+          stats.total++;
+          stats.totalValue += item.totalPrice || 0;
+          
+          switch(item.status?.toUpperCase()) {
+            case 'PENDING':
+              stats.pending++;
+              break;
+            case 'COMPLETED':
+              stats.completed++;
+              break;
+            case 'RETURNED':
+              stats.returned++;
+              break;
+            case 'DAMAGED':
+              stats.damaged++;
+              break;
+            case 'CANCELED':
+              stats.canceled++;
+              break;
+          }
+        });
+      }
+    });
+
+    return stats;
+  };
+
+  const itemStats = getItemStatistics();
+
+  const handleUpdateItemStatus = async (saleId: string, itemId: string, newStatus: string) => {
+    try {
+      const response = await fetch(
+        `/api/ceeone/sales/${saleId}/items/${itemId}/status`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+          },
+          body: JSON.stringify({ status: newStatus }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to update item status');
+      }
+
+      showSuccess('Success', `Item status updated to ${newStatus}`);
+      
+      // Refresh purchases data - don't filter, get all items
+      if (productId) {
+        const purchaseHistory = await getProductPurchaseHistory(productId as string, 20);
+        
+        if (purchaseHistory) {
+          // Handle both response formats
+          const items = (purchaseHistory as any).data || (purchaseHistory as any).purchases || [];
+          
+          if (Array.isArray(items)) {
+            // Group items by saleId
+            const purchaseMap = new Map<string, Purchase>();
+            
+            items.forEach((item: any) => {
+              const saleId = item.saleId;
+              if (!saleId) return;
+              
+              if (!purchaseMap.has(saleId)) {
+                const sale = item.sale || {};
+                const customer = sale.customer || {};
+                
+                purchaseMap.set(saleId, {
+                  id: saleId,
+                  date: sale.createdAt || item.createdAt || new Date().toISOString(),
+                  price: item.unitPrice || 0,
+                  quantity: 0,
+                  totalAmount: sale.totalAmount || 0,
+                  status: sale.status || 'PENDING',
+                  orderType: sale.orderType || 'Standard',
+                  customerName: customer.name || 'Unknown Customer',
+                  customerPhone: customer.phone || '',
+                  saleReference: sale.saleReference || sale.id?.substring(0, 8) || '',
+                  items: [],
+                });
+              }
+              
+              const purchase = purchaseMap.get(saleId)!;
+              purchase.items = purchase.items || [];
+              purchase.items.push({
+                id: item.id,
+                productId: item.productId,
+                productName: item.productName || (purchaseHistory as any).productName || 'Product',
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                totalPrice: item.totalPrice,
+                status: item.status || purchase.status || 'PENDING',
+                unitType: item.selectedUnit,
+              });
+              purchase.quantity += item.quantity;
+            });
+            
+            const formattedPurchases = Array.from(purchaseMap.values()).sort(
+              (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+            );
+            
+            setPurchases(formattedPurchases);
+            setFilteredPurchases(formattedPurchases);
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('Error updating item status:', error);
+      showError('Error', error.message || 'Failed to update item status');
+    }
+  };
 
   const handleEditProduct = () => {
     setShowEditModal(true);
@@ -438,7 +600,7 @@ function ViewInventoryContent() {
       {/* Main Content */}
       <main className="flex-1 h-screen overflow-y-auto transition-all duration-300 relative">
         <Header 
-          title="View Tyre Product" 
+          title="View Product" 
           sidebarOpen={showSidebar}
           setSidebarOpen={setShowSidebar}
         />
@@ -641,20 +803,26 @@ function ViewInventoryContent() {
 
           {/* Summary Statistics */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-            {/* Total Orders */}
-            <div className="bg-white p-4 rounded-lg shadow-sm">
+            {/* Total Items Value */}
+            <button
+              onClick={() => {
+                setStatusFilter('All Status');
+                setCurrentPage(1);
+              }}
+              className="bg-white p-4 rounded-lg shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+            >
               <div className="flex items-center gap-3">
                 <svg className="w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                 </svg>
-                <div>
-                  <p className="text-sm text-gray-600">Total Orders</p>
+                <div className="text-left">
+                  <p className="text-sm text-gray-600">Total Items Value</p>
                   <p className="text-lg font-semibold text-gray-900">
-                    {InventoryDataService.formatCurrency(purchases.reduce((sum, p) => sum + p.totalAmount, 0))}
+                    {InventoryDataService.formatCurrency(itemStats.totalValue)}
                   </p>
                 </div>
               </div>
-            </div>
+            </button>
 
             {/* Views */}
             <div className="bg-white p-4 rounded-lg shadow-sm">
@@ -683,64 +851,94 @@ function ViewInventoryContent() {
               </div>
             </div>
 
-            {/* All Orders */}
-            <div className="bg-white p-4 rounded-lg shadow-sm">
+            {/* Total Items in Orders */}
+            <button
+              onClick={() => {
+                setStatusFilter('All Status');
+                setCurrentPage(1);
+              }}
+              className="bg-white p-4 rounded-lg shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+            >
               <div className="flex items-center gap-3">
                 <svg className="w-8 h-8 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                 </svg>
-                <div>
-                  <p className="text-sm text-gray-600">All Orders</p>
-                  <p className="text-lg font-semibold text-gray-900">{purchases.length}</p>
+                <div className="text-left">
+                  <p className="text-sm text-gray-600">Total Items</p>
+                  <p className="text-lg font-semibold text-gray-900">{itemStats.total}</p>
                 </div>
               </div>
-            </div>
+            </button>
 
-            {/* Pending */}
-            <div className="bg-white p-4 rounded-lg shadow-sm">
-              <div>
+            {/* Pending Items */}
+            <button
+              onClick={() => {
+                setStatusFilter('PENDING');
+                setCurrentPage(1);
+              }}
+              className="bg-white p-4 rounded-lg shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+            >
+              <div className="text-left">
                 <p className="text-sm text-gray-600">Pending</p>
                 <p className="text-lg font-semibold text-gray-900">
-                  {purchases.filter(p => p.status === 'PENDING').length}
+                  {itemStats.pending}
                 </p>
               </div>
-            </div>
+            </button>
 
-            {/* Completed */}
-            <div className="bg-white p-4 rounded-lg shadow-sm">
-              <div>
+            {/* Completed Items */}
+            <button
+              onClick={() => {
+                setStatusFilter('COMPLETED');
+                setCurrentPage(1);
+              }}
+              className="bg-white p-4 rounded-lg shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+            >
+              <div className="text-left">
                 <p className="text-sm text-gray-600">Completed</p>
                 <p className="text-lg font-semibold text-gray-900">
-                  {purchases.filter(p => p.status === 'COMPLETED').length}
+                  {itemStats.completed}
                 </p>
               </div>
-            </div>
+            </button>
 
-            {/* Canceled */}
-            <div className="bg-white p-4 rounded-lg shadow-sm">
-              <div>
+            {/* Canceled Items */}
+            <button
+              onClick={() => {
+                setStatusFilter('CANCELED');
+                setCurrentPage(1);
+              }}
+              className="bg-white p-4 rounded-lg shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+            >
+              <div className="text-left">
                 <p className="text-sm text-gray-600">Canceled</p>
                 <p className="text-lg font-semibold text-gray-900">
-                  {purchases.filter(p => p.status === 'CANCELLED').length}
+                  {itemStats.canceled}
                 </p>
               </div>
-            </div>
+            </button>
 
-            {/* Returned */}
-            <div className="bg-white p-4 rounded-lg shadow-sm">
-              <div>
+            {/* Returned Items */}
+            <button
+              onClick={() => {
+                setStatusFilter('RETURNED');
+                setCurrentPage(1);
+              }}
+              className="bg-white p-4 rounded-lg shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+            >
+              <div className="text-left">
                 <p className="text-sm text-gray-600">Returned</p>
                 <p className="text-lg font-semibold text-gray-900">
-                  {purchases.filter(p => p.status === 'RETURNED').length}
+                  {itemStats.returned}
                 </p>
               </div>
-            </div>
+            </button>
 
-            {/* Damaged */}
+            {/* Damaged Items */}
             <div className="bg-white p-4 rounded-lg shadow-sm">
-              <div>
+              <div className="text-left">
                 <p className="text-sm text-gray-600">Damaged</p>
-                <p className="text-lg font-semibold text-gray-900">0</p>
+                <p className="text-lg font-semibold text-gray-900">{itemStats.damaged}</p>
               </div>
             </div>
           </div>
@@ -783,19 +981,54 @@ function ViewInventoryContent() {
                       {showFilterDropdown && (
                         <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
                           <div className="py-1">
-                            <button className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                            <button
+                              onClick={() => {
+                                setStatusFilter('All Status');
+                                setShowFilterDropdown(false);
+                                setCurrentPage(1);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-sm ${statusFilter === 'All Status' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
+                            >
                               All Status
                             </button>
-                            <button className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                            <button
+                              onClick={() => {
+                                setStatusFilter('COMPLETED');
+                                setShowFilterDropdown(false);
+                                setCurrentPage(1);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-sm ${statusFilter === 'COMPLETED' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
+                            >
                               Completed
                             </button>
-                            <button className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                            <button
+                              onClick={() => {
+                                setStatusFilter('PENDING');
+                                setShowFilterDropdown(false);
+                                setCurrentPage(1);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-sm ${statusFilter === 'PENDING' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
+                            >
                               Pending
                             </button>
-                            <button className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                            <button
+                              onClick={() => {
+                                setStatusFilter('CANCELLED');
+                                setShowFilterDropdown(false);
+                                setCurrentPage(1);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-sm ${statusFilter === 'CANCELLED' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
+                            >
                               Cancelled
                             </button>
-                            <button className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                            <button
+                              onClick={() => {
+                                setStatusFilter('RETURNED');
+                                setShowFilterDropdown(false);
+                                setCurrentPage(1);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-sm ${statusFilter === 'RETURNED' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
+                            >
                               Returned
                             </button>
                           </div>
@@ -919,46 +1152,107 @@ function ViewInventoryContent() {
                   {(() => {
                     const startIndex = (currentPage - 1) * itemsPerPage;
                     const endIndex = startIndex + itemsPerPage;
-                    return filteredPurchases.slice(startIndex, endIndex);
-                  })().map((purchase) => (
-                    <tr key={purchase.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <input type="checkbox" className="rounded border-gray-300" />
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(purchase.date).toLocaleDateString('en-US', { 
-                          year: 'numeric', 
-                          month: 'short', 
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div>
-                          <div className="font-medium">{purchase.customerName}</div>
-                          <div className="text-xs text-gray-500">{purchase.customerPhone}</div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {InventoryDataService.formatCurrency(purchase.price)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {purchase.quantity}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <div className="text-xs text-gray-500">{purchase.saleReference}</div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {InventoryDataService.formatCurrency(purchase.totalAmount)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 text-xs rounded-full font-medium ${InventoryDataService.getStatusColor(purchase.status)}`}>
-                          {purchase.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                    const sliced = filteredPurchases.slice(startIndex, endIndex);
+                    return sliced;
+                  })().flatMap((purchase) => {
+                    // Show each item in the purchase as a separate row
+                    if (purchase.items && purchase.items.length > 0) {
+                      return purchase.items.map((item, idx) => (
+                        <tr key={`${purchase.id}-${item.id}`} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <input type="checkbox" className="rounded border-gray-300" />
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {idx === 0 && (
+                              new Date(purchase.date).toLocaleDateString('en-US', { 
+                                year: 'numeric', 
+                                month: 'short', 
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {idx === 0 && (
+                              <div>
+                                <div className="font-medium">{purchase.customerName}</div>
+                                <div className="text-xs text-gray-500">{purchase.customerPhone}</div>
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {InventoryDataService.formatCurrency(item.unitPrice)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {item.quantity}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {idx === 0 && <div className="text-xs text-gray-500">{purchase.saleReference}</div>}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {idx === 0 && InventoryDataService.formatCurrency(purchase.totalAmount)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <StatusBadge status={item.status} size="sm" />
+                              <select
+                                value={item.status || 'PENDING'}
+                                onChange={(e) => handleUpdateItemStatus(purchase.id, item.id, e.target.value)}
+                                className="text-xs border border-gray-300 rounded px-2 py-1 hover:border-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              >
+                                <option value="PENDING">Pending</option>
+                                <option value="COMPLETED">Completed</option>
+                                <option value="RETURNED">Returned</option>
+                                <option value="DAMAGED">Damaged</option>
+                                <option value="CANCELED">Canceled</option>
+                              </select>
+                            </div>
+                          </td>
+                        </tr>
+                      ));
+                    }
+                    // Fallback if no items (legacy data)
+                    return (
+                      <tr key={purchase.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <input type="checkbox" className="rounded border-gray-300" />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {new Date(purchase.date).toLocaleDateString('en-US', { 
+                            year: 'numeric', 
+                            month: 'short', 
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <div>
+                            <div className="font-medium">{purchase.customerName}</div>
+                            <div className="text-xs text-gray-500">{purchase.customerPhone}</div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {InventoryDataService.formatCurrency(purchase.price)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {purchase.quantity}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <div className="text-xs text-gray-500">{purchase.saleReference}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {InventoryDataService.formatCurrency(purchase.totalAmount)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 text-xs rounded-full font-medium ${InventoryDataService.getStatusColor(purchase.status)}`}>
+                            {purchase.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
