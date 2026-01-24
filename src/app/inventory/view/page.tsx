@@ -265,7 +265,21 @@ function ViewInventoryContent() {
   useEffect(() => {
     let filtered = purchases;
     
-    // Only apply search filter - always show all items
+    // Apply status filter first
+    if (statusFilter && statusFilter !== 'All Status') {
+      filtered = filtered.filter(purchase => {
+        // Check if any item in the purchase matches the status filter
+        if (purchase.items && purchase.items.length > 0) {
+          return purchase.items.some(item => 
+            (item.status || purchase.status || 'PENDING').toUpperCase() === statusFilter.toUpperCase()
+          );
+        }
+        // Fall back to purchase status
+        return (purchase.status || 'PENDING').toUpperCase() === statusFilter.toUpperCase();
+      });
+    }
+    
+    // Then apply search filter
     if (searchQuery.trim()) {
       filtered = filtered.filter(purchase => 
         purchase.date.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -278,7 +292,7 @@ function ViewInventoryContent() {
     
     setFilteredPurchases(filtered);
     setCurrentPage(1);
-  }, [searchQuery, purchases]);
+  }, [searchQuery, statusFilter, purchases]);
 
   // Click outside handlers
   useEffect(() => {
@@ -935,12 +949,18 @@ function ViewInventoryContent() {
             </button>
 
             {/* Damaged Items */}
-            <div className="bg-white p-4 rounded-lg shadow-sm">
+            <button
+              onClick={() => {
+                setStatusFilter('DAMAGED');
+                setCurrentPage(1);
+              }}
+              className="bg-white p-4 rounded-lg shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+            >
               <div className="text-left">
                 <p className="text-sm text-gray-600">Damaged</p>
                 <p className="text-lg font-semibold text-gray-900">{itemStats.damaged}</p>
               </div>
-            </div>
+            </button>
           </div>
 
           {/* Purchases Table */}
@@ -1013,13 +1033,13 @@ function ViewInventoryContent() {
                             </button>
                             <button
                               onClick={() => {
-                                setStatusFilter('CANCELLED');
+                                setStatusFilter('CANCELED');
                                 setShowFilterDropdown(false);
                                 setCurrentPage(1);
                               }}
-                              className={`w-full text-left px-3 py-2 text-sm ${statusFilter === 'CANCELLED' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
+                              className={`w-full text-left px-3 py-2 text-sm ${statusFilter === 'CANCELED' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
                             >
-                              Cancelled
+                              Canceled
                             </button>
                             <button
                               onClick={() => {
@@ -1030,6 +1050,16 @@ function ViewInventoryContent() {
                               className={`w-full text-left px-3 py-2 text-sm ${statusFilter === 'RETURNED' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
                             >
                               Returned
+                            </button>
+                            <button
+                              onClick={() => {
+                                setStatusFilter('DAMAGED');
+                                setShowFilterDropdown(false);
+                                setCurrentPage(1);
+                              }}
+                              className={`w-full text-left px-3 py-2 text-sm ${statusFilter === 'DAMAGED' ? 'bg-[#f4f5fa] text-[#02016a] font-medium' : 'text-gray-700 hover:bg-gray-50'}`}
+                            >
+                              Damaged
                             </button>
                           </div>
                         </div>
