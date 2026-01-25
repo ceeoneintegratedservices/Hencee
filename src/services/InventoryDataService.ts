@@ -31,6 +31,17 @@ export interface InventorySummary {
   oneStarRating: number;
 }
 
+export interface SaleItem {
+  id: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+  status: "PENDING" | "COMPLETED" | "RETURNED" | "DAMAGED" | "CANCELED";
+  unitType?: string;
+}
+
 export interface Purchase {
   id: string;
   date: string;

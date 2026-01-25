@@ -7,7 +7,9 @@ interface StatusBadgeProps {
   size?: 'sm' | 'md' | 'lg';
 }
 
-const statusConfig = {
+type StatusKey = 'PENDING' | 'COMPLETED' | 'RETURNED' | 'DAMAGED' | 'CANCELED';
+
+const statusConfig: Record<StatusKey, { color: string; icon: string; label: string }> = {
   PENDING: { 
     color: 'bg-yellow-50 text-yellow-700 border-yellow-200',
     icon: '⏳',
@@ -35,8 +37,13 @@ const statusConfig = {
   },
 };
 
+const isValidStatus = (status: string): status is StatusKey => {
+  return status in statusConfig;
+};
+
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' }) => {
-  const config = statusConfig[status?.toUpperCase()] || statusConfig.PENDING;
+  const upperStatus = status?.toUpperCase() || 'PENDING';
+  const config = isValidStatus(upperStatus) ? statusConfig[upperStatus] : statusConfig.PENDING;
 
   const sizeClasses = {
     sm: 'px-2 py-1 text-xs',
