@@ -1585,6 +1585,7 @@ export default function InventoryPage() {
                     {/* Status Filter */}
                     <div className="relative" ref={filterDropdownRef}>
                       <button
+                        type="button"
                         onClick={() => setShowFilterDropdown(!showFilterDropdown)}
                         className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                       >
@@ -1745,6 +1746,7 @@ export default function InventoryPage() {
 
                     {/* Date Filter */}
                     <button 
+                      type="button"
                       onClick={() => setShowDateFilterModal(true)}
                       className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                     >
@@ -1755,7 +1757,10 @@ export default function InventoryPage() {
                     </button>
 
                     {/* Share */}
-                    <button className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                    <button 
+                      type="button"
+                      className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
                       <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                       </svg>
@@ -1765,6 +1770,7 @@ export default function InventoryPage() {
                     {/* Bulk Action */}
                     <div className="relative" ref={bulkActionDropdownRef}>
                       <button
+                        type="button"
                         onClick={() => setShowBulkActionDropdown(!showBulkActionDropdown)}
                         className="flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                       >

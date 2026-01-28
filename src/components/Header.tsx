@@ -220,21 +220,24 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
         <h1 className="text-[20px] font-poppins font-medium text-[#45464e]">{title}</h1>
       </div>
       <div className="flex items-center gap-5">
-        {/* Role Button with Permissions - Only show if user has permission to view permissions */}
-        {hasPermission('users.view') && (
-          <div className="relative" ref={permissionsRef}>
-            <button 
-              onClick={() => setShowPermissions(!showPermissions)}
-              className="bg-[#fef5ea] rounded-lg px-3 py-1 flex items-center gap-2 hover:bg-[#fef0e0] transition-colors cursor-pointer"
-            >
-              <span className="text-[#1c1d22] text-[14px]">{getUserRole()}</span>
+        {/* Role Button with Permissions */}
+        <div className="relative" ref={permissionsRef}>
+          <button 
+            onClick={() => hasPermission('users.view') && setShowPermissions(!showPermissions)}
+            className={`bg-[#fef5ea] rounded-lg px-3 py-1 flex items-center gap-2 transition-colors ${
+              hasPermission('users.view') ? 'hover:bg-[#fef0e0] cursor-pointer' : 'cursor-default'
+            }`}
+          >
+            <span className="text-[#1c1d22] text-[14px]">{getUserRole()}</span>
+            {hasPermission('users.view') && (
               <svg className={`w-4 h-4 transition-transform ${showPermissions ? 'rotate-180' : ''}`} fill="none">
                 <path d="M6 8l4 4 4-4" stroke="#1c1d22" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
-            </button>
-          
-          {/* Permissions Modal */}
-          {showPermissions && (
+            )}
+          </button>
+        
+        {/* Permissions Modal - Only for users with users.view permission */}
+        {hasPermission('users.view') && showPermissions && (
             <div className="absolute top-full right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
               <div className="p-4">
                 <div className="flex items-center justify-between mb-3">
@@ -273,8 +276,7 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
               </div>
             </div>
           )}
-          </div>
-        )}
+        </div>
         {/* Notification Bell - Only show if user has permission to view notifications */}
         {hasAnyPermission(['dashboard.view', 'sales.view', 'inventory.view']) && (
           <div className="relative" ref={notificationRef}>
