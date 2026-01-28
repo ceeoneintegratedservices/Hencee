@@ -641,15 +641,6 @@ function ViewInventoryContent() {
                   hour: '2-digit',
                   minute: '2-digit'
                 })}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="text-gray-600">Product URL</span>
-                  <span className="text-blue-600">1nancystores.com/{inventoryItem.productName.toLowerCase().replace(/\s+/g, '-')}</span>
-                  <button className="p-1 hover:bg-gray-100 rounded">
-                    <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                  </button>
-                </div>
               </div>
               
               {/* Action Buttons */}
@@ -934,6 +925,39 @@ function ViewInventoryContent() {
                 <p className="text-lg font-semibold text-gray-900">{itemStats.damaged}</p>
               </div>
             </button>
+
+            {/* Expired Status */}
+            <div className={`p-4 rounded-lg shadow-sm ${
+              productDetails?.expiryStatus === 'expired' 
+                ? 'bg-red-50 border border-red-200' 
+                : productDetails?.expiryStatus === 'critical'
+                ? 'bg-orange-50 border border-orange-200'
+                : productDetails?.expiryStatus === 'warning'
+                ? 'bg-yellow-50 border border-yellow-200'
+                : 'bg-green-50 border border-green-200'
+            }`}>
+              <div className="text-left">
+                <p className="text-sm text-gray-600">Expiry Status</p>
+                <p className={`text-lg font-semibold ${
+                  productDetails?.expiryStatus === 'expired' 
+                    ? 'text-red-700' 
+                    : productDetails?.expiryStatus === 'critical'
+                    ? 'text-orange-700'
+                    : productDetails?.expiryStatus === 'warning'
+                    ? 'text-yellow-700'
+                    : 'text-green-700'
+                }`}>
+                  {productDetails?.expiryStatus 
+                    ? productDetails.expiryStatus.charAt(0).toUpperCase() + productDetails.expiryStatus.slice(1)
+                    : 'N/A'}
+                </p>
+                {productDetails?.expiryDate && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {new Date(productDetails.expiryDate).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Purchases Table */}
