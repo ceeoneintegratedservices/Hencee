@@ -1,9 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import Breadcrumb from "@/components/Breadcrumb";
+import { getCustomer } from "@/services/customers";
+import type { CustomerRecord } from "@/types/customers";
 
 interface Order {
   id: string;
@@ -11,63 +14,56 @@ interface Order {
   category: string;
   trackingId: string;
   orderTotal: number;
-  status: 'Completed' | 'In-Progress' | 'Pending';
+  status: 'Completed' | 'In-Progress' | 'Pending' | 'Canceled';
 }
 
 export default function CustomerDetailsPage() {
+  const params = useParams();
+  const router = useRouter();
+  const customerId = params.id as string;
+  
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
+  const [customer, setCustomer] = useState<CustomerRecord | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Sample customer data
-  const customer = {
-    id: "743648",
-    name: "Janet Adebayo",
-    email: "janet.adebayo@gmail.com",
-    phone: "+2348065650633",
-    customerSince: "12 Sept 2022 - 12:55 pm",
-    trackingId: "9348fjr73",
-    status: "Active",
-    lastOrder: "12 Sept 2022",
-    homeAddress: "No. 15 Adekunle Street, Yaba, Lagos State",
-    billingAddress: "No. 15 Adekunle Street, Yaba, Lagos State",
-    totalOrdersValue: 250000,
-    totalOrders: 10,
-    pendingOrders: 2,
-    completedOrders: 8,
+  // Fetch customer data
+  useEffect(() => {
+    async function fetchCustomer() {
+      if (!customerId) return;
+      
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const data = await getCustomer(customerId);
+        setCustomer(data);
+      } catch (err: any) {
+        setError(err.message || 'Failed to load customer');
+      } finally {
+        setLoading(false);
+      }
+    }
+    
+    fetchCustomer();
+  }, [customerId]);
+
+  // Calculate order statistics from customer data
+  const orderStats = {
+    totalOrders: customer?.totalOrders ?? 0,
+    totalValue: customer?.totalPurchases ?? 0,
+    pendingOrders: 0,
+    completedOrders: 0,
     canceledOrders: 0,
     returnedOrders: 0,
     damagedOrders: 0,
-    abandonedCarts: 2
+    abandonedCarts: 0
   };
 
-  // Sample orders data
-  const orders: Order[] = [
-    {
-      id: "1",
-      orderDate: "12 Aug 2022 - 12:25 am",
-      category: "GL601",
-      trackingId: "9348fjr73",
-      orderTotal: 25000,
-      status: "Completed"
-    },
-    {
-      id: "2",
-      orderDate: "12 Aug 2022 - 12:25 am",
-      category: "GL602",
-      trackingId: "9348fjr73",
-      orderTotal: 25000,
-      status: "In-Progress"
-    },
-    {
-      id: "3",
-      orderDate: "12 Aug 2022 - 12:25 am",
-      category: "GL908",
-      trackingId: "9348fjr73",
-      orderTotal: 25000,
-      status: "Pending"
-    }
-  ];
+  // Sample orders data (would need to fetch from orders API)
+  const orders: Order[] = [];
 
   const handleSelectOrder = (orderId: string) => {
     setSelectedOrders(prev => 
@@ -93,19 +89,75 @@ export default function CustomerDetailsPage() {
   };
 
   const getStatusBadgeColor = (status: string) => {
-    switch (status) {
-      case 'Completed':
+    switch (status?.toLowerCase()) {
+      case 'completed':
         return 'bg-green-100 text-green-800';
-      case 'In-Progress':
+      case 'in-progress':
         return 'bg-blue-100 text-blue-800';
-      case 'Pending':
+      case 'pending':
         return 'bg-orange-100 text-orange-800';
-      case 'Active':
+      case 'active':
         return 'bg-green-100 text-green-800';
+      case 'inactive':
+        return 'bg-red-100 text-red-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }
   };
+
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar currentPage="customers" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header title="Customers" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+          <main className="flex-1 overflow-y-auto px-5 pt-7">
+            <div className="flex items-center justify-center h-64">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#02016a]"></div>
+              <span className="ml-2 text-gray-600">Loading customer...</span>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !customer) {
+    return (
+      <div className="flex h-screen bg-gray-50">
+        <Sidebar currentPage="customers" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <Header title="Customers" sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
+          <main className="flex-1 overflow-y-auto px-5 pt-7">
+            <div className="flex flex-col items-center justify-center h-64">
+              <p className="text-red-600 font-medium">{error || 'Customer not found'}</p>
+              <button 
+                onClick={() => router.push('/customers')}
+                className="mt-4 px-4 py-2 bg-[#02016a] text-white rounded-lg hover:bg-[#03024a] transition-colors"
+              >
+                Back to Customers
+              </button>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -119,7 +171,7 @@ export default function CustomerDetailsPage() {
           <Breadcrumb items={[
             { label: "Home", href: "/dashboard" },
             { label: "Customers", href: "/customers" },
-            { label: "View Customer", href: "#" }
+            { label: customer.name || "View Customer", href: "#" }
           ]} />
 
           {/* Customer Header */}
@@ -127,38 +179,35 @@ export default function CustomerDetailsPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-8">
                 <div>
-                  <label className="text-sm text-gray-500">Order Number</label>
-                  <p className="text-lg font-semibold text-gray-900">#{customer.id}</p>
+                  <label className="text-sm text-gray-500">Customer ID</label>
+                  <p className="text-lg font-semibold text-gray-900">#{customer.id?.slice(0, 8) || 'N/A'}</p>
                 </div>
                 <div>
                   <label className="text-sm text-gray-500">Customer Since</label>
-                  <p className="text-lg font-semibold text-gray-900">{customer.customerSince}</p>
+                  <p className="text-lg font-semibold text-gray-900">{formatDate(customer.createdAt)}</p>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500">Tracking ID</label>
-                  <div className="flex items-center gap-2">
-                    <p className="text-lg font-semibold text-gray-900">{customer.trackingId}</p>
-                    <button
-                      onClick={() => copyToClipboard(customer.trackingId)}
-                      className="p-1 hover:bg-gray-100 rounded transition-colors"
-                    >
-                      <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                    </button>
+                  <label className="text-sm text-gray-500">Status</label>
+                  <div className="mt-1">
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor(customer.status || 'active')}`}>
+                      {customer.status || 'Active'}
+                    </span>
                   </div>
                 </div>
               </div>
               
               <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => router.push('/customers')}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Back
+                </button>
                 <button className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2">
                   Edit Customer
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
-                </button>
-                <button className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors">
-                  Suspend Customer
                 </button>
               </div>
             </div>
@@ -175,27 +224,22 @@ export default function CustomerDetailsPage() {
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">{customer.name}</h3>
-                  <p className="text-sm text-gray-600">Last Order: {customer.lastOrder}</p>
+                  <h3 className="text-lg font-semibold text-gray-900">{customer.name || 'N/A'}</h3>
+                  <p className="text-sm text-gray-600">Customer</p>
                 </div>
-              </div>
-              <div className="mb-4">
-                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor(customer.status)}`}>
-                  {customer.status}
-                </span>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                   </svg>
-                  <span className="text-sm text-gray-600">{customer.phone}</span>
+                  <span className="text-sm text-gray-600">{customer.phone || 'N/A'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
-                  <span className="text-sm text-gray-600">{customer.email}</span>
+                  <span className="text-sm text-gray-600">{customer.email || 'N/A'}</span>
                 </div>
               </div>
             </div>
@@ -209,16 +253,12 @@ export default function CustomerDetailsPage() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900">Addresses</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Address</h3>
               </div>
               <div className="space-y-3">
                 <div>
-                  <label className="text-sm text-gray-500">Home Address</label>
-                  <p className="text-sm text-gray-900">{customer.homeAddress}</p>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-500">Billing Address</label>
-                  <p className="text-sm text-gray-900">{customer.billingAddress}</p>
+                  <label className="text-sm text-gray-500">Address</label>
+                  <p className="text-sm text-gray-900">{customer.address || 'No address provided'}</p>
                 </div>
               </div>
             </div>
@@ -229,18 +269,14 @@ export default function CustomerDetailsPage() {
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
                     <svg className="w-4 h-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900">Total Orders Value</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">Total Purchases</h3>
                 </div>
-                <select className="px-2 py-1 border border-gray-300 rounded text-xs">
-                  <option value="all-time">All-time</option>
-                  <option value="this-month">This Month</option>
-                  <option value="this-year">This Year</option>
-                </select>
               </div>
-              <p className="text-2xl font-bold text-gray-900">₦{customer.totalOrdersValue.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-gray-900">₦{(customer.totalPurchases ?? 0).toLocaleString()}</p>
+              <p className="text-sm text-gray-500 mt-1">{customer.totalOrders ?? 0} orders</p>
             </div>
 
             {/* Order Summary */}
@@ -254,140 +290,63 @@ export default function CustomerDetailsPage() {
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900">Order Summary</h3>
                 </div>
-                <select className="px-2 py-1 border border-gray-300 rounded text-xs">
-                  <option value="all-time">All-time</option>
-                  <option value="this-month">This Month</option>
-                  <option value="this-year">This Year</option>
-                </select>
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">All Orders</span>
-                  <span className="text-sm font-semibold text-gray-900">{customer.totalOrders}</span>
+                  <span className="text-sm text-gray-600">Total Orders</span>
+                  <span className="text-sm font-semibold text-gray-900">{customer.totalOrders ?? 0}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Pending</span>
-                  <span className="text-sm font-semibold text-gray-900">{customer.pendingOrders}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Completed</span>
-                  <span className="text-sm font-semibold text-gray-900">{customer.completedOrders}</span>
+                  <span className="text-sm text-gray-600">Outstanding Balance</span>
+                  <span className="text-sm font-semibold text-gray-900">₦{(customer.outstandingBalance ?? 0).toLocaleString()}</span>
                 </div>
               </div>
             </div>
 
-            {/* Order Status */}
+            {/* Additional Info */}
             <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
-                    <svg className="w-4 h-4 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <svg className="w-4 h-4 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900">Order Status</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">Additional Info</h3>
                 </div>
-                <select className="px-2 py-1 border border-gray-300 rounded text-xs">
-                  <option value="all-time">All-time</option>
-                  <option value="this-month">This Month</option>
-                  <option value="this-year">This Year</option>
-                </select>
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Canceled</span>
-                  <span className="text-sm font-semibold text-gray-900">{customer.canceledOrders}</span>
+                  <span className="text-sm text-gray-600">Created</span>
+                  <span className="text-sm font-semibold text-gray-900">{formatDate(customer.createdAt)}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Returned</span>
-                  <span className="text-sm font-semibold text-gray-900">{customer.returnedOrders}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Damaged</span>
-                  <span className="text-sm font-semibold text-gray-900">{customer.damagedOrders}</span>
+                  <span className="text-sm text-gray-600">Last Updated</span>
+                  <span className="text-sm font-semibold text-gray-900">{formatDate(customer.updatedAt)}</span>
                 </div>
               </div>
             </div>
 
-            {/* Abandoned Cart */}
-            <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
-                    <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4m0 0L7 13m0 0l-2.5 5M7 13l2.5 5m6-5v6a2 2 0 01-2 2H9a2 2 0 01-2-2v-6m8 0V9a2 2 0 00-2-2H9a2 2 0 00-2 2v4.01" />
+            {/* Notes */}
+            {customer.notes && (
+              <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
+                    <svg className="w-4 h-4 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900">Abandoned Cart</h3>
+                  <h3 className="text-lg font-semibold text-gray-900">Notes</h3>
                 </div>
-                <select className="px-2 py-1 border border-gray-300 rounded text-xs">
-                  <option value="all-time">All-time</option>
-                  <option value="this-month">This Month</option>
-                  <option value="this-year">This Year</option>
-                </select>
+                <p className="text-sm text-gray-600">{customer.notes}</p>
               </div>
-              <p className="text-2xl font-bold text-gray-900">{customer.abandonedCarts}</p>
-            </div>
+            )}
           </div>
 
-          {/* Janet's Orders */}
-          <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200">
+          {/* Customer's Orders Section */}
+          <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
             <div className="p-6 border-b border-gray-200">
               <h2 className="text-xl font-semibold text-gray-900">{customer.name}'s Orders</h2>
-            </div>
-
-            {/* Search and Filter Bar */}
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center gap-4">
-                <div className="flex-1 relative">
-                  <input
-                    type="text"
-                    placeholder="Search orders..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-                
-                <button className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-                  </svg>
-                  Filter
-                </button>
-                
-                <button className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  Filter
-                </button>
-                
-                <button className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                  </svg>
-                  Share
-                </button>
-                
-                <div className="relative">
-                  <select
-                    onChange={(e) => handleBulkAction(e.target.value)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors appearance-none pr-8"
-                  >
-                    <option value="">Bulk Action</option>
-                    <option value="export">Export</option>
-                    <option value="complete">Mark as Complete</option>
-                    <option value="cancel">Cancel Orders</option>
-                  </select>
-                  <svg className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </div>
             </div>
 
             {/* Orders Table */}
@@ -398,7 +357,7 @@ export default function CustomerDetailsPage() {
                     <th className="px-6 py-3 text-left">
                       <input
                         type="checkbox"
-                        checked={selectedOrders.length === orders.length}
+                        checked={orders.length > 0 && selectedOrders.length === orders.length}
                         onChange={handleSelectAll}
                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
@@ -407,16 +366,10 @@ export default function CustomerDetailsPage() {
                       Order Date
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Category
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Tracking ID
+                      Order ID
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Order Total
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Action
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
@@ -424,54 +377,43 @@ export default function CustomerDetailsPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {orders.map((order) => (
-                    <tr key={order.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4">
-                        <input
-                          type="checkbox"
-                          checked={selectedOrders.includes(order.id)}
-                          onChange={() => handleSelectOrder(order.id)}
-                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {order.orderDate}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {order.category}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-900">{order.trackingId}</span>
-                          <button
-                            onClick={() => copyToClipboard(order.trackingId)}
-                            className="p-1 hover:bg-gray-100 rounded transition-colors"
-                          >
-                            <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                            </svg>
-                          </button>
+                  {orders.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-8 text-center">
+                        <div className="text-gray-500">
+                          <p className="font-medium">No orders found</p>
+                          <p className="text-sm mt-1">This customer hasn't placed any orders yet</p>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ₦{order.orderTotal.toLocaleString()}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <select className="px-2 py-1 border border-gray-300 rounded text-xs">
-                          <option value={order.status}>{order.status}</option>
-                          <option value="Completed">Completed</option>
-                          <option value="In-Progress">In-Progress</option>
-                          <option value="Pending">Pending</option>
-                          <option value="Canceled">Canceled</option>
-                        </select>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor(order.status)}`}>
-                          {order.status}
-                        </span>
-                      </td>
                     </tr>
-                  ))}
+                  ) : (
+                    orders.map((order) => (
+                      <tr key={order.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4">
+                          <input
+                            type="checkbox"
+                            checked={selectedOrders.includes(order.id)}
+                            onChange={() => handleSelectOrder(order.id)}
+                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {order.orderDate}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {order.trackingId}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          ₦{order.orderTotal.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor(order.status)}`}>
+                            {order.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
