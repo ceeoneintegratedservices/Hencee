@@ -12,6 +12,10 @@ export interface CustomerRecord {
   balance?: number;
   createdAt?: string;
   updatedAt?: string;
+  totalOrders?: number;
+  totalPurchases?: number;
+  outstandingBalance?: number;
+  notes?: string;
   sales?: Array<{
     id: string;
     customerId: string;

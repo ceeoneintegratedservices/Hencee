@@ -31,6 +31,9 @@ interface Customer {
   address?: string;
   creditLimit?: number;
   balance?: number;
+  totalOrders?: number;
+  totalPurchases?: number;
+  createdAt?: string;
 }
 
 export default function CustomersPage() {
