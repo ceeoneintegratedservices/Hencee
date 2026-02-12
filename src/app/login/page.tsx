@@ -49,9 +49,18 @@ export default function LoginPage() {
           
           const roleType = userData?.role?.roleType || userData?.roleType || userData?.role?.name || '';
           const roleTypeLower = roleType?.toLowerCase() || '';
+          const roleName = userData?.role?.name || userData?.roleName || '';
+          const roleNameLower = roleName?.toLowerCase() || '';
           
+          // Customer role should go to customer portal
+          if (roleType === 'Customer' || 
+              roleTypeLower === 'customer' || 
+              roleNameLower === 'customer' ||
+              roleTypeLower.includes('customer')) {
+            router.push('/customer-portal');
+          }
           // Sales rep should go to orders page by default - check multiple variations
-          if (roleType === 'SALES_REP' || 
+          else if (roleType === 'SALES_REP' || 
               roleType === 'sales_staff' || 
               roleTypeLower === 'sales rep' || 
               roleTypeLower === 'sales_rep' ||
@@ -166,9 +175,18 @@ export default function LoginPage() {
             const permissions = userData?.permissions || userData?.role?.permissions || [];
             const roleType = userData?.role?.roleType || userData?.roleType || userData?.role?.name || '';
             const roleTypeLower = roleType?.toLowerCase() || '';
+            const roleName = userData?.role?.name || userData?.roleName || '';
+            const roleNameLower = roleName?.toLowerCase() || '';
             
+            // Customer role should go to customer portal
+            if (roleType === 'Customer' || 
+                roleTypeLower === 'customer' || 
+                roleNameLower === 'customer' ||
+                roleTypeLower.includes('customer')) {
+              router.push('/customer-portal');
+            }
             // Admin should go to dashboard by default
-            if (roleTypeLower === 'admin' || roleType === 'ADMIN' || roleType === 'admin') {
+            else if (roleTypeLower === 'admin' || roleType === 'ADMIN' || roleType === 'admin') {
               router.push('/dashboard');
             }
             // Sales rep should go to orders page by default - check multiple variations

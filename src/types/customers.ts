@@ -49,6 +49,7 @@ export interface CreateCustomerBody {
   phone: string; // International format with + prefix
   address: string;
   creditLimit?: number;
+  password?: string; // Optional - for customer portal access
 }
 
 export interface UpdateCustomerBody {

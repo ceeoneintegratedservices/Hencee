@@ -7,7 +7,7 @@ import Sidebar from "@/components/Sidebar";
 import Breadcrumb from "@/components/Breadcrumb";
 import CreateCustomerModal from "@/components/CreateCustomerModal";
 import { 
-  listCustomers, 
+  listCustomersPaginated, 
   createCustomer, 
   updateCustomer, 
   deleteCustomer,
@@ -46,6 +46,11 @@ export default function CustomersPage() {
   const [timeframe, setTimeframe] = useState("This Week");
   const [statusFilter, setStatusFilter] = useState<string>("All");
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [totalItems, setTotalItems] = useState(0);
+
   // API state management
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,14 +68,13 @@ export default function CustomersPage() {
   const [dateTo, setDateTo] = useState('');
 
   // Fetch customers from API
-  const fetchCustomers = async () => {
+  const fetchCustomers = async (page = currentPage, limit = itemsPerPage) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await listCustomers({ limit: 100 });
-      // Handle both array response and { data: [] } response formats
-      const customersArray = Array.isArray(response) ? response : ((response as any).data || []);
-      setCustomers(customersArray);
+      const response = await listCustomersPaginated({ page, limit });
+      setCustomers(response.data);
+      setTotalItems(response.total);
     } catch (err: any) {
       console.error('Error fetching customers:', err);
       setError(err.message || 'Failed to load customers');
@@ -105,13 +109,18 @@ export default function CustomersPage() {
   const handleCreateCustomer = async (customerData: any) => {
     try {
       // Transform the data to match backend's expected format
-      const transformedData = {
+      const transformedData: any = {
         name: `${customerData.firstName} ${customerData.lastName}`.trim(),
         email: customerData.email,
         phone: customerData.phone.startsWith('+') ? customerData.phone : `${customerData.countryCode}${customerData.phone}`,
         address: customerData.address,
         creditLimit: 0 // Default credit limit as expected by backend
       };
+      
+      // Include password if provided (for customer portal access)
+      if (customerData.password && customerData.password.trim()) {
+        transformedData.password = customerData.password;
+      }
       
       const newCustomer = await createCustomer(transformedData);
       setCustomers(prev => [newCustomer, ...prev]);
@@ -888,7 +897,7 @@ export default function CustomersPage() {
                           <p className="font-medium">Error loading customers</p>
                           <p className="text-sm mt-1">{error}</p>
                           <button 
-                            onClick={fetchCustomers}
+                            onClick={() => fetchCustomers(currentPage, itemsPerPage)}
                             className="mt-2 px-4 py-2 bg-[#02016a] text-white rounded-lg hover:bg-[#03024a] transition-colors"
                           >
                             Retry
@@ -994,30 +1003,70 @@ export default function CustomersPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <select className="px-2 py-1 border border-gray-300 rounded text-sm">
+                    <select 
+                      className="px-2 py-1 border border-gray-300 rounded text-sm"
+                      value={itemsPerPage}
+                      onChange={(e) => {
+                        const newLimit = parseInt(e.target.value);
+                        setItemsPerPage(newLimit);
+                        setCurrentPage(1);
+                        fetchCustomers(1, newLimit);
+                      }}
+                    >
                       <option value="10">10</option>
                       <option value="25">25</option>
                       <option value="50">50</option>
                     </select>
                     <span className="text-sm text-gray-700">Items per page</span>
                   </div>
-                  <span className="text-sm text-gray-700">1-5 of 200 items</span>
+                  <span className="text-sm text-gray-700">
+                    {filteredCustomers.length > 0 
+                      ? `${((currentPage - 1) * itemsPerPage) + 1}-${Math.min(currentPage * itemsPerPage, totalItems)} of ${totalItems} items`
+                      : `0 items`
+                    }
+                  </span>
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <select className="px-2 py-1 border border-gray-300 rounded text-sm">
-                    <option value="1">1</option>
-                    <option value="2">2</option>
-                    <option value="3">3</option>
+                  <select 
+                    className="px-2 py-1 border border-gray-300 rounded text-sm"
+                    value={currentPage}
+                    onChange={(e) => {
+                      const newPage = parseInt(e.target.value);
+                      setCurrentPage(newPage);
+                      fetchCustomers(newPage, itemsPerPage);
+                    }}
+                  >
+                    {Array.from({ length: Math.ceil(totalItems / itemsPerPage) || 1 }, (_, i) => (
+                      <option key={i + 1} value={i + 1}>{i + 1}</option>
+                    ))}
                   </select>
-                  <span className="text-sm text-gray-700">of 44 pages</span>
+                  <span className="text-sm text-gray-700">of {Math.ceil(totalItems / itemsPerPage) || 1} pages</span>
                   <div className="flex gap-1">
-                    <button className="p-1 border border-gray-300 rounded hover:bg-gray-50 transition-colors">
+                    <button 
+                      type="button"
+                      disabled={currentPage === 1}
+                      onClick={() => {
+                        const newPage = currentPage - 1;
+                        setCurrentPage(newPage);
+                        fetchCustomers(newPage, itemsPerPage);
+                      }}
+                      className="p-1 border border-gray-300 rounded hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                       </svg>
                     </button>
-                    <button className="p-1 border border-gray-300 rounded hover:bg-gray-50 transition-colors">
+                    <button 
+                      type="button"
+                      disabled={currentPage >= Math.ceil(totalItems / itemsPerPage)}
+                      onClick={() => {
+                        const newPage = currentPage + 1;
+                        setCurrentPage(newPage);
+                        fetchCustomers(newPage, itemsPerPage);
+                      }}
+                      className="p-1 border border-gray-300 rounded hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
                       <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>

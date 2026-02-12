@@ -1,9 +1,20 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, Suspense } from "react";
+import { useState, useEffect, useRef, useMemo, Suspense, useCallback } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
+import {
+  getMyProfile,
+  getMyOrders,
+  searchProducts as searchProductsAPI,
+  createOrder as createOrderAPI,
+  payDebt as payDebtAPI,
+  requestRefund as requestRefundAPI,
+  createSupportTicket,
+} from "@/services/customerPortal";
+import { listProducts } from "@/services/products";
+import type { CustomerProfile, CustomerOrder } from "@/types/customerPortal";
 
 const Chart = dynamic(() => import("react-apexcharts"), { 
   ssr: false,
@@ -79,166 +90,81 @@ function CustomerPortalContent() {
     }
   }, [searchParams]);
 
-  const [customerInfo] = useState<any>({
-    name: "Kevin Mezie",
-  });
+  const [customerInfo, setCustomerInfo] = useState<CustomerProfile | null>(null);
 
-  const [orders] = useState<OrderHistoryItem[]>([
-    {
-      id: "order-001234",
-      createdAt: new Date().toISOString(),
-      status: "completed",
-      paymentStatus: "completed",
-      totalAmount: 250000,
-      items: [
-        { productName: "Bridgestone 16\" Tire", quantity: 2, totalPrice: 150000 },
-        { productName: "Michelin 18\" Tire", quantity: 1, totalPrice: 100000 },
-      ],
-    },
-    {
-      id: "order-001235",
-      createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      status: "pending",
-      paymentStatus: "partial",
-      totalAmount: 120000,
-      paidAmount: 50000,
-      items: [{ productName: "Goodyear 17\" Tire", quantity: 2, totalPrice: 120000 }],
-    },
-    {
-      id: "order-001236",
-      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      status: "completed",
-      paymentStatus: "completed",
-      totalAmount: 320000,
-      items: [
-        { productName: "Yokohama 18\" Tire", quantity: 2, totalPrice: 220000 },
-        { productName: "Linglong 16\" Tire", quantity: 2, totalPrice: 100000 },
-      ],
-    },
-    {
-      id: "order-001237",
-      createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-      status: "pending",
-      paymentStatus: "partial",
-      totalAmount: 80000,
-      paidAmount: 30000,
-      items: [{ productName: "Maxxis 15\" Tire", quantity: 1, totalPrice: 80000 }],
-    },
-    {
-      id: "order-001238",
-      createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-      status: "completed",
-      paymentStatus: "completed",
-      totalAmount: 190000,
-      items: [
-        { productName: "Continental 17\" Tire", quantity: 1, totalPrice: 95000 },
-        { productName: "Hankook 16\" Tire", quantity: 1, totalPrice: 95000 },
-      ],
-    },
-    {
-      id: "order-001239",
-      createdAt: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
-      status: "completed",
-      paymentStatus: "completed",
-      totalAmount: 280000,
-      items: [
-        { productName: "Pirelli 18\" Tire", quantity: 2, totalPrice: 280000 },
-      ],
-    },
-    {
-      id: "order-001240",
-      createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-      status: "pending",
-      paymentStatus: "partial",
-      totalAmount: 150000,
-      paidAmount: 75000,
-      items: [
-        { productName: "Dunlop 16\" Tire", quantity: 2, totalPrice: 150000 },
-      ],
-    },
-    {
-      id: "order-001241",
-      createdAt: new Date(Date.now() - 18 * 24 * 60 * 60 * 1000).toISOString(),
-      status: "completed",
-      paymentStatus: "completed",
-      totalAmount: 210000,
-      items: [
-        { productName: "Firestone 17\" Tire", quantity: 1, totalPrice: 110000 },
-        { productName: "Nitto 16\" Tire", quantity: 1, totalPrice: 100000 },
-      ],
-    },
-    {
-      id: "order-001242",
-      createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
-      status: "completed",
-      paymentStatus: "completed",
-      totalAmount: 175000,
-      items: [
-        { productName: "Toyo 18\" Tire", quantity: 1, totalPrice: 175000 },
-      ],
-    },
-    {
-      id: "order-001243",
-      createdAt: new Date(Date.now() - 22 * 24 * 60 * 60 * 1000).toISOString(),
-      status: "pending",
-      paymentStatus: "pending",
-      totalAmount: 135000,
-      items: [
-        { productName: "Kumho 17\" Tire", quantity: 2, totalPrice: 135000 },
-      ],
-    },
-    {
-      id: "order-001244",
-      createdAt: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString(),
-      status: "completed",
-      paymentStatus: "completed",
-      totalAmount: 240000,
-      items: [
-        { productName: "BFGoodrich 18\" Tire", quantity: 2, totalPrice: 240000 },
-      ],
-    },
-    {
-      id: "order-001245",
-      createdAt: new Date(Date.now() - 28 * 24 * 60 * 60 * 1000).toISOString(),
-      status: "completed",
-      paymentStatus: "completed",
-      totalAmount: 165000,
-      items: [
-        { productName: "General 16\" Tire", quantity: 1, totalPrice: 85000 },
-        { productName: "Falken 17\" Tire", quantity: 1, totalPrice: 80000 },
-      ],
-    },
-    {
-      id: "order-001246",
-      createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-      status: "completed",
-      paymentStatus: "completed",
-      totalAmount: 295000,
-      items: [
-        { productName: "Cooper 18\" Tire", quantity: 2, totalPrice: 295000 },
-      ],
-    },
-    {
-      id: "order-001247",
-      createdAt: new Date(Date.now() - 32 * 24 * 60 * 60 * 1000).toISOString(),
-      status: "pending",
-      paymentStatus: "pending",
-      totalAmount: 110000,
-      items: [
-        { productName: "Nexen 16\" Tire", quantity: 1, totalPrice: 110000 },
-      ],
-    },
-    {
-      id: "order-001248",
-      createdAt: new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString(),
-      status: "completed",
-      paymentStatus: "completed",
-      totalAmount: 220000,
-      items: [
-        { productName: "Giti 17\" Tire", quantity: 2, totalPrice: 220000 },
-      ],
-    },
-  ]);
+  const [orders, setOrders] = useState<OrderHistoryItem[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+
+  // Fetch customer profile and orders on mount
+  useEffect(() => {
+    const fetchData = async () => {
+      setDataLoading(true);
+      setOrdersLoading(true);
+      try {
+        // Fetch customer profile
+        const profile = await getMyProfile();
+        setCustomerInfo(profile);
+
+        // Fetch orders
+        const ordersResponse = await getMyOrders({ limit: 50 });
+        const ordersData = ordersResponse.data || [];
+        
+        // Transform API orders to local format
+        const transformedOrders: OrderHistoryItem[] = ordersData.map((order: CustomerOrder) => ({
+          id: order.id,
+          createdAt: order.createdAt,
+          status: order.status?.toLowerCase() || 'pending',
+          paymentStatus: order.paymentStatus?.toLowerCase() || 'pending',
+          totalAmount: order.totalAmount,
+          paidAmount: order.paidAmount,
+          items: order.items?.map(item => ({
+            productName: item.productName,
+            quantity: item.quantity,
+            totalPrice: item.totalPrice,
+          })) || [],
+        }));
+        
+        setOrders(transformedOrders);
+      } catch (err) {
+        console.error("Error fetching customer data:", err);
+      } finally {
+        setDataLoading(false);
+        setOrdersLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Function to refresh orders after creating new one
+  const refreshOrders = useCallback(async () => {
+    setOrdersLoading(true);
+    try {
+      const ordersResponse = await getMyOrders({ limit: 50 });
+      const ordersData = ordersResponse.data || [];
+      
+      const transformedOrders: OrderHistoryItem[] = ordersData.map((order: CustomerOrder) => ({
+        id: order.id,
+        createdAt: order.createdAt,
+        status: order.status?.toLowerCase() || 'pending',
+        paymentStatus: order.paymentStatus?.toLowerCase() || 'pending',
+        totalAmount: order.totalAmount,
+        paidAmount: order.paidAmount,
+        items: order.items?.map(item => ({
+          productName: item.productName,
+          quantity: item.quantity,
+          totalPrice: item.totalPrice,
+        })) || [],
+      }));
+      
+      setOrders(transformedOrders);
+    } catch (err) {
+      console.error("Error refreshing orders:", err);
+    } finally {
+      setOrdersLoading(false);
+    }
+  }, []);
 
   // Calculate debts from orders with partial payments
   // NOTE: Payment confirmations are manual. When admin confirms payment in admin portal,
@@ -312,6 +238,8 @@ function CustomerPortalContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [showProductList, setShowProductList] = useState(false);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [showAllProducts, setShowAllProducts] = useState(false);
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [paymentType, setPaymentType] = useState("");
   const [selectedBank, setSelectedBank] = useState("");
@@ -620,52 +548,98 @@ function CustomerPortalContent() {
     }
   }, [activeTab]);
 
+  // Fetch products when order tab is active
   useEffect(() => {
-    const products: Product[] = [
-      {
-        id: "prod-1",
-        name: "Bridgestone 16\" Tire",
-        price: 75000,
-        sellingPrice: 75000,
-        category: "Bridgestone",
-        stock: 24,
-        description: "High performance 16-inch tire for sedans.",
-      },
-      {
-        id: "prod-2",
-        name: "Michelin 18\" Tire",
-        price: 100000,
-        sellingPrice: 100000,
-        category: "Michelin",
-        stock: 10,
-        description: "Premium 18-inch tire for SUVs.",
-      },
-      {
-        id: "prod-3",
-        name: "Goodyear 17\" Tire",
-        price: 60000,
-        sellingPrice: 60000,
-        category: "Goodyear",
-        stock: 32,
-        description: "Durable 17-inch tire for everyday use.",
-      },
-    ];
-
-    setProducts(products);
-  }, []);
-
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      const filtered = products.filter((product) =>
-        product.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-      setFilteredProducts(filtered);
-      setShowProductList(true);
-    } else {
-      setFilteredProducts([]);
-      setShowProductList(false);
+    if (activeTab === "order" && products.length === 0) {
+      const fetchInitialProducts = async () => {
+        setProductsLoading(true);
+        try {
+          // Fetch all products using listProducts (same as admin)
+          const response = await listProducts({ limit: 100 });
+          // Handle both array response and { data: [] } response formats
+          const productsArray = Array.isArray(response) ? response : (response.data || []);
+          
+          const transformedProducts: Product[] = productsArray.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            price: p.sellingPrice || p.price,
+            sellingPrice: p.sellingPrice || p.price,
+            category: typeof p.category === 'string' ? p.category : (p.category?.name || p.category?.label || ''),
+            stock: p.stock || p.quantity || 0,
+            description: p.description || '',
+          }));
+          setProducts(transformedProducts);
+          setFilteredProducts(transformedProducts);
+          setShowAllProducts(true);
+        } catch (err) {
+          console.error("Error fetching products:", err);
+          // Fallback to search API if listProducts fails
+          try {
+            const results = await searchProductsAPI({ q: "" });
+            const transformedProducts: Product[] = results.map(p => ({
+              id: p.id,
+              name: p.name,
+              price: p.sellingPrice,
+              sellingPrice: p.sellingPrice,
+              category: p.category,
+              stock: p.stock,
+              description: p.description,
+            }));
+            setProducts(transformedProducts);
+            setFilteredProducts(transformedProducts);
+            setShowAllProducts(true);
+          } catch (searchErr) {
+            console.error("Error fetching products via search:", searchErr);
+          }
+        } finally {
+          setProductsLoading(false);
+        }
+      };
+      fetchInitialProducts();
     }
-  }, [searchQuery, products]);
+  }, [activeTab]);
+
+  // Search products from API when search query changes
+  useEffect(() => {
+    const searchProductsFromAPI = async () => {
+      if (searchQuery.trim().length >= 2) {
+        setProductsLoading(true);
+        try {
+          const results = await searchProductsAPI({ q: searchQuery });
+          const transformedProducts: Product[] = results.map(p => ({
+            id: p.id,
+            name: p.name,
+            price: p.sellingPrice,
+            sellingPrice: p.sellingPrice,
+            category: p.category,
+            stock: p.stock,
+            description: p.description,
+          }));
+          // Update filtered products for search results dropdown
+          setFilteredProducts(transformedProducts);
+          setShowProductList(true);
+          setShowAllProducts(false);
+        } catch (err) {
+          console.error("Error searching products:", err);
+          setFilteredProducts([]);
+        } finally {
+          setProductsLoading(false);
+        }
+      } else if (searchQuery.trim().length === 0 && activeTab === "order") {
+        // Show all products when search is cleared
+        setFilteredProducts(products);
+        setShowAllProducts(products.length > 0);
+        setShowProductList(false);
+      } else {
+        setFilteredProducts([]);
+        setShowProductList(false);
+        setShowAllProducts(false);
+      }
+    };
+
+    const debounce = setTimeout(searchProductsFromAPI, 300);
+    return () => clearTimeout(debounce);
+  }, [searchQuery, activeTab, products]);
 
   const addProductToOrder = (product: Product) => {
     if (orderInvoice) {
@@ -735,22 +709,41 @@ function CustomerPortalContent() {
     try {
       setCreatingOrder(true);
 
-      const orderNumber = `ORD${Date.now().toString().slice(-8)}`;
+      // Prepare payload for API
+      const orderPayload = {
+        items: orderItems.map(item => ({
+          productId: item.id,
+          quantity: item.quantity,
+        })),
+        paymentType: payment === "Part Payment" ? "PARTIAL" as const : "FULL" as const,
+        paymentMethod: paymentType === "Bank Transfer" ? "TRANSFER" as const : 
+                       paymentType === "Cash" ? "CASH" as const : 
+                       paymentType === "Cheque" ? "CHEQUE" as const : "TRANSFER" as const,
+        paymentAmount: payment === "Part Payment" ? parseFloat(paymentAmount) : calculateTotal(),
+        note: orderNote || undefined,
+      };
+
+      // Call API to create order
+      const createdOrder = await createOrderAPI(orderPayload);
+
       const invoice = {
-        orderNumber,
-        orderDate: new Date().toISOString(),
+        orderNumber: createdOrder.orderNumber || createdOrder.id,
+        orderDate: createdOrder.createdAt || new Date().toISOString(),
         items: orderItems,
         paymentType,
         payment,
         paymentAmount: payment === "Part Payment" ? paymentAmount : calculateTotal().toString(),
         orderNote,
         totalAmount: calculateTotal(),
-        status: "pending",
-        createdAt: new Date().toISOString(),
+        status: createdOrder.status || "pending",
+        createdAt: createdOrder.createdAt || new Date().toISOString(),
       };
       
       setOrderInvoice(invoice);
       showNotification("Order created successfully! Invoice generated.", "success");
+
+      // Refresh orders list
+      await refreshOrders();
 
       setOrderItems([]);
       setPaymentType("");
@@ -915,6 +908,21 @@ function CustomerPortalContent() {
 
     try {
       setSubmittingRefund(true);
+      
+      // Call API to submit exchange request
+      const exchangePayload = {
+        orderId: selectedOrderForRefund,
+        type: 'exchange' as const,
+        reason: refundReason,
+        items: exchangeSelectedItems.map(item => ({
+          productId: item.newProduct.id,
+          quantity: item.quantity,
+        })),
+        replacementProductId: exchangeSelectedItems[0]?.newProduct.id,
+      };
+      
+      await requestRefundAPI(exchangePayload);
+      
       generateExchangeInvoice();
       showNotification("Exchange request submitted successfully! Invoice generated. Our team will review your request.", "success");
     } catch (err: any) {
@@ -938,6 +946,23 @@ function CustomerPortalContent() {
 
     try {
       setSubmittingRefund(true);
+      
+      // Get selected order to find items
+      const order = orders.find(o => o.id === selectedOrderForRefund);
+      
+      // Call API to submit refund request
+      const refundPayload = {
+        orderId: selectedOrderForRefund,
+        type: 'refund' as const,
+        reason: refundReason,
+        items: order?.items?.map((item, idx) => ({
+          productId: refundItems.includes(String(idx)) ? `item-${idx}` : '',
+          quantity: item.quantity,
+        })).filter(i => i.productId) || [],
+      };
+      
+      await requestRefundAPI(refundPayload);
+      
       showNotification("Refund request submitted successfully! Our team will review your request.", "success");
       setSelectedOrderForRefund(null);
       setRefundReason("");
@@ -959,6 +984,13 @@ function CustomerPortalContent() {
 
     try {
       setSubmittingSupport(true);
+      
+      // Call API to create support ticket
+      await createSupportTicket({
+        subject: supportSubject,
+        message: supportMessage,
+      });
+      
       showNotification("Support request submitted successfully! We'll get back to you soon.", "success");
       setSupportSubject("");
       setSupportMessage("");
@@ -1614,7 +1646,19 @@ function CustomerPortalContent() {
         {/* Order History Tab */}
         {activeTab === "history" && (
           <div className="space-y-6">
-            {orders.length === 0 ? (
+            {ordersLoading ? (
+              <div className="bg-white rounded-xl shadow-sm p-6">
+                <div className="text-center py-12">
+                  <div className="flex justify-center mb-4">
+                    <svg className="animate-spin h-12 w-12 text-[#02016a]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  </div>
+                  <p className="text-gray-600">Loading orders...</p>
+                </div>
+              </div>
+            ) : orders.length === 0 ? (
               <div className="bg-white rounded-xl shadow-sm p-6">
                 <div className="text-center py-12">
                   <div className="text-gray-400 mb-4">
@@ -1975,10 +2019,61 @@ function CustomerPortalContent() {
                     )}
                   </div>
 
+                  {/* Product Catalog - Show all products when order tab is active */}
+                  {showAllProducts && filteredProducts.length > 0 && (
+                    <div className="mt-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Available Products</h3>
+                      {productsLoading ? (
+                        <div className="flex justify-center items-center py-12">
+                          <svg className="animate-spin h-8 w-8 text-[#02016a]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          <span className="ml-3 text-gray-600">Loading products...</span>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
+                          {filteredProducts.map((product) => (
+                            <div
+                              key={product.id}
+                              onClick={() => addProductToOrder(product)}
+                              className="border border-gray-200 rounded-lg p-4 hover:shadow-md hover:border-[#02016a] transition-all cursor-pointer"
+                            >
+                              <div className="flex justify-between items-start mb-2">
+                                <div className="flex-1">
+                                  <h4 className="text-sm font-semibold text-gray-900 mb-1">{product.name}</h4>
+                                  {product.category && (
+                                    <p className="text-xs text-gray-500 mb-2">{product.category}</p>
+                                  )}
+                                  {product.description && (
+                                    <p className="text-xs text-gray-600 line-clamp-2">{product.description}</p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
+                                <div>
+                                  <p className="text-lg font-bold text-[#02016a]">₦{(product.sellingPrice || product.price || 0).toLocaleString()}</p>
+                                  {product.stock !== undefined && (
+                                    <p className={`text-xs mt-1 ${product.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                      {product.stock > 0 ? `In Stock (${product.stock})` : 'Out of Stock'}
+                                    </p>
+                                  )}
+                                </div>
+                                <button className="px-3 py-1.5 bg-[#02016a] text-white text-xs font-medium rounded-lg hover:bg-[#03024a] transition-colors">
+                                  Add
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Helper text with icon – centered, using bag icon SVG.
-                      Only show when no products have been added yet.
+                      Only show when no products have been added yet and no products are loaded.
                       Appears below the search results container. */}
-                  {orderItems.length === 0 && (
+                  {orderItems.length === 0 && !showAllProducts && !productsLoading && (
                     <div className="mt-20 flex flex-col items-center text-center">
                       <div className="flex h-28 w-28 items-center justify-center rounded-full bg-[#f4f5fa] mb-4">
                         <svg
@@ -2001,7 +2096,7 @@ function CustomerPortalContent() {
                         Add Products to Your Order
                       </p>
                       <p className="mt-1 text-sm text-[#8b8d97]">
-                        Search and add products to this order.
+                        Search for products or browse available inventory below.
                       </p>
                     </div>
                   )}
@@ -4563,17 +4658,27 @@ function CustomerPortalContent() {
 
                   try {
                     setSubmittingDebtPayment(true);
-                    // Simulate payment processing
-                    // NOTE: In production, this will submit payment to backend.
-                    // Admin will manually confirm payment in admin portal, which will then
-                    // update the order's paidAmount and paymentStatus in customer portal.
-                    // Payment approval system in admin portal to be implemented later.
-                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    
+                    // Call API to submit debt payment
+                    const paymentPayload = {
+                      orderId: selectedDebtForPayment.orderId,
+                      amount: parseFloat(debtPaymentAmount),
+                      paymentMethod: debtPaymentType === "Bank Transfer" ? "TRANSFER" as const : 
+                                     debtPaymentType === "Cash" ? "CASH" as const : 
+                                     debtPaymentType === "Cheque" ? "CHEQUE" as const : "TRANSFER" as const,
+                      reference: debtPaymentType === "Cheque" ? debtChequeNumber : debtChequeReference || undefined,
+                      proofImageUrl: debtChequeImagePreview || undefined,
+                    };
+                    
+                    await payDebtAPI(paymentPayload);
                     
                     showNotification(
                       `Payment of ₦${parseFloat(debtPaymentAmount).toLocaleString()} submitted successfully. Your payment will be reviewed and confirmed by our team within 24-48 hours.`,
                       "success"
                     );
+                    
+                    // Refresh orders to update debt status
+                    await refreshOrders();
                     
                     setSelectedDebtForPayment(null);
                     setDebtPaymentAmount("");

@@ -206,4 +206,31 @@ export const API_ENDPOINTS = {
 
   // API documentation (Pharma/CeeOne)
   apiDocs: `${API_BASE_URL}${CEEONE_PREFIX}/api/docs`,
+
+  // Customer Portal endpoints (Pharma/CeeOne)
+  customerPortal: {
+    // Profile
+    me: `${API_BASE_URL}${CEEONE_PREFIX}/customers/me`,
+    updateMe: `${API_BASE_URL}${CEEONE_PREFIX}/customers/me`,
+    
+    // Orders
+    myOrders: `${API_BASE_URL}${CEEONE_PREFIX}/customers/me/orders`,
+    createOrder: `${API_BASE_URL}${CEEONE_PREFIX}/orders`,
+    
+    // Products
+    searchProducts: `${API_BASE_URL}${CEEONE_PREFIX}/products/search`,
+    
+    // Debts
+    myDebts: `${API_BASE_URL}${CEEONE_PREFIX}/customers/me/debts`,
+    payDebt: `${API_BASE_URL}${CEEONE_PREFIX}/payments/debt`,
+    
+    // Refunds
+    requestRefund: `${API_BASE_URL}${CEEONE_PREFIX}/refunds`,
+    
+    // Support
+    createTicket: `${API_BASE_URL}${CEEONE_PREFIX}/support/tickets`,
+    
+    // Notifications
+    notifications: `${API_BASE_URL}${CEEONE_PREFIX}/notifications`,
+  },
 }; 

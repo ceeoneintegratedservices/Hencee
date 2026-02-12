@@ -1,6 +1,6 @@
 import { API_ENDPOINTS } from "../config/api";
 import { authFetch } from "./authFetch";
-import type { CustomersListQuery, CustomersListResponse, CustomerRecord, CreateCustomerBody, UpdateCustomerBody } from "../types/customers";
+import type { CustomersListQuery, CustomersListResponse, CustomerRecord, CreateCustomerBody, UpdateCustomerBody, PaginatedCustomersResponse } from "../types/customers";
 
 function buildQuery(params: CustomersListQuery = {}): string {
   const qp = new URLSearchParams();
@@ -28,6 +28,41 @@ export async function listCustomers(params: CustomersListQuery = {}): Promise<Cu
     else {
       console.error("Unexpected API response format:", data);
       return [];
+    }
+  } catch (error) {
+    console.error("Error fetching customers:", error);
+    throw error;
+  }
+}
+
+// New function that returns paginated response with total count
+export async function listCustomersPaginated(params: CustomersListQuery = {}): Promise<PaginatedCustomersResponse> {
+  try {
+    const res = await authFetch(`${API_ENDPOINTS.customers}${buildQuery(params)}`);
+    const data = await res.json();
+    
+    // The API returns a paginated object with data, total, page, limit
+    if (data && Array.isArray(data.data)) {
+      return {
+        data: data.data,
+        total: data.total ?? data.data.length,
+        page: data.page ?? 1,
+        limit: data.limit ?? params.limit ?? 10,
+      };
+    } 
+    // Fallback if the response is an array directly
+    else if (Array.isArray(data)) {
+      return {
+        data: data,
+        total: data.length,
+        page: 1,
+        limit: params.limit ?? data.length,
+      };
+    } 
+    // If we can't find an array, return empty
+    else {
+      console.error("Unexpected API response format:", data);
+      return { data: [], total: 0, page: 1, limit: params.limit ?? 10 };
     }
   } catch (error) {
     console.error("Error fetching customers:", error);
