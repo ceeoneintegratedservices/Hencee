@@ -12,6 +12,8 @@ import {
   payDebt as payDebtAPI,
   requestRefund as requestRefundAPI,
   createSupportTicket,
+  getMyDebts,
+  getNotifications as getNotificationsAPI,
 } from "@/services/customerPortal";
 import { listProducts } from "@/services/products";
 import type { CustomerProfile, CustomerOrder } from "@/types/customerPortal";
@@ -95,6 +97,9 @@ function CustomerPortalContent() {
   const [orders, setOrders] = useState<OrderHistoryItem[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [apiDebts, setApiDebts] = useState<any[]>([]);
+  const [debtsLoading, setDebtsLoading] = useState(false);
+  const [apiNotifications, setApiNotifications] = useState<any[]>([]);
 
   // Fetch customer profile and orders on mount
   useEffect(() => {
@@ -137,6 +142,39 @@ function CustomerPortalContent() {
     fetchData();
   }, []);
 
+  // Fetch debts from API
+  useEffect(() => {
+    const fetchDebts = async () => {
+      setDebtsLoading(true);
+      try {
+        const debtsData = await getMyDebts();
+        setApiDebts(debtsData);
+      } catch (err) {
+        console.error("Error fetching debts:", err);
+      } finally {
+        setDebtsLoading(false);
+      }
+    };
+    fetchDebts();
+  }, []);
+
+  // Fetch notifications from API
+  useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const notificationsData = await getNotificationsAPI();
+        setApiNotifications(notificationsData);
+      } catch (err) {
+        console.error("Error fetching notifications:", err);
+      }
+    };
+    fetchNotifications();
+    
+    // Refresh notifications every 30 seconds
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Function to refresh orders after creating new one
   const refreshOrders = useCallback(async () => {
     setOrdersLoading(true);
@@ -159,6 +197,13 @@ function CustomerPortalContent() {
       }));
       
       setOrders(transformedOrders);
+      
+      // Refresh debts and profile
+      const debtsData = await getMyDebts();
+      setApiDebts(debtsData);
+      
+      const profile = await getMyProfile();
+      setCustomerInfo(profile);
     } catch (err) {
       console.error("Error refreshing orders:", err);
     } finally {
@@ -166,11 +211,28 @@ function CustomerPortalContent() {
     }
   }, []);
 
-  // Calculate debts from orders with partial payments
-  // NOTE: Payment confirmations are manual. When admin confirms payment in admin portal,
-  // it should update the order history here (paidAmount, paymentStatus). 
-  // Payment approval system in admin portal to be implemented later.
+  // Use API debts if available, otherwise calculate from orders
   const debts = useMemo<DebtRecord[]>(() => {
+    // If API debts are available, use them
+    if (apiDebts.length > 0) {
+      return apiDebts.map(debt => ({
+        id: debt.id,
+        orderId: debt.orderId,
+        orderNumber: debt.orderNumber || `#${debt.orderId.slice(-6)}`,
+        orderDate: debt.createdAt || new Date().toISOString(),
+        totalAmount: debt.totalAmount,
+        paidAmount: debt.paidAmount,
+        outstandingBalance: debt.outstandingBalance,
+        status: debt.status === "pending" ? "pending" as const :
+                debt.status === "partial" ? "partial" as const :
+                debt.status === "overdue" ? "overdue" as const :
+                "cleared" as const,
+        dueDate: debt.dueDate,
+        paymentHistory: [],
+      }));
+    }
+    
+    // Fallback: Calculate debts from orders with partial payments
     return orders
       .filter(order => {
         const paid = order.paidAmount || 0;
@@ -212,7 +274,7 @@ function CustomerPortalContent() {
           }] : []
         };
       });
-  }, [orders]);
+  }, [apiDebts, orders]);
   const [selectedDebtForPayment, setSelectedDebtForPayment] = useState<DebtRecord | null>(null);
   const [highlightedDebtOrderId, setHighlightedDebtOrderId] = useState<string | null>(null);
   const debtCardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
@@ -240,6 +302,8 @@ function CustomerPortalContent() {
   const [showProductList, setShowProductList] = useState(false);
   const [productsLoading, setProductsLoading] = useState(false);
   const [showAllProducts, setShowAllProducts] = useState(false);
+  const [productPage, setProductPage] = useState(1);
+  const [productsPerPage] = useState(12); // Show 12 products per page
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [paymentType, setPaymentType] = useState("");
   const [selectedBank, setSelectedBank] = useState("");
@@ -250,6 +314,9 @@ function CustomerPortalContent() {
   const [payment, setPayment] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [orderNote, setOrderNote] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [accountName, setAccountName] = useState("");
+  const [bankName, setBankName] = useState("");
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const [orderInvoice, setOrderInvoice] = useState<any>(null);
@@ -259,6 +326,7 @@ function CustomerPortalContent() {
   const [requestType, setRequestType] = useState<"exchange" | "refund" | "">("");
   const [refundReason, setRefundReason] = useState("");
   const [refundItems, setRefundItems] = useState<string[]>([]);
+  const [refundAccountNumber, setRefundAccountNumber] = useState("");
   const [submittingRefund, setSubmittingRefund] = useState(false);
   
   const [exchangeSearchQuery, setExchangeSearchQuery] = useState("");
@@ -391,37 +459,32 @@ function CustomerPortalContent() {
         return 0;
       });
     
-    // Static notifications
-    const staticNotifications = [
-      {
-        id: 1,
-        title: "Payment Received",
-        message: "Payment of ₦150,000 received for Order #12340",
-        time: "2 minutes ago",
-        type: "payment" as const,
-        unread: true,
-      },
-      {
-        id: 2,
-        title: "New Order Placed",
-        message: "Order #12345 has been placed successfully",
-        time: "10 minutes ago",
-        type: "order" as const,
-        unread: true,
-      },
-      {
-        id: 3,
-        title: "New Product Added",
-        message: "Michelin 19\" Tire has been added to the catalog",
-        time: "1 hour ago",
-        type: "product" as const,
-        unread: false,
-      },
-    ];
+    // Transform API notifications
+    const transformedApiNotifications = apiNotifications.map((notif: any) => ({
+      id: notif.id || `api-${Date.now()}-${Math.random()}`,
+      title: notif.title || notif.message || "Notification",
+      message: notif.message || notif.description || "",
+      time: notif.createdAt ? (() => {
+        const date = new Date(notif.createdAt);
+        const now = new Date();
+        const diffMs = now.getTime() - date.getTime();
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        if (diffMins < 1) return "Just now";
+        if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+        if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+        if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+        return date.toLocaleDateString();
+      })() : "Recently",
+      type: (notif.type || "general") as "payment" | "order" | "product" | "general",
+      unread: notif.read === false || notif.unread === true,
+    }));
     
-    // Combine incomplete payment notifications first, then static notifications
-    return [...incompletePaymentNotifications, ...staticNotifications];
-  }, [debts]);
+    // Combine incomplete payment notifications first, then API notifications
+    return [...incompletePaymentNotifications, ...transformedApiNotifications];
+  }, [debts, apiNotifications]);
   
   // Count unread incomplete payment notifications
   const unreadIncompletePaymentsCount = useMemo(() => {
@@ -602,7 +665,7 @@ function CustomerPortalContent() {
   // Search products from API when search query changes
   useEffect(() => {
     const searchProductsFromAPI = async () => {
-      if (searchQuery.trim().length >= 2) {
+      if (searchQuery.trim().length > 0) {
         setProductsLoading(true);
         try {
           const results = await searchProductsAPI({ q: searchQuery });
@@ -619,6 +682,7 @@ function CustomerPortalContent() {
           setFilteredProducts(transformedProducts);
           setShowProductList(true);
           setShowAllProducts(false);
+          setProductPage(1); // Reset to first page on new search
         } catch (err) {
           console.error("Error searching products:", err);
           setFilteredProducts([]);
@@ -630,6 +694,7 @@ function CustomerPortalContent() {
         setFilteredProducts(products);
         setShowAllProducts(products.length > 0);
         setShowProductList(false);
+        setProductPage(1); // Reset to first page
       } else {
         setFilteredProducts([]);
         setShowProductList(false);
@@ -710,7 +775,7 @@ function CustomerPortalContent() {
       setCreatingOrder(true);
 
       // Prepare payload for API
-      const orderPayload = {
+      const orderPayload: any = {
         items: orderItems.map(item => ({
           productId: item.id,
           quantity: item.quantity,
@@ -722,6 +787,23 @@ function CustomerPortalContent() {
         paymentAmount: payment === "Part Payment" ? parseFloat(paymentAmount) : calculateTotal(),
         note: orderNote || undefined,
       };
+      
+      // Add account details if provided
+      if (paymentType === "Bank Transfer" && accountNumber) {
+        orderPayload.accountDetails = {
+          accountNumber: accountNumber,
+          bankName: bankName || selectedBank,
+          accountName: accountName,
+        };
+      }
+      
+      // Add cheque details if provided
+      if (paymentType === "Cheque") {
+        if (chequeNumber) orderPayload.chequeNumber = chequeNumber;
+        if (chequeAccountName) orderPayload.chequeAccountName = chequeAccountName;
+        if (chequeReference) orderPayload.chequeReference = chequeReference;
+        if (debtChequeImagePreview) orderPayload.chequeImageUrl = debtChequeImagePreview;
+      }
 
       // Call API to create order
       const createdOrder = await createOrderAPI(orderPayload);
@@ -733,10 +815,22 @@ function CustomerPortalContent() {
         paymentType,
         payment,
         paymentAmount: payment === "Part Payment" ? paymentAmount : calculateTotal().toString(),
+        paidAmount: payment === "Part Payment" ? paymentAmount : calculateTotal().toString(),
+        outstandingBalance: payment === "Part Payment" ? (calculateTotal() - parseFloat(paymentAmount || "0")).toString() : "0",
         orderNote,
         totalAmount: calculateTotal(),
         status: createdOrder.status || "pending",
         createdAt: createdOrder.createdAt || new Date().toISOString(),
+        accountDetails: paymentType === "Bank Transfer" && accountNumber ? {
+          accountNumber,
+          bankName: bankName || selectedBank,
+          accountName,
+        } : undefined,
+        chequeDetails: paymentType === "Cheque" ? {
+          chequeNumber,
+          accountName: chequeAccountName,
+          reference: chequeReference,
+        } : undefined,
       };
       
       setOrderInvoice(invoice);
@@ -944,6 +1038,11 @@ function CustomerPortalContent() {
       return;
     }
 
+    if (!refundAccountNumber.trim()) {
+      showNotification("Please provide your account number for refund", "error");
+      return;
+    }
+
     try {
       setSubmittingRefund(true);
       
@@ -951,7 +1050,7 @@ function CustomerPortalContent() {
       const order = orders.find(o => o.id === selectedOrderForRefund);
       
       // Call API to submit refund request
-      const refundPayload = {
+      const refundPayload: any = {
         orderId: selectedOrderForRefund,
         type: 'refund' as const,
         reason: refundReason,
@@ -961,11 +1060,17 @@ function CustomerPortalContent() {
         })).filter(i => i.productId) || [],
       };
       
+      // Add account details for refund
+      refundPayload.accountDetails = {
+        accountNumber: refundAccountNumber,
+      };
+      
       await requestRefundAPI(refundPayload);
       
       showNotification("Refund request submitted successfully! Our team will review your request.", "success");
       setSelectedOrderForRefund(null);
       setRefundReason("");
+      setRefundAccountNumber("");
       setRefundItems([]);
       setRequestType("");
     } catch (err: any) {
@@ -2022,7 +2127,12 @@ function CustomerPortalContent() {
                   {/* Product Catalog - Show all products when order tab is active */}
                   {showAllProducts && filteredProducts.length > 0 && (
                     <div className="mt-6">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Available Products</h3>
+                      <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-semibold text-gray-900">Available Products</h3>
+                        <span className="text-sm text-gray-500">
+                          Showing {(productPage - 1) * productsPerPage + 1}-{Math.min(productPage * productsPerPage, filteredProducts.length)} of {filteredProducts.length}
+                        </span>
+                      </div>
                       {productsLoading ? (
                         <div className="flex justify-center items-center py-12">
                           <svg className="animate-spin h-8 w-8 text-[#02016a]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -2032,40 +2142,69 @@ function CustomerPortalContent() {
                           <span className="ml-3 text-gray-600">Loading products...</span>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-96 overflow-y-auto">
-                          {filteredProducts.map((product) => (
-                            <div
-                              key={product.id}
-                              onClick={() => addProductToOrder(product)}
-                              className="border border-gray-200 rounded-lg p-4 hover:shadow-md hover:border-[#02016a] transition-all cursor-pointer"
-                            >
-                              <div className="flex justify-between items-start mb-2">
-                                <div className="flex-1">
-                                  <h4 className="text-sm font-semibold text-gray-900 mb-1">{product.name}</h4>
-                                  {product.category && (
-                                    <p className="text-xs text-gray-500 mb-2">{product.category}</p>
-                                  )}
-                                  {product.description && (
-                                    <p className="text-xs text-gray-600 line-clamp-2">{product.description}</p>
-                                  )}
+                        <>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {filteredProducts
+                              .slice((productPage - 1) * productsPerPage, productPage * productsPerPage)
+                              .map((product) => (
+                              <div
+                                key={product.id}
+                                onClick={() => addProductToOrder(product)}
+                                className="border border-gray-200 rounded-lg p-4 hover:shadow-md hover:border-[#02016a] transition-all cursor-pointer"
+                              >
+                                <div className="flex justify-between items-start mb-2">
+                                  <div className="flex-1">
+                                    <h4 className="text-sm font-semibold text-gray-900 mb-1">{product.name}</h4>
+                                    {product.category && (
+                                      <p className="text-xs text-gray-500 mb-2">{product.category}</p>
+                                    )}
+                                    {product.description && (
+                                      <p className="text-xs text-gray-600 line-clamp-2">{product.description}</p>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
+                                  <div>
+                                    <p className="text-lg font-bold text-[#02016a]">₦{(product.sellingPrice || product.price || 0).toLocaleString()}</p>
+                                    {product.stock !== undefined && (
+                                      <p className={`text-xs mt-1 ${product.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {product.stock > 0 ? `In Stock (${product.stock})` : 'Out of Stock'}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <button className="px-3 py-1.5 bg-[#02016a] text-white text-xs font-medium rounded-lg hover:bg-[#03024a] transition-colors">
+                                    Add
+                                  </button>
                                 </div>
                               </div>
-                              <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
-                                <div>
-                                  <p className="text-lg font-bold text-[#02016a]">₦{(product.sellingPrice || product.price || 0).toLocaleString()}</p>
-                                  {product.stock !== undefined && (
-                                    <p className={`text-xs mt-1 ${product.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                      {product.stock > 0 ? `In Stock (${product.stock})` : 'Out of Stock'}
-                                    </p>
-                                  )}
-                                </div>
-                                <button className="px-3 py-1.5 bg-[#02016a] text-white text-xs font-medium rounded-lg hover:bg-[#03024a] transition-colors">
-                                  Add
-                                </button>
-                              </div>
+                            ))}
+                          </div>
+                          
+                          {/* Pagination Controls */}
+                          {filteredProducts.length > productsPerPage && (
+                            <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
+                              <button
+                                type="button"
+                                onClick={() => setProductPage(prev => Math.max(1, prev - 1))}
+                                disabled={productPage === 1}
+                                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Previous
+                              </button>
+                              <span className="text-sm text-gray-700">
+                                Page {productPage} of {Math.ceil(filteredProducts.length / productsPerPage)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setProductPage(prev => Math.min(Math.ceil(filteredProducts.length / productsPerPage), prev + 1))}
+                                disabled={productPage >= Math.ceil(filteredProducts.length / productsPerPage)}
+                                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Next
+                              </button>
                             </div>
-                          ))}
-                        </div>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
@@ -2361,6 +2500,46 @@ function CustomerPortalContent() {
                         Please make payment to the selected account.
                       </p>
                     )}
+                    
+                    {/* Account Details Fields */}
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Your Account Number <span className="text-gray-400 text-xs">(for payment confirmation)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={accountNumber}
+                          onChange={(e) => setAccountNumber(e.target.value)}
+                          placeholder="Enter your account number"
+                          className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Your Bank Name
+                        </label>
+                        <input
+                          type="text"
+                          value={bankName}
+                          onChange={(e) => setBankName(e.target.value)}
+                          placeholder="Enter your bank name"
+                          className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Account Name
+                        </label>
+                        <input
+                          type="text"
+                          value={accountName}
+                          onChange={(e) => setAccountName(e.target.value)}
+                          placeholder="Enter account name"
+                          className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                        />
+                      </div>
+                    </div>
                               </div>
                 )}
 
@@ -2736,6 +2915,7 @@ function CustomerPortalContent() {
                                 setExchangeSelectedItems([]);
                                 setExchangeInvoice(null);
                                 setRefundReason("");
+                                setRefundAccountNumber("");
                                 setSelectedItemsForExchange(new Set());
                                 setProductSelectingForExchange(null);
                                 setExchangePaymentProof(null);
@@ -2806,6 +2986,7 @@ function CustomerPortalContent() {
                                 setExchangeSelectedItems([]);
                                 setExchangeInvoice(null);
                                 setRefundReason("");
+                                setRefundAccountNumber("");
                                 setSelectedItemsForExchange(new Set());
                                 setProductSelectingForExchange(null);
                                 setExchangePaymentProof(null);
@@ -2832,6 +3013,7 @@ function CustomerPortalContent() {
                                 setExchangeSelectedItems([]);
                                 setExchangeInvoice(null);
                                 setRefundReason("");
+                                setRefundAccountNumber("");
                                 setSelectedItemsForExchange(new Set());
                                 setProductSelectingForExchange(null);
                                 setShowRequestTypeDropdown(false);
@@ -3477,10 +3659,26 @@ function CustomerPortalContent() {
                             className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#02016a] resize-none"
                           />
                         </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Account Number for Refund <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={refundAccountNumber}
+                            onChange={(e) => setRefundAccountNumber(e.target.value)}
+                            placeholder="Add account number here for refund"
+                            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                          />
+                          <p className="text-xs text-gray-500 mt-1">
+                            The account must be in your name (same as your customer account)
+                          </p>
+                        </div>
 
                         <button
                           onClick={handleSubmitRefund}
-                          disabled={submittingRefund || !refundReason.trim()}
+                          disabled={submittingRefund || !refundReason.trim() || !refundAccountNumber.trim()}
                           className="w-full bg-[#02016a] text-white py-3 rounded-lg font-medium hover:bg-[#03024a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {submittingRefund ? "Submitting..." : "Submit Refund Request"}
@@ -3852,6 +4050,39 @@ function CustomerPortalContent() {
                     </p>
                   </div>
       </div>
+      
+      {/* Payment Information */}
+      {(selectedOrderForDetails as any).paymentType || (selectedOrderForDetails as any).paymentMethod ? (
+        <div className="border border-gray-200 rounded-lg p-4 space-y-2">
+          <h4 className="text-sm font-semibold text-gray-900 mb-3">Payment Information</h4>
+          {(selectedOrderForDetails as any).paymentType && (
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Payment Type:</span>
+              <span className="text-sm font-medium text-gray-900">{(selectedOrderForDetails as any).paymentType}</span>
+            </div>
+          )}
+          {(selectedOrderForDetails as any).paymentMethod && (
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600">Payment Method:</span>
+              <span className="text-sm font-medium text-gray-900">{(selectedOrderForDetails as any).paymentMethod}</span>
+            </div>
+          )}
+          {(selectedOrderForDetails as any).accountDetails && (
+            <div className="pt-2 border-t border-gray-200 space-y-1">
+              <p className="text-xs font-medium text-gray-700">Account Details:</p>
+              {(selectedOrderForDetails as any).accountDetails.accountNumber && (
+                <p className="text-xs text-gray-600">Account Number: {(selectedOrderForDetails as any).accountDetails.accountNumber}</p>
+              )}
+              {(selectedOrderForDetails as any).accountDetails.bankName && (
+                <p className="text-xs text-gray-600">Bank: {(selectedOrderForDetails as any).accountDetails.bankName}</p>
+              )}
+              {(selectedOrderForDetails as any).accountDetails.accountName && (
+                <p className="text-xs text-gray-600">Account Name: {(selectedOrderForDetails as any).accountDetails.accountName}</p>
+              )}
+            </div>
+          )}
+        </div>
+      ) : null}
 
                 {/* Items Table */}
                 <div className="border border-gray-200 rounded-lg overflow-hidden mt-2">
