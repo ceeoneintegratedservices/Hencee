@@ -12,8 +12,6 @@ import {
   payDebt as payDebtAPI,
   requestRefund as requestRefundAPI,
   createSupportTicket,
-  getMyDebts,
-  getNotifications as getNotificationsAPI,
 } from "@/services/customerPortal";
 import { listProducts } from "@/services/products";
 import type { CustomerProfile, CustomerOrder } from "@/types/customerPortal";
@@ -31,6 +29,7 @@ interface Product {
   category?: string;
   stock?: number;
   description?: string;
+  sku?: string;
 }
 
 interface OrderItem {
@@ -97,9 +96,6 @@ function CustomerPortalContent() {
   const [orders, setOrders] = useState<OrderHistoryItem[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [ordersLoading, setOrdersLoading] = useState(false);
-  const [apiDebts, setApiDebts] = useState<any[]>([]);
-  const [debtsLoading, setDebtsLoading] = useState(false);
-  const [apiNotifications, setApiNotifications] = useState<any[]>([]);
 
   // Fetch customer profile and orders on mount
   useEffect(() => {
@@ -142,39 +138,6 @@ function CustomerPortalContent() {
     fetchData();
   }, []);
 
-  // Fetch debts from API
-  useEffect(() => {
-    const fetchDebts = async () => {
-      setDebtsLoading(true);
-      try {
-        const debtsData = await getMyDebts();
-        setApiDebts(debtsData);
-      } catch (err) {
-        console.error("Error fetching debts:", err);
-      } finally {
-        setDebtsLoading(false);
-      }
-    };
-    fetchDebts();
-  }, []);
-
-  // Fetch notifications from API
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const notificationsData = await getNotificationsAPI();
-        setApiNotifications(notificationsData);
-      } catch (err) {
-        console.error("Error fetching notifications:", err);
-      }
-    };
-    fetchNotifications();
-    
-    // Refresh notifications every 30 seconds
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
   // Function to refresh orders after creating new one
   const refreshOrders = useCallback(async () => {
     setOrdersLoading(true);
@@ -197,13 +160,6 @@ function CustomerPortalContent() {
       }));
       
       setOrders(transformedOrders);
-      
-      // Refresh debts and profile
-      const debtsData = await getMyDebts();
-      setApiDebts(debtsData);
-      
-      const profile = await getMyProfile();
-      setCustomerInfo(profile);
     } catch (err) {
       console.error("Error refreshing orders:", err);
     } finally {
@@ -211,28 +167,11 @@ function CustomerPortalContent() {
     }
   }, []);
 
-  // Use API debts if available, otherwise calculate from orders
+  // Calculate debts from orders with partial payments
+  // NOTE: Payment confirmations are manual. When admin confirms payment in admin portal,
+  // it should update the order history here (paidAmount, paymentStatus). 
+  // Payment approval system in admin portal to be implemented later.
   const debts = useMemo<DebtRecord[]>(() => {
-    // If API debts are available, use them
-    if (apiDebts.length > 0) {
-      return apiDebts.map(debt => ({
-        id: debt.id,
-        orderId: debt.orderId,
-        orderNumber: debt.orderNumber || `#${debt.orderId.slice(-6)}`,
-        orderDate: debt.createdAt || new Date().toISOString(),
-        totalAmount: debt.totalAmount,
-        paidAmount: debt.paidAmount,
-        outstandingBalance: debt.outstandingBalance,
-        status: debt.status === "pending" ? "pending" as const :
-                debt.status === "partial" ? "partial" as const :
-                debt.status === "overdue" ? "overdue" as const :
-                "cleared" as const,
-        dueDate: debt.dueDate,
-        paymentHistory: [],
-      }));
-    }
-    
-    // Fallback: Calculate debts from orders with partial payments
     return orders
       .filter(order => {
         const paid = order.paidAmount || 0;
@@ -274,7 +213,7 @@ function CustomerPortalContent() {
           }] : []
         };
       });
-  }, [apiDebts, orders]);
+  }, [orders]);
   const [selectedDebtForPayment, setSelectedDebtForPayment] = useState<DebtRecord | null>(null);
   const [highlightedDebtOrderId, setHighlightedDebtOrderId] = useState<string | null>(null);
   const debtCardRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
@@ -302,8 +241,6 @@ function CustomerPortalContent() {
   const [showProductList, setShowProductList] = useState(false);
   const [productsLoading, setProductsLoading] = useState(false);
   const [showAllProducts, setShowAllProducts] = useState(false);
-  const [productPage, setProductPage] = useState(1);
-  const [productsPerPage] = useState(12); // Show 12 products per page
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [paymentType, setPaymentType] = useState("");
   const [selectedBank, setSelectedBank] = useState("");
@@ -314,9 +251,6 @@ function CustomerPortalContent() {
   const [payment, setPayment] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [orderNote, setOrderNote] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [accountName, setAccountName] = useState("");
-  const [bankName, setBankName] = useState("");
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [copyToast, setCopyToast] = useState<string | null>(null);
   const [orderInvoice, setOrderInvoice] = useState<any>(null);
@@ -326,7 +260,6 @@ function CustomerPortalContent() {
   const [requestType, setRequestType] = useState<"exchange" | "refund" | "">("");
   const [refundReason, setRefundReason] = useState("");
   const [refundItems, setRefundItems] = useState<string[]>([]);
-  const [refundAccountNumber, setRefundAccountNumber] = useState("");
   const [submittingRefund, setSubmittingRefund] = useState(false);
   
   const [exchangeSearchQuery, setExchangeSearchQuery] = useState("");
@@ -459,32 +392,37 @@ function CustomerPortalContent() {
         return 0;
       });
     
-    // Transform API notifications
-    const transformedApiNotifications = apiNotifications.map((notif: any) => ({
-      id: notif.id || `api-${Date.now()}-${Math.random()}`,
-      title: notif.title || notif.message || "Notification",
-      message: notif.message || notif.description || "",
-      time: notif.createdAt ? (() => {
-        const date = new Date(notif.createdAt);
-        const now = new Date();
-        const diffMs = now.getTime() - date.getTime();
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMs / 3600000);
-        const diffDays = Math.floor(diffMs / 86400000);
-        
-        if (diffMins < 1) return "Just now";
-        if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
-        if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-        if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-        return date.toLocaleDateString();
-      })() : "Recently",
-      type: (notif.type || "general") as "payment" | "order" | "product" | "general",
-      unread: notif.read === false || notif.unread === true,
-    }));
+    // Static notifications
+    const staticNotifications = [
+      {
+        id: 1,
+        title: "Payment Received",
+        message: "Payment of ₦150,000 received for Order #12340",
+        time: "2 minutes ago",
+        type: "payment" as const,
+        unread: true,
+      },
+      {
+        id: 2,
+        title: "New Order Placed",
+        message: "Order #12345 has been placed successfully",
+        time: "10 minutes ago",
+        type: "order" as const,
+        unread: true,
+      },
+      {
+        id: 3,
+        title: "New Product Added",
+        message: "Michelin 19\" Tire has been added to the catalog",
+        time: "1 hour ago",
+        type: "product" as const,
+        unread: false,
+      },
+    ];
     
-    // Combine incomplete payment notifications first, then API notifications
-    return [...incompletePaymentNotifications, ...transformedApiNotifications];
-  }, [debts, apiNotifications]);
+    // Combine incomplete payment notifications first, then static notifications
+    return [...incompletePaymentNotifications, ...staticNotifications];
+  }, [debts]);
   
   // Count unread incomplete payment notifications
   const unreadIncompletePaymentsCount = useMemo(() => {
@@ -622,35 +560,49 @@ function CustomerPortalContent() {
           // Handle both array response and { data: [] } response formats
           const productsArray = Array.isArray(response) ? response : (response.data || []);
           
-          const transformedProducts: Product[] = productsArray.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            price: p.sellingPrice || p.price,
-            sellingPrice: p.sellingPrice || p.price,
-            category: typeof p.category === 'string' ? p.category : (p.category?.name || p.category?.label || ''),
-            stock: p.stock || p.quantity || 0,
-            description: p.description || '',
-          }));
+          const transformedProducts: Product[] = productsArray.map((p: any) => {
+            const categoryValue = typeof p.category === 'string' 
+              ? p.category 
+              : (p.category && typeof p.category === 'object' 
+                ? (p.category?.name || p.category?.label || '')
+                : '');
+            return {
+              id: p.id,
+              name: p.name,
+              price: p.sellingPrice || p.price,
+              sellingPrice: p.sellingPrice || p.price,
+              category: categoryValue,
+              stock: p.stock || p.quantity || 0,
+              description: p.description || '',
+              sku: p.sku,
+            };
+          });
           setProducts(transformedProducts);
           setFilteredProducts(transformedProducts);
-          setShowAllProducts(true);
         } catch (err) {
           console.error("Error fetching products:", err);
           // Fallback to search API if listProducts fails
           try {
             const results = await searchProductsAPI({ q: "" });
-            const transformedProducts: Product[] = results.map(p => ({
-              id: p.id,
-              name: p.name,
-              price: p.sellingPrice,
-              sellingPrice: p.sellingPrice,
-              category: p.category,
-              stock: p.stock,
-              description: p.description,
-            }));
+            const transformedProducts: Product[] = results.map(p => {
+              const categoryValue = typeof p.category === 'string' 
+                ? p.category 
+                : (p.category && typeof p.category === 'object' 
+                  ? ((p.category as any)?.name || (p.category as any)?.label || '')
+                  : '');
+              return {
+                id: p.id,
+                name: p.name,
+                price: p.sellingPrice,
+                sellingPrice: p.sellingPrice,
+                category: categoryValue,
+                stock: p.stock,
+                description: p.description,
+                sku: p.sku,
+              };
+            });
             setProducts(transformedProducts);
             setFilteredProducts(transformedProducts);
-            setShowAllProducts(true);
           } catch (searchErr) {
             console.error("Error fetching products via search:", searchErr);
           }
@@ -662,49 +614,27 @@ function CustomerPortalContent() {
     }
   }, [activeTab]);
 
-  // Search products from API when search query changes
+  // Search products from initially loaded products when search query changes
   useEffect(() => {
-    const searchProductsFromAPI = async () => {
-      if (searchQuery.trim().length > 0) {
-        setProductsLoading(true);
-        try {
-          const results = await searchProductsAPI({ q: searchQuery });
-          const transformedProducts: Product[] = results.map(p => ({
-            id: p.id,
-            name: p.name,
-            price: p.sellingPrice,
-            sellingPrice: p.sellingPrice,
-            category: p.category,
-            stock: p.stock,
-            description: p.description,
-          }));
-          // Update filtered products for search results dropdown
-          setFilteredProducts(transformedProducts);
-          setShowProductList(true);
-          setShowAllProducts(false);
-          setProductPage(1); // Reset to first page on new search
-        } catch (err) {
-          console.error("Error searching products:", err);
-          setFilteredProducts([]);
-        } finally {
-          setProductsLoading(false);
-        }
-      } else if (searchQuery.trim().length === 0 && activeTab === "order") {
-        // Show all products when search is cleared
-        setFilteredProducts(products);
-        setShowAllProducts(products.length > 0);
-        setShowProductList(false);
-        setProductPage(1); // Reset to first page
-      } else {
-        setFilteredProducts([]);
-        setShowProductList(false);
-        setShowAllProducts(false);
-      }
-    };
-
-    const debounce = setTimeout(searchProductsFromAPI, 300);
-    return () => clearTimeout(debounce);
-  }, [searchQuery, activeTab, products]);
+    if (searchQuery.trim().length >= 2) {
+      // Filter from initially loaded products
+      const filtered = products.filter(product => {
+        const searchLower = searchQuery.toLowerCase();
+        return (
+          product.name.toLowerCase().includes(searchLower) ||
+          (product.category && typeof product.category === 'string' && product.category.toLowerCase().includes(searchLower)) ||
+          (product.description && product.description.toLowerCase().includes(searchLower)) ||
+          (product.sku && product.sku.toLowerCase().includes(searchLower))
+        );
+      });
+      setFilteredProducts(filtered);
+      setShowProductList(filtered.length > 0);
+    } else {
+      // Clear search results when query is empty or too short
+      setFilteredProducts([]);
+      setShowProductList(false);
+    }
+  }, [searchQuery, products]);
 
   const addProductToOrder = (product: Product) => {
     if (orderInvoice) {
@@ -775,7 +705,7 @@ function CustomerPortalContent() {
       setCreatingOrder(true);
 
       // Prepare payload for API
-      const orderPayload: any = {
+      const orderPayload = {
         items: orderItems.map(item => ({
           productId: item.id,
           quantity: item.quantity,
@@ -787,23 +717,6 @@ function CustomerPortalContent() {
         paymentAmount: payment === "Part Payment" ? parseFloat(paymentAmount) : calculateTotal(),
         note: orderNote || undefined,
       };
-      
-      // Add account details if provided
-      if (paymentType === "Bank Transfer" && accountNumber) {
-        orderPayload.accountDetails = {
-          accountNumber: accountNumber,
-          bankName: bankName || selectedBank,
-          accountName: accountName,
-        };
-      }
-      
-      // Add cheque details if provided
-      if (paymentType === "Cheque") {
-        if (chequeNumber) orderPayload.chequeNumber = chequeNumber;
-        if (chequeAccountName) orderPayload.chequeAccountName = chequeAccountName;
-        if (chequeReference) orderPayload.chequeReference = chequeReference;
-        if (debtChequeImagePreview) orderPayload.chequeImageUrl = debtChequeImagePreview;
-      }
 
       // Call API to create order
       const createdOrder = await createOrderAPI(orderPayload);
@@ -815,22 +728,10 @@ function CustomerPortalContent() {
         paymentType,
         payment,
         paymentAmount: payment === "Part Payment" ? paymentAmount : calculateTotal().toString(),
-        paidAmount: payment === "Part Payment" ? paymentAmount : calculateTotal().toString(),
-        outstandingBalance: payment === "Part Payment" ? (calculateTotal() - parseFloat(paymentAmount || "0")).toString() : "0",
         orderNote,
         totalAmount: calculateTotal(),
         status: createdOrder.status || "pending",
         createdAt: createdOrder.createdAt || new Date().toISOString(),
-        accountDetails: paymentType === "Bank Transfer" && accountNumber ? {
-          accountNumber,
-          bankName: bankName || selectedBank,
-          accountName,
-        } : undefined,
-        chequeDetails: paymentType === "Cheque" ? {
-          chequeNumber,
-          accountName: chequeAccountName,
-          reference: chequeReference,
-        } : undefined,
       };
       
       setOrderInvoice(invoice);
@@ -1038,11 +939,6 @@ function CustomerPortalContent() {
       return;
     }
 
-    if (!refundAccountNumber.trim()) {
-      showNotification("Please provide your account number for refund", "error");
-      return;
-    }
-
     try {
       setSubmittingRefund(true);
       
@@ -1050,7 +946,7 @@ function CustomerPortalContent() {
       const order = orders.find(o => o.id === selectedOrderForRefund);
       
       // Call API to submit refund request
-      const refundPayload: any = {
+      const refundPayload = {
         orderId: selectedOrderForRefund,
         type: 'refund' as const,
         reason: refundReason,
@@ -1060,17 +956,11 @@ function CustomerPortalContent() {
         })).filter(i => i.productId) || [],
       };
       
-      // Add account details for refund
-      refundPayload.accountDetails = {
-        accountNumber: refundAccountNumber,
-      };
-      
       await requestRefundAPI(refundPayload);
       
       showNotification("Refund request submitted successfully! Our team will review your request.", "success");
       setSelectedOrderForRefund(null);
       setRefundReason("");
-      setRefundAccountNumber("");
       setRefundItems([]);
       setRequestType("");
     } catch (err: any) {
@@ -2088,12 +1978,20 @@ function CustomerPortalContent() {
                     type="text"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search for products..."
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                      placeholder={productsLoading ? "Loading products..." : "Search for products..."}
+                      disabled={productsLoading}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#02016a] disabled:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
                     />
-                    <svg className="absolute right-3 top-3.5 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
+                    {productsLoading ? (
+                      <svg className="absolute right-3 top-3.5 w-5 h-5 text-[#02016a] animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                    ) : (
+                      <svg className="absolute right-3 top-3.5 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    )}
                     
                     {/* Product List - appears immediately after search input */}
                     {showProductList && filteredProducts.length > 0 && (
@@ -2108,7 +2006,11 @@ function CustomerPortalContent() {
                               <div>
                                 <h4 className="text-sm font-medium text-gray-900">{product.name}</h4>
                                 {product.category && (
-                                  <p className="text-xs text-gray-500">{product.category}</p>
+                                  <p className="text-xs text-gray-500">
+                                    {typeof product.category === 'string' 
+                                      ? product.category 
+                                      : (product.category as any)?.name || (product.category as any)?.label || ''}
+                                  </p>
                                 )}
                 </div>
                               <div className="text-right">
@@ -2123,122 +2025,6 @@ function CustomerPortalContent() {
                       </div>
                     )}
                   </div>
-
-                  {/* Product Catalog - Show all products when order tab is active */}
-                  {showAllProducts && filteredProducts.length > 0 && (
-                    <div className="mt-6">
-                      <div className="flex justify-between items-center mb-4">
-                        <h3 className="text-lg font-semibold text-gray-900">Available Products</h3>
-                        <span className="text-sm text-gray-500">
-                          Showing {(productPage - 1) * productsPerPage + 1}-{Math.min(productPage * productsPerPage, filteredProducts.length)} of {filteredProducts.length}
-                        </span>
-                      </div>
-                      {productsLoading ? (
-                        <div className="flex justify-center items-center py-12">
-                          <svg className="animate-spin h-8 w-8 text-[#02016a]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          <span className="ml-3 text-gray-600">Loading products...</span>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            {filteredProducts
-                              .slice((productPage - 1) * productsPerPage, productPage * productsPerPage)
-                              .map((product) => (
-                              <div
-                                key={product.id}
-                                onClick={() => addProductToOrder(product)}
-                                className="border border-gray-200 rounded-lg p-4 hover:shadow-md hover:border-[#02016a] transition-all cursor-pointer"
-                              >
-                                <div className="flex justify-between items-start mb-2">
-                                  <div className="flex-1">
-                                    <h4 className="text-sm font-semibold text-gray-900 mb-1">{product.name}</h4>
-                                    {product.category && (
-                                      <p className="text-xs text-gray-500 mb-2">{product.category}</p>
-                                    )}
-                                    {product.description && (
-                                      <p className="text-xs text-gray-600 line-clamp-2">{product.description}</p>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-100">
-                                  <div>
-                                    <p className="text-lg font-bold text-[#02016a]">₦{(product.sellingPrice || product.price || 0).toLocaleString()}</p>
-                                    {product.stock !== undefined && (
-                                      <p className={`text-xs mt-1 ${product.stock > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        {product.stock > 0 ? `In Stock (${product.stock})` : 'Out of Stock'}
-                                      </p>
-                                    )}
-                                  </div>
-                                  <button className="px-3 py-1.5 bg-[#02016a] text-white text-xs font-medium rounded-lg hover:bg-[#03024a] transition-colors">
-                                    Add
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                          
-                          {/* Pagination Controls */}
-                          {filteredProducts.length > productsPerPage && (
-                            <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
-                              <button
-                                type="button"
-                                onClick={() => setProductPage(prev => Math.max(1, prev - 1))}
-                                disabled={productPage === 1}
-                                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                Previous
-                              </button>
-                              <span className="text-sm text-gray-700">
-                                Page {productPage} of {Math.ceil(filteredProducts.length / productsPerPage)}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setProductPage(prev => Math.min(Math.ceil(filteredProducts.length / productsPerPage), prev + 1))}
-                                disabled={productPage >= Math.ceil(filteredProducts.length / productsPerPage)}
-                                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                Next
-                              </button>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Helper text with icon – centered, using bag icon SVG.
-                      Only show when no products have been added yet and no products are loaded.
-                      Appears below the search results container. */}
-                  {orderItems.length === 0 && !showAllProducts && !productsLoading && (
-                    <div className="mt-20 flex flex-col items-center text-center">
-                      <div className="flex h-28 w-28 items-center justify-center rounded-full bg-[#f4f5fa] mb-4">
-                        <svg
-                          className="w-10 h-10 text-[#02016a]"
-                          fill="none"
-                          viewBox="0 0 18 20"
-                        >
-                          <path
-                            d="M14.0865 5C15.3503 5 16.6767 5.90969 17.1451 8.12012L17.9137 14.3145C18.4793 18.3533 16.2078 20 13.1588 20H4.86873C1.81092 20 -0.531257 18.8626 0.105058 14.3145L0.883378 8.12012C1.28109 5.84602 2.65071 5 3.93221 5H14.0865ZM6.09725 8.3291C5.60921 8.32918 5.21346 8.73693 5.21346 9.23926C5.21363 9.74144 5.60932 10.1484 6.09725 10.1484C6.58524 10.1484 6.98086 9.74149 6.98103 9.23926C6.98103 8.73688 6.58535 8.3291 6.09725 8.3291ZM11.8863 8.3291C11.3982 8.3291 11.0025 8.73688 11.0025 9.23926C11.0027 9.74149 11.3983 10.1484 11.8863 10.1484C12.3743 10.1484 12.7699 9.74146 12.7701 9.23926C12.7701 8.73691 12.3744 8.32915 11.8863 8.3291Z"
-                            fill="currentColor"
-                          />
-                          <path
-                            d="M13.9743 4.77432C13.9774 4.85189 13.9625 4.92913 13.9307 5H12.4936C12.4658 4.92794 12.451 4.85153 12.4501 4.77432C12.4501 2.85682 10.8903 1.30238 8.96615 1.30238C7.04204 1.30238 5.48224 2.85682 5.48224 4.77432C5.49542 4.84898 5.49542 4.92535 5.48224 5H4.01029C3.9971 4.92535 3.9971 4.84898 4.01029 4.77432C4.12212 2.10591 6.32539 0 9.00534 0C11.6853 0 13.8886 2.10591 14.0004 4.77432H13.9743Z"
-                            fill="currentColor"
-                            opacity="0.4"
-                          />
-                        </svg>
-                      </div>
-                      <p className="text-base font-medium text-[#45464e]">
-                        Add Products to Your Order
-                      </p>
-                      <p className="mt-1 text-sm text-[#8b8d97]">
-                        Search for products or browse available inventory below.
-                      </p>
-                    </div>
-                  )}
                               </div>
 
                 {/* Selected Products */}
@@ -2247,42 +2033,51 @@ function CustomerPortalContent() {
                     <h3 className="text-sm font-medium text-gray-700 mb-3">Selected Products</h3>
                     <div className="space-y-3 max-h-64 overflow-y-auto">
                       {orderItems.map((item) => (
-                        <div key={item.id} className="bg-gray-50 rounded-lg p-3">
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="flex-1">
-                              <h4 className="text-sm font-medium text-gray-900">{item.name}</h4>
+                        <div key={item.id} className="bg-white border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between gap-4">
+                            {/* Left: Product Name and Price */}
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-sm font-medium text-gray-900 mb-1">{item.name}</h4>
                               <p className="text-xs text-gray-500">₦{item.price.toLocaleString()} each</p>
                             </div>
-                <button
-                              onClick={() => setOrderItems(orderItems.filter(i => i.id !== item.id))}
-                              className="text-red-500 hover:text-red-700"
-                              >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                              </button>
-                  </div>
-                          <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
+                            
+                            {/* Middle: Quantity Selector */}
+                            <div className="flex items-center gap-2">
                               <button
+                                type="button"
                                 onClick={() => updateProductQuantity(item.id, item.quantity - 1)}
-                                className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded hover:bg-gray-100"
+                                className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                               >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
                                 </svg>
-                </button>
-                              <span className="w-12 text-center text-sm font-medium">{item.quantity}</span>
-                <button
+                              </button>
+                              <span className="w-10 text-center text-sm font-medium text-gray-900">{item.quantity}</span>
+                              <button
+                                type="button"
                                 onClick={() => updateProductQuantity(item.id, item.quantity + 1)}
-                                className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded hover:bg-gray-100"
+                                className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                              >
+                                <svg className="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                </svg>
+                              </button>
+                            </div>
+                            
+                            {/* Right: Total and Remove Button */}
+                            <div className="flex items-center gap-3">
+                              <p className="text-sm font-semibold text-gray-900 whitespace-nowrap">₦{item.total.toLocaleString()}</p>
+                              <button
+                                type="button"
+                                onClick={() => setOrderItems(orderItems.filter(i => i.id !== item.id))}
+                                className="w-6 h-6 flex items-center justify-center rounded-full bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 transition-colors"
+                                title="Remove item"
                               >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
                               </button>
-                  </div>
-                            <p className="text-sm font-semibold text-gray-900">₦{item.total.toLocaleString()}</p>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -2500,46 +2295,6 @@ function CustomerPortalContent() {
                         Please make payment to the selected account.
                       </p>
                     )}
-                    
-                    {/* Account Details Fields */}
-                    <div className="mt-4 space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Your Account Number <span className="text-gray-400 text-xs">(for payment confirmation)</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={accountNumber}
-                          onChange={(e) => setAccountNumber(e.target.value)}
-                          placeholder="Enter your account number"
-                          className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#02016a]"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Your Bank Name
-                        </label>
-                        <input
-                          type="text"
-                          value={bankName}
-                          onChange={(e) => setBankName(e.target.value)}
-                          placeholder="Enter your bank name"
-                          className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#02016a]"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Account Name
-                        </label>
-                        <input
-                          type="text"
-                          value={accountName}
-                          onChange={(e) => setAccountName(e.target.value)}
-                          placeholder="Enter account name"
-                          className="w-full p-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#02016a]"
-                        />
-                      </div>
-                    </div>
                               </div>
                 )}
 
@@ -2915,7 +2670,6 @@ function CustomerPortalContent() {
                                 setExchangeSelectedItems([]);
                                 setExchangeInvoice(null);
                                 setRefundReason("");
-                                setRefundAccountNumber("");
                                 setSelectedItemsForExchange(new Set());
                                 setProductSelectingForExchange(null);
                                 setExchangePaymentProof(null);
@@ -2986,7 +2740,6 @@ function CustomerPortalContent() {
                                 setExchangeSelectedItems([]);
                                 setExchangeInvoice(null);
                                 setRefundReason("");
-                                setRefundAccountNumber("");
                                 setSelectedItemsForExchange(new Set());
                                 setProductSelectingForExchange(null);
                                 setExchangePaymentProof(null);
@@ -3013,7 +2766,6 @@ function CustomerPortalContent() {
                                 setExchangeSelectedItems([]);
                                 setExchangeInvoice(null);
                                 setRefundReason("");
-                                setRefundAccountNumber("");
                                 setSelectedItemsForExchange(new Set());
                                 setProductSelectingForExchange(null);
                                 setShowRequestTypeDropdown(false);
@@ -3136,7 +2888,11 @@ function CustomerPortalContent() {
                                         <div>
                                           <h4 className="text-sm font-medium text-gray-900">{product.name}</h4>
                                           {product.category && (
-                                            <p className="text-xs text-gray-500">{product.category}</p>
+                                            <p className="text-xs text-gray-500">
+                                              {typeof product.category === 'string' 
+                                                ? product.category 
+                                                : (product.category as any)?.name || (product.category as any)?.label || ''}
+                                            </p>
                                           )}
                                         </div>
                                         <div className="text-right">
@@ -3659,26 +3415,10 @@ function CustomerPortalContent() {
                             className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#02016a] resize-none"
                           />
                         </div>
-                        
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Account Number for Refund <span className="text-red-500">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            value={refundAccountNumber}
-                            onChange={(e) => setRefundAccountNumber(e.target.value)}
-                            placeholder="Add account number here for refund"
-                            className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#02016a]"
-                          />
-                          <p className="text-xs text-gray-500 mt-1">
-                            The account must be in your name (same as your customer account)
-                          </p>
-                        </div>
 
                         <button
                           onClick={handleSubmitRefund}
-                          disabled={submittingRefund || !refundReason.trim() || !refundAccountNumber.trim()}
+                          disabled={submittingRefund || !refundReason.trim()}
                           className="w-full bg-[#02016a] text-white py-3 rounded-lg font-medium hover:bg-[#03024a] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {submittingRefund ? "Submitting..." : "Submit Refund Request"}
@@ -4050,39 +3790,6 @@ function CustomerPortalContent() {
                     </p>
                   </div>
       </div>
-      
-      {/* Payment Information */}
-      {(selectedOrderForDetails as any).paymentType || (selectedOrderForDetails as any).paymentMethod ? (
-        <div className="border border-gray-200 rounded-lg p-4 space-y-2">
-          <h4 className="text-sm font-semibold text-gray-900 mb-3">Payment Information</h4>
-          {(selectedOrderForDetails as any).paymentType && (
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-600">Payment Type:</span>
-              <span className="text-sm font-medium text-gray-900">{(selectedOrderForDetails as any).paymentType}</span>
-            </div>
-          )}
-          {(selectedOrderForDetails as any).paymentMethod && (
-            <div className="flex justify-between">
-              <span className="text-sm text-gray-600">Payment Method:</span>
-              <span className="text-sm font-medium text-gray-900">{(selectedOrderForDetails as any).paymentMethod}</span>
-            </div>
-          )}
-          {(selectedOrderForDetails as any).accountDetails && (
-            <div className="pt-2 border-t border-gray-200 space-y-1">
-              <p className="text-xs font-medium text-gray-700">Account Details:</p>
-              {(selectedOrderForDetails as any).accountDetails.accountNumber && (
-                <p className="text-xs text-gray-600">Account Number: {(selectedOrderForDetails as any).accountDetails.accountNumber}</p>
-              )}
-              {(selectedOrderForDetails as any).accountDetails.bankName && (
-                <p className="text-xs text-gray-600">Bank: {(selectedOrderForDetails as any).accountDetails.bankName}</p>
-              )}
-              {(selectedOrderForDetails as any).accountDetails.accountName && (
-                <p className="text-xs text-gray-600">Account Name: {(selectedOrderForDetails as any).accountDetails.accountName}</p>
-              )}
-            </div>
-          )}
-        </div>
-      ) : null}
 
                 {/* Items Table */}
                 <div className="border border-gray-200 rounded-lg overflow-hidden mt-2">
