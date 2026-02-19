@@ -329,16 +329,40 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
   if (invoiceData.issuedAt) {
     doc.text(`Date: ${formatDate(invoiceData.issuedAt)}`, pageWidth - margin, yPos, { align: 'right' });
   }
-  
+
+  // Warehouse (when present at invoice or first-item level)
+  const warehouseObj = invoiceData.warehouse && typeof invoiceData.warehouse === 'object'
+    ? invoiceData.warehouse
+    : invoiceData.items?.[0]?.warehouse;
+  const warehouseName =
+    invoiceData.warehouseName ||
+    (typeof invoiceData.warehouse === 'string' ? invoiceData.warehouse : invoiceData.warehouse?.name) ||
+    (invoiceData.items?.[0]?.warehouseName || (invoiceData.items?.[0]?.warehouse && (typeof invoiceData.items[0].warehouse === 'string' ? invoiceData.items[0].warehouse : invoiceData.items[0].warehouse?.name)));
+  const warehouseAddress = warehouseObj?.address || null;
+  if (warehouseName) {
+    yPos += lineHeight;
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Warehouse: ${warehouseName}`, pageWidth - margin, yPos, { align: 'right' });
+    if (warehouseAddress) {
+      yPos += lineHeight;
+      doc.setFontSize(9);
+      doc.setTextColor(80, 80, 80);
+      doc.text(warehouseAddress, pageWidth - margin, yPos, { align: 'right' });
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+    }
+  }
+
   // Items Table
-  yPos = 80;
+  yPos = 85;
   doc.setFontSize(10);
   doc.setTextColor(255, 255, 255);
   doc.setFillColor(2, 1, 106);
   doc.rect(margin, yPos - 5, pageWidth - 2 * margin, 8, 'F');
   
   doc.text('Item', margin + 2, yPos);
-  doc.text('Qty', margin + 80, yPos);
+  doc.text('Warehouse', margin + 52, yPos);
+  doc.text('Qty', margin + 82, yPos);
   doc.text('Unit Price', margin + 100, yPos);
   if (invoiceData.showDiscountOnInvoice) {
     doc.text('Discount', margin + 140, yPos);
@@ -363,6 +387,13 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
         yPos = 20;
       }
       
+      const itemWarehouseName =
+        item.warehouseName ||
+        (typeof item.warehouse === 'string' ? item.warehouse : item.warehouse?.name) ||
+        warehouseName ||
+        '—';
+      const itemWarehouseAddress = item.warehouse && typeof item.warehouse === 'object' ? item.warehouse?.address : null;
+      
       doc.setFont('helvetica', 'bold');
       doc.text(item.productName || 'Product', margin + 2, yPos);
       doc.setFont('helvetica', 'normal');
@@ -376,7 +407,15 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
         doc.setTextColor(0, 0, 0);
       }
       
-      doc.text(String(item.quantity || 0), margin + 80, yPos);
+      doc.text(itemWarehouseName, margin + 52, yPos);
+      if (itemWarehouseAddress) {
+        doc.setFontSize(8);
+        doc.setTextColor(80, 80, 80);
+        doc.text(itemWarehouseAddress, margin + 52, yPos + 4);
+        doc.setFontSize(9);
+        doc.setTextColor(0, 0, 0);
+      }
+      doc.text(String(item.quantity || 0), margin + 82, yPos);
       doc.text(formatCurrency(item.unitPrice || 0), margin + 100, yPos);
       
       if (invoiceData.showDiscountOnInvoice) {
@@ -387,8 +426,11 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
       doc.text(formatCurrency(item.totalPrice || 0), pageWidth - margin - 2, yPos, { align: 'right' });
       doc.setFont('helvetica', 'normal');
       
-      // Increase yPos more if dosage size was displayed to prevent overlap
-      yPos += item.productSize && item.productSizeUnit ? 10 : 8;
+      // Increase yPos: extra line for dosage size and/or warehouse address
+      let rowHeight = 8;
+      if (item.productSize && item.productSizeUnit) rowHeight = 10;
+      if (itemWarehouseAddress) rowHeight = Math.max(rowHeight, 12);
+      yPos += rowHeight;
     });
   }
   
