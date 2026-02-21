@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useRef, useState, useEffect, useMemo } from "react";
+import { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import { getMyProfile, updateMyProfile, getMyOrders } from "@/services/customerPortal";
 import type { CustomerProfile, CustomerOrder } from "@/types/customerPortal";
 
@@ -30,56 +30,67 @@ export default function CustomerInfoPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Fetch customer profile and orders on mount
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        // Fetch customer profile
-        const profile = await getMyProfile();
-        setCustomer(profile);
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const profile = await getMyProfile();
+      setCustomer(profile);
 
-        // Fetch orders
-        const ordersResponse = await getMyOrders({ limit: 50 });
-        const ordersData = ordersResponse.data || [];
-        
-        // Transform API orders to local format
-        const transformedOrders: OrderHistoryItem[] = ordersData.map((order: CustomerOrder) => ({
-          id: order.id,
-          createdAt: order.createdAt,
-          status: order.status?.toLowerCase() || 'pending',
-          paymentStatus: order.paymentStatus?.toLowerCase() || 'pending',
-          totalAmount: order.totalAmount,
-          paidAmount: order.paidAmount,
-          items: order.items?.map(item => ({
-            productName: item.productName,
-            quantity: item.quantity,
-            totalPrice: item.totalPrice,
-          })) || [],
-        }));
-        
-        setOrders(transformedOrders);
-      } catch (err) {
-        console.error("Error fetching customer data:", err);
-        setError("Failed to load customer data. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+      const ordersResponse = await getMyOrders({ limit: 50 });
+      const ordersData = ordersResponse.data || [];
+      const transformedOrders: OrderHistoryItem[] = ordersData.map((order: CustomerOrder) => ({
+        id: order.id,
+        createdAt: order.createdAt,
+        status: order.status?.toLowerCase() || 'pending',
+        paymentStatus: order.paymentStatus?.toLowerCase() || 'pending',
+        totalAmount: order.totalAmount,
+        paidAmount: order.paidAmount,
+        items: order.items?.map(item => ({
+          productName: item.productName,
+          quantity: item.quantity,
+          totalPrice: item.totalPrice,
+        })) || [],
+      }));
+      setOrders(transformedOrders);
+    } catch (err) {
+      console.error("Error fetching customer data:", err);
+      setError("Failed to load customer data. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  // Calculate outstanding balance
+  // Fetch on mount and when page becomes visible (e.g. navigating back to profile tab)
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") fetchData();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [fetchData]);
+
+  // Total spent = sum of amounts actually paid across all orders (so it updates with new orders/part payments)
+  const totalSpentFromOrders = useMemo(
+    () => orders.reduce((sum, order) => sum + (order.paidAmount ?? 0), 0),
+    [orders]
+  );
+
+  // Outstanding balance: same logic as main portal (partial or paidAmount < totalAmount)
   const outstandingBalance = useMemo(() => {
     return orders
       .filter(order => {
-        const paid = order.paidAmount || 0;
-        return order.paymentStatus === "partial" || (order.paymentStatus === "pending" && paid > 0 && paid < order.totalAmount);
+        const paid = order.paidAmount ?? 0;
+        const hasExplicitPartial = order.paymentStatus === "partial";
+        const hasOutstanding = typeof order.paidAmount === "number" && paid < order.totalAmount;
+        return hasExplicitPartial || hasOutstanding;
       })
       .reduce((sum, order) => {
-        const paidAmount = order.paidAmount || 0;
+        const paidAmount = order.paidAmount ?? 0;
         return sum + (order.totalAmount - paidAmount);
       }, 0);
   }, [orders]);
@@ -300,7 +311,7 @@ export default function CustomerInfoPage() {
               <div className="flex justify-between">
                 <span className="text-gray-500">Total Spent</span>
                 <span className="text-gray-900">
-                  ₦{(customer.stats?.totalSpent ?? 0).toLocaleString()}
+                  ₦{(orders.length > 0 ? totalSpentFromOrders : (customer.stats?.totalSpent ?? 0)).toLocaleString()}
                 </span>
               </div>
               <div className="flex justify-between">

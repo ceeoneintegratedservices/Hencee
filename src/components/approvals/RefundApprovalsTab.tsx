@@ -38,6 +38,8 @@ export default function RefundApprovalsTab() {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
 
+  const formatAmount = (value: number) => `₦${value.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
   const fetchRefunds = async () => {
     setLoading(true);
     try {
@@ -227,17 +229,24 @@ export default function RefundApprovalsTab() {
         </div>
       ) : (
         <div className="space-y-4">
-          {refunds.map((refund) => (
+          {refunds.map((refund) => {
+            const label = refund.amountLabel || (refund.type === 'exchange' && (refund.amountToPay != null && refund.amountToPay > 0) ? 'Amount to pay' : refund.type === 'exchange' ? 'Credit' : 'Refund amount');
+            const isExchangeWithPayment = refund.type === 'exchange' && (refund.amountToPay != null && refund.amountToPay > 0);
+            const hasBankDetails = refund.type === 'refund' && (refund.bankAccountNumber || refund.bankName || refund.accountName);
+            return (
             <div 
               key={refund.id} 
               className="border rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-shadow"
             >
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
+              <div className="flex justify-between items-start gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <h3 className="font-semibold text-lg text-gray-900">
-                      ${refund.amount.toFixed(2)}
+                      {formatAmount(refund.amount)}
                     </h3>
+                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                      {label}
+                    </span>
                     <span className="text-sm text-gray-500">
                       Sale ID: {refund.saleId.slice(0, 8)}...
                     </span>
@@ -246,6 +255,28 @@ export default function RefundApprovalsTab() {
                   <p className="text-gray-700 mb-2">
                     <strong>Reason:</strong> {refund.reason}
                   </p>
+                  
+                  {isExchangeWithPayment && (refund.paymentProofUrl || refund.paymentMethod || refund.paymentReference) && (
+                    <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                      <p className="text-xs font-medium text-blue-800 mb-1">Payment details (replacement)</p>
+                      {refund.paymentMethod && <p className="text-sm text-gray-700">Method: {refund.paymentMethod}</p>}
+                      {refund.paymentReference && <p className="text-sm text-gray-700">Reference: {refund.paymentReference}</p>}
+                      {refund.paymentProofUrl && (
+                        <a href={refund.paymentProofUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline mt-1 inline-block">
+                          View payment receipt →
+                        </a>
+                      )}
+                    </div>
+                  )}
+                  
+                  {hasBankDetails && (
+                    <div className="mb-3 p-3 bg-amber-50 rounded-lg border border-amber-100">
+                      <p className="text-xs font-medium text-amber-800 mb-1">Refund bank account</p>
+                      {refund.accountName && <p className="text-sm text-gray-700">Account name: {refund.accountName}</p>}
+                      {refund.bankName && <p className="text-sm text-gray-700">Bank: {refund.bankName}</p>}
+                      {refund.bankAccountNumber && <p className="text-sm text-gray-700">Account number: {refund.bankAccountNumber}</p>}
+                    </div>
+                  )}
                   
                   <p className="text-sm text-gray-600">
                     Requested by: {refund.requesterName || 'Unknown'}
@@ -257,7 +288,7 @@ export default function RefundApprovalsTab() {
                 </div>
 
                 {!isViewOnly && canApprove && (
-                  <div className="flex gap-2 ml-4">
+                  <div className="flex gap-2 flex-shrink-0">
                     <button
                       onClick={() => handleApproveClick(refund)}
                       className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
@@ -273,7 +304,7 @@ export default function RefundApprovalsTab() {
                   </div>
                 )}
                 {isViewOnly && (
-                  <div className="ml-4">
+                  <div className="flex-shrink-0">
                     <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-sm">
                       View Only
                     </span>
@@ -281,7 +312,7 @@ export default function RefundApprovalsTab() {
                 )}
               </div>
             </div>
-          ))}
+          );})}
         </div>
       )}
 
@@ -309,13 +340,15 @@ export default function RefundApprovalsTab() {
       )}
 
       {/* Approve Dialog */}
-      {approveDialogOpen && (
+      {approveDialogOpen && selectedRefund && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Approve Refund</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Approve {selectedRefund.type === 'exchange' ? 'Exchange' : 'Refund'}
+            </h3>
             <div className="space-y-4">
               <p className="text-gray-700">
-                Approving refund of <strong>${selectedRefund?.amount.toFixed(2)}</strong>
+                Approving {selectedRefund.amountLabel?.toLowerCase() || 'amount'}: <strong>{formatAmount(selectedRefund.amount)}</strong>
               </p>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -356,7 +389,7 @@ export default function RefundApprovalsTab() {
                   onClick={handleApproveSubmit}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
                 >
-                  Approve Refund
+                  Approve
                 </button>
               </div>
             </div>
@@ -365,13 +398,13 @@ export default function RefundApprovalsTab() {
       )}
 
       {/* Reject Dialog */}
-      {rejectDialogOpen && (
+      {rejectDialogOpen && selectedRefund && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
           <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Reject Refund</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Reject {selectedRefund.type === 'exchange' ? 'Exchange' : 'Refund'}</h3>
             <div className="space-y-4">
               <p className="text-gray-700">
-                Rejecting refund of <strong>${selectedRefund?.amount.toFixed(2)}</strong>
+                Rejecting {selectedRefund.amountLabel?.toLowerCase() || 'amount'}: <strong>{formatAmount(selectedRefund.amount)}</strong>
               </p>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">

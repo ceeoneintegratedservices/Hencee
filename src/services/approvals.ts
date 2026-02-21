@@ -135,6 +135,20 @@ export interface RefundRequest {
   refundReference?: string;
   createdAt: string;
   updatedAt: string;
+  // Type and amount breakdown (from backend)
+  type?: 'refund' | 'exchange';
+  amountToPay?: number;
+  creditAmount?: number;
+  refundAmount?: number;
+  amountLabel?: string;
+  // Exchange (customer pays more): payment proof
+  paymentProofUrl?: string;
+  paymentMethod?: string;
+  paymentReference?: string;
+  // Refund: customer bank details
+  bankAccountNumber?: string;
+  bankName?: string;
+  accountName?: string;
 }
 
 // Paginated Response Type

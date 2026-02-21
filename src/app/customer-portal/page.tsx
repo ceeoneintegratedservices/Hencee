@@ -167,15 +167,14 @@ function CustomerPortalContent() {
     }
   }, []);
 
-  // Calculate debts from orders with partial payments
-  // NOTE: Payment confirmations are manual. When admin confirms payment in admin portal,
-  // it should update the order history here (paidAmount, paymentStatus). 
-  // Payment approval system in admin portal to be implemented later.
+  // Outstanding tab: show orders with outstanding balance (paidAmount < totalAmount when paidAmount is provided)
   const debts = useMemo<DebtRecord[]>(() => {
     return orders
       .filter(order => {
-        const paid = order.paidAmount || 0;
-        return order.paymentStatus === "partial" || (order.paymentStatus === "pending" && paid > 0 && paid < order.totalAmount);
+        const paid = order.paidAmount ?? 0;
+        const hasExplicitPartial = order.paymentStatus === "partial";
+        const hasOutstanding = typeof order.paidAmount === "number" && paid < order.totalAmount;
+        return hasExplicitPartial || hasOutstanding;
       })
       .map(order => {
         const paidAmount = order.paidAmount || 0;
@@ -721,6 +720,19 @@ function CustomerPortalContent() {
       // Call API to create order
       const createdOrder = await createOrderAPI(orderPayload);
 
+      const amountPaid = payment === "Part Payment" ? parseFloat(paymentAmount) : calculateTotal();
+      const bankLabel = selectedBank === "gtb" ? "GTB" : selectedBank === "access" ? "Access Bank" : selectedBank === "zenith" ? "Zenith Bank" : selectedBank || "";
+      const bankAccount = selectedBank === "gtb" ? "0123456789" : selectedBank === "access" ? "1234567890" : selectedBank === "zenith" ? "9876543210" : "";
+      let paymentDetailsUsed = paymentType;
+      if (paymentType === "Bank Transfer" && bankLabel) paymentDetailsUsed = `Bank Transfer — ${bankLabel} (${bankAccount})`;
+      else if (paymentType === "Cheque" && (chequeReference || chequeNumber || chequeAccountName)) {
+        const parts = ["Cheque"];
+        if (chequeReference) parts.push(`Ref: ${chequeReference}`);
+        if (chequeNumber) parts.push(`No: ${chequeNumber}`);
+        if (chequeAccountName) parts.push(`Account: ${chequeAccountName}`);
+        paymentDetailsUsed = parts.join(" — ");
+      } else if (paymentType === "Cash") paymentDetailsUsed = "Cash";
+
       const invoice = {
         orderNumber: createdOrder.orderNumber || createdOrder.id,
         orderDate: createdOrder.createdAt || new Date().toISOString(),
@@ -728,6 +740,8 @@ function CustomerPortalContent() {
         paymentType,
         payment,
         paymentAmount: payment === "Part Payment" ? paymentAmount : calculateTotal().toString(),
+        amountPaid,
+        paymentDetailsUsed,
         orderNote,
         totalAmount: calculateTotal(),
         status: createdOrder.status || "pending",
@@ -740,12 +754,35 @@ function CustomerPortalContent() {
       // Refresh orders list
       await refreshOrders();
 
+      // If backend didn't return paidAmount for the new order, patch it so order history shows correct paid/outstanding
+      setOrders((prev) => {
+        const apiPaid = createdOrder.paidAmount ?? (createdOrder as any).paidAmount;
+        if (apiPaid != null && apiPaid > 0) return prev;
+        const total = createdOrder.totalAmount ?? calculateTotal();
+        const paid = amountPaid;
+        if (paid <= 0 || paid >= total) return prev;
+        return prev.map((o) =>
+          o.id === createdOrder.id
+            ? {
+                ...o,
+                paidAmount: paid,
+                paymentStatus: (o.paymentStatus === "partial" ? "partial" : "partial") as string,
+              }
+            : o
+        );
+      });
+
       setOrderItems([]);
       setPaymentType("");
       setPayment("");
       setPaymentAmount("");
       setOrderNote("");
       setPaymentConfirmed(false);
+      setSelectedBank("");
+      setChequeReference("");
+      setChequeNumber("");
+      setChequeAccountName("");
+      setChequeImagePreview(null);
     } catch (err: any) {
       console.error("Error creating order:", err);
       showNotification(err.message || "Failed to create order", "error");
@@ -2579,16 +2616,19 @@ function CustomerPortalContent() {
                       <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
                         <div className="space-y-3">
                           <div className="flex justify-between text-sm text-gray-600">
-                            <span>Payment Type:</span>
+                            <span>Amount paid:</span>
+                            <span className="font-medium text-gray-900">
+                              ₦{(typeof orderInvoice.amountPaid === "number" ? orderInvoice.amountPaid : parseFloat(orderInvoice.paymentAmount || "0")).toLocaleString()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-sm text-gray-600">
+                            <span>Payment type:</span>
                             <span className="font-medium text-gray-900">{orderInvoice.paymentType}</span>
                           </div>
                           <div className="flex justify-between text-sm text-gray-600">
-                            <span>Payment:</span>
-                            <span className="font-medium text-gray-900">
-                              {orderInvoice.payment}
-                              {orderInvoice.payment === "Part Payment" && orderInvoice.paymentAmount && (
-                                <span className="ml-2">(₦{parseFloat(orderInvoice.paymentAmount).toLocaleString()})</span>
-                              )}
+                            <span>Payment details used:</span>
+                            <span className="font-medium text-gray-900 text-right max-w-[60%]">
+                              {orderInvoice.paymentDetailsUsed ?? orderInvoice.payment ?? "—"}
                             </span>
                           </div>
                           {orderInvoice.orderNote && (
@@ -3410,7 +3450,7 @@ function CustomerPortalContent() {
                           <textarea
                             value={refundReason}
                             onChange={(e) => setRefundReason(e.target.value)}
-                            placeholder="Please explain why you need a refund..."
+                            placeholder="Please explain why you need a refund...\n\nIMPORTANT: Include your account number here for refund. The account must be in your name (same as your customer account)."
                             rows={4}
                             className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#02016a] resize-none"
                           />
