@@ -47,6 +47,9 @@ interface OrderHistoryItem {
   paymentStatus: string;
   totalAmount: number;
   paidAmount?: number; // Amount paid so far
+  outstandingBalance?: number; // from API when available (correct amount owing)
+  paymentType?: string; // e.g. Bank Transfer, Cash, Cheque
+  paymentDetailsUsed?: string; // e.g. bank account, reference
   items: Array<{
     productName: string;
     quantity: number;
@@ -112,13 +115,16 @@ function CustomerPortalContent() {
         const ordersData = ordersResponse.data || [];
         
         // Transform API orders to local format
-        const transformedOrders: OrderHistoryItem[] = ordersData.map((order: CustomerOrder) => ({
+        const transformedOrders: OrderHistoryItem[] = ordersData.map((order: CustomerOrder & { paymentType?: string; paymentDetailsUsed?: string; paymentMethod?: string }) => ({
           id: order.id,
           createdAt: order.createdAt,
           status: order.status?.toLowerCase() || 'pending',
           paymentStatus: order.paymentStatus?.toLowerCase() || 'pending',
           totalAmount: order.totalAmount,
           paidAmount: order.paidAmount,
+          outstandingBalance: order.outstandingBalance,
+          paymentType: order.paymentType ?? order.paymentMethod,
+          paymentDetailsUsed: order.paymentDetailsUsed,
           items: order.items?.map(item => ({
             productName: item.productName,
             quantity: item.quantity,
@@ -145,13 +151,16 @@ function CustomerPortalContent() {
       const ordersResponse = await getMyOrders({ limit: 50 });
       const ordersData = ordersResponse.data || [];
       
-      const transformedOrders: OrderHistoryItem[] = ordersData.map((order: CustomerOrder) => ({
+      const transformedOrders: OrderHistoryItem[] = ordersData.map((order: CustomerOrder & { paymentType?: string; paymentDetailsUsed?: string; paymentMethod?: string }) => ({
         id: order.id,
         createdAt: order.createdAt,
         status: order.status?.toLowerCase() || 'pending',
         paymentStatus: order.paymentStatus?.toLowerCase() || 'pending',
         totalAmount: order.totalAmount,
         paidAmount: order.paidAmount,
+        outstandingBalance: order.outstandingBalance,
+        paymentType: order.paymentType ?? order.paymentMethod,
+        paymentDetailsUsed: order.paymentDetailsUsed,
         items: order.items?.map(item => ({
           productName: item.productName,
           quantity: item.quantity,
@@ -177,8 +186,10 @@ function CustomerPortalContent() {
         return hasExplicitPartial || hasOutstanding;
       })
       .map(order => {
-        const paidAmount = order.paidAmount || 0;
-        const outstandingBalance = order.totalAmount - paidAmount;
+        const paidAmount = order.paidAmount ?? 0;
+        const outstandingBalance = typeof order.outstandingBalance === "number"
+          ? order.outstandingBalance
+          : order.totalAmount - paidAmount;
         const orderDate = new Date(order.createdAt);
         const dueDate = new Date(orderDate);
         dueDate.setDate(dueDate.getDate() + 30); // 30 days payment terms
@@ -391,36 +402,8 @@ function CustomerPortalContent() {
         return 0;
       });
     
-    // Static notifications
-    const staticNotifications = [
-      {
-        id: 1,
-        title: "Payment Received",
-        message: "Payment of ₦150,000 received for Order #12340",
-        time: "2 minutes ago",
-        type: "payment" as const,
-        unread: true,
-      },
-      {
-        id: 2,
-        title: "New Order Placed",
-        message: "Order #12345 has been placed successfully",
-        time: "10 minutes ago",
-        type: "order" as const,
-        unread: true,
-      },
-      {
-        id: 3,
-        title: "New Product Added",
-        message: "Michelin 19\" Tire has been added to the catalog",
-        time: "1 hour ago",
-        type: "product" as const,
-        unread: false,
-      },
-    ];
-    
-    // Combine incomplete payment notifications first, then static notifications
-    return [...incompletePaymentNotifications, ...staticNotifications];
+    // Only show real outstanding-balance alerts (no static placeholders)
+    return incompletePaymentNotifications;
   }, [debts]);
   
   // Count unread incomplete payment notifications
@@ -3829,7 +3812,29 @@ function CustomerPortalContent() {
                       {selectedOrderForDetails.paymentStatus}
                     </p>
                   </div>
-      </div>
+                </div>
+
+                {/* Amount paid, Payment type, Payment details */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm pt-2 border-t border-gray-100">
+                  <div>
+                    <p className="text-gray-500 mb-1">Amount paid</p>
+                    <p className="text-gray-900 font-medium">
+                      ₦{(typeof selectedOrderForDetails.paidAmount === "number" ? selectedOrderForDetails.paidAmount : 0).toLocaleString()}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 mb-1">Payment type</p>
+                    <p className="text-gray-900">
+                      {selectedOrderForDetails.paymentType || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500 mb-1">Payment details used</p>
+                    <p className="text-gray-900 text-right sm:text-left break-words">
+                      {selectedOrderForDetails.paymentDetailsUsed || "—"}
+                    </p>
+                  </div>
+                </div>
 
                 {/* Items Table */}
                 <div className="border border-gray-200 rounded-lg overflow-hidden mt-2">

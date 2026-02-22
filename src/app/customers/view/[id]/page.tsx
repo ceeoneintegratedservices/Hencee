@@ -6,16 +6,9 @@ import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import Breadcrumb from "@/components/Breadcrumb";
 import { getCustomer } from "@/services/customers";
+import { getSalesByCustomer } from "@/services/sales";
 import type { CustomerRecord } from "@/types/customers";
-
-interface Order {
-  id: string;
-  orderDate: string;
-  category: string;
-  trackingId: string;
-  orderTotal: number;
-  status: 'Completed' | 'In-Progress' | 'Pending' | 'Canceled';
-}
+import type { Sale } from "@/services/sales";
 
 export default function CustomerDetailsPage() {
   const params = useParams();
@@ -28,6 +21,8 @@ export default function CustomerDetailsPage() {
   const [customer, setCustomer] = useState<CustomerRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [salesLoading, setSalesLoading] = useState(false);
 
   // Fetch customer data
   useEffect(() => {
@@ -50,10 +45,27 @@ export default function CustomerDetailsPage() {
     fetchCustomer();
   }, [customerId]);
 
-  // Calculate order statistics from customer data
+  // Fetch customer order history (sales) via GET /api/ceeone/sales/customer/:customerId
+  useEffect(() => {
+    async function fetchSales() {
+      if (!customerId) return;
+      setSalesLoading(true);
+      try {
+        const list = await getSalesByCustomer(customerId);
+        setSales(Array.isArray(list) ? list : []);
+      } catch {
+        setSales([]);
+      } finally {
+        setSalesLoading(false);
+      }
+    }
+    fetchSales();
+  }, [customerId]);
+
+  // Order statistics from customer data (and from sales when available)
   const orderStats = {
-    totalOrders: customer?.totalOrders ?? 0,
-    totalValue: customer?.totalPurchases ?? 0,
+    totalOrders: customer?.totalOrders ?? sales.length,
+    totalValue: customer?.totalPurchases ?? sales.reduce((sum, s) => sum + (s.totalAmount || 0), 0),
     pendingOrders: 0,
     completedOrders: 0,
     canceledOrders: 0,
@@ -61,9 +73,6 @@ export default function CustomerDetailsPage() {
     damagedOrders: 0,
     abandonedCarts: 0
   };
-
-  // Sample orders data (would need to fetch from orders API)
-  const orders: Order[] = [];
 
   const handleSelectOrder = (orderId: string) => {
     setSelectedOrders(prev => 
@@ -74,10 +83,10 @@ export default function CustomerDetailsPage() {
   };
 
   const handleSelectAll = () => {
-    if (selectedOrders.length === orders.length) {
+    if (selectedOrders.length === sales.length) {
       setSelectedOrders([]);
     } else {
-      setSelectedOrders(orders.map(o => o.id));
+      setSelectedOrders(sales.map(s => s.id));
     }
   };
 
@@ -343,13 +352,18 @@ export default function CustomerDetailsPage() {
             )}
           </div>
 
-          {/* Customer's Orders Section */}
+          {/* Customer's Order History */}
           <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">{customer.name}'s Orders</h2>
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">Order History</h2>
+              {salesLoading && (
+                <span className="text-sm text-gray-500 flex items-center gap-1">
+                  <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#02016a] inline-block" />
+                  Loading orders...
+                </span>
+              )}
             </div>
 
-            {/* Orders Table */}
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">
@@ -357,59 +371,82 @@ export default function CustomerDetailsPage() {
                     <th className="px-6 py-3 text-left">
                       <input
                         type="checkbox"
-                        checked={orders.length > 0 && selectedOrders.length === orders.length}
+                        disabled={sales.length === 0}
+                        checked={sales.length > 0 && selectedOrders.length === sales.length}
                         onChange={handleSelectAll}
                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Order Date
+                      Date
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Order ID
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Order Total
+                      Total
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                      Payment
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Outstanding
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Action
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {orders.length === 0 ? (
+                  {!salesLoading && sales.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center">
+                      <td colSpan={7} className="px-6 py-8 text-center">
                         <div className="text-gray-500">
                           <p className="font-medium">No orders found</p>
-                          <p className="text-sm mt-1">This customer hasn't placed any orders yet</p>
+                          <p className="text-sm mt-1">This customer hasn&apos;t placed any orders yet</p>
                         </div>
                       </td>
                     </tr>
                   ) : (
-                    orders.map((order) => (
-                      <tr key={order.id} className="hover:bg-gray-50">
+                    sales.map((sale) => (
+                      <tr key={sale.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4">
                           <input
                             type="checkbox"
-                            checked={selectedOrders.includes(order.id)}
-                            onChange={() => handleSelectOrder(order.id)}
+                            checked={selectedOrders.includes(sale.id)}
+                            onChange={() => handleSelectOrder(sale.id)}
                             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                           />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {order.orderDate}
+                          {formatDate(sale.createdAt)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-mono">
+                          #{sale.id.slice(0, 8)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {order.trackingId}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          ₦{order.orderTotal.toLocaleString()}
+                          ₦{(sale.totalAmount ?? 0).toLocaleString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor(order.status)}`}>
-                            {order.status}
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusBadgeColor((sale.paymentStatus || sale.status || '').toLowerCase())}`}>
+                            {sale.paymentStatus || sale.status || '—'}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {(sale.outstandingBalance ?? 0) > 0 ? (
+                            <span className="text-orange-600 font-medium">₦{(sale.outstandingBalance ?? 0).toLocaleString()}</span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/view-order?id=${sale.id}`)}
+                            className="text-[#02016a] font-medium hover:underline text-sm"
+                          >
+                            View order
+                          </button>
                         </td>
                       </tr>
                     ))
