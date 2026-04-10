@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
+import { useConvexAuth } from 'convex/react';
+import { useAuth } from '@clerk/nextjs';
 import { InventoryDataService, InventoryItem, Purchase } from '@/services/InventoryDataService';
 import {
   getInventoryProductById,
@@ -22,11 +24,10 @@ import StatusBadge from '@/components/StatusBadge';
 function ViewInventoryContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { getToken } = useAuth();
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const { notifications, removeNotification, showSuccess, showError } = useNotifications();
   
-  // Authentication check
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [showSidebar, setShowSidebar] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   
@@ -53,16 +54,11 @@ function ViewInventoryContent() {
   const bulkActionDropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
-  // Authentication check
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      setIsAuthenticated(true);
-    } else {
-      router.push('/login');
+    if (!authLoading && !isAuthenticated) {
+      router.replace('/login');
     }
-    setLoading(false);
-  }, [router]);
+  }, [authLoading, isAuthenticated, router]);
 
   // Extract product ID once - must run before other effects
   useEffect(() => {
@@ -358,13 +354,14 @@ function ViewInventoryContent() {
 
   const handleUpdateItemStatus = async (saleId: string, itemId: string, newStatus: string) => {
     try {
+      const token = await getToken();
       const response = await fetch(
         `/api/ceeone/sales/${saleId}/items/${itemId}/status`,
         {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ status: newStatus }),
         }
@@ -591,7 +588,7 @@ function ViewInventoryContent() {
     showSuccess('Success', 'Date filter applied successfully');
   };
 
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">

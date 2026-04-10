@@ -237,9 +237,7 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
       setProductsError(null);
       
       try {
-        const data = await listProducts({ limit: 100 });
-        // Handle both array response and { data: [] } response formats
-        const productsArray = Array.isArray(data) ? data : (data.data || []);
+        const productsArray = await listProducts({ limit: 100 });
         
         // Debug: Log the actual structure of the API response
         if (process.env.NODE_ENV === 'development' && productsArray.length > 0) {

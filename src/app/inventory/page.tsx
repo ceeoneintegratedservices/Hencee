@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useConvexAuth } from 'convex/react';
 import { InventoryDataService, InventoryItem, InventorySummary } from '@/services/InventoryDataService';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import {
@@ -217,10 +218,9 @@ const EXPIRY_STATUS_META: Record<
 
 export default function InventoryPage() {
   const router = useRouter();
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const { notifications, removeNotification, showSuccess, showError } = useNotifications();
   
-  // Authentication check
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   
   // Data states
@@ -296,16 +296,14 @@ export default function InventoryPage() {
   const bulkActionDropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
-  // Authentication check
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      setIsAuthenticated(true);
-    } else {
-      router.push('/login');
+    if (!authLoading) {
+      setLoading(false);
+      if (!isAuthenticated) {
+        router.replace('/login');
+      }
     }
-    setLoading(false);
-  }, [router]);
+  }, [authLoading, isAuthenticated, router]);
 
   const fetchInventoryData = useCallback(
     async (search?: string) => {
@@ -909,7 +907,7 @@ export default function InventoryPage() {
   const topWarehouses = (expirySummary?.warehouses ?? []).slice(0, 4);
   const upcomingExpiries = (expirySummary?.upcoming ?? []).slice(0, 5);
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">

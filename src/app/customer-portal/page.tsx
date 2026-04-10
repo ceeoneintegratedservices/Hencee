@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, Suspense, useCallback } from "react";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useClerk } from "@clerk/nextjs";
 import dynamic from "next/dynamic";
 import {
   getMyProfile,
@@ -77,6 +78,33 @@ interface DebtRecord {
 }
 
 type TabType = "history" | "order" | "refunds" | "support" | "debt";
+
+function clearLegacyPortalAuth() {
+  try {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("userData");
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function CustomerPortalLogoutButton({ className }: { className?: string }) {
+  const { signOut } = useClerk();
+  return (
+    <button
+      type="button"
+      className={className}
+      onClick={() => {
+        clearLegacyPortalAuth();
+        void signOut({ redirectUrl: "/login" });
+      }}
+    >
+      Logout
+    </button>
+  );
+}
 
 function CustomerPortalContent() {
   const router = useRouter();
@@ -538,9 +566,7 @@ function CustomerPortalContent() {
         setProductsLoading(true);
         try {
           // Fetch all products using listProducts (same as admin)
-          const response = await listProducts({ limit: 100 });
-          // Handle both array response and { data: [] } response formats
-          const productsArray = Array.isArray(response) ? response : (response.data || []);
+          const productsArray = await listProducts({ limit: 100 });
           
           const transformedProducts: Product[] = productsArray.map((p: any) => {
             const categoryValue = typeof p.category === 'string' 
@@ -1523,42 +1549,12 @@ function CustomerPortalContent() {
               </button>
               
               {/* Logout button */}
-              <button
-                type="button"
-                onClick={() => {
-                  try {
-                    if (typeof window !== "undefined") {
-                      localStorage.removeItem("authToken");
-                      localStorage.removeItem("userData");
-                    }
-    } catch {
-                  }
-                  router.push("/login");
-                }}
-                className="text-xs sm:text-sm font-bold text-red-600 hover:text-red-700 flex-shrink-0 py-3 sm:py-3.5 md:py-4"
-              >
-                Logout
-              </button>
+              <CustomerPortalLogoutButton className="text-xs sm:text-sm font-bold text-red-600 hover:text-red-700 flex-shrink-0 py-3 sm:py-3.5 md:py-4" />
             </div>
             
             {/* Logout button for Desktop (appears after Customer Service in main row) */}
             <div className="hidden lg:flex items-center">
-              <button
-                type="button"
-                onClick={() => {
-                  try {
-                    if (typeof window !== "undefined") {
-                      localStorage.removeItem("authToken");
-                      localStorage.removeItem("userData");
-                    }
-                  } catch {
-                  }
-                  router.push("/login");
-                }}
-                className="text-sm font-bold text-red-600 hover:text-red-700 flex-shrink-0 py-4 ml-4 lg:ml-6"
-              >
-                Logout
-              </button>
+              <CustomerPortalLogoutButton className="text-sm font-bold text-red-600 hover:text-red-700 flex-shrink-0 py-4 ml-4 lg:ml-6" />
             </div>
           </nav>
         </div>
@@ -1915,7 +1911,7 @@ function CustomerPortalContent() {
                       <div className="h-[300px] flex items-center justify-center text-gray-400">
                         <div className="text-center">
                           <p className="mb-2">Chart loading...</p>
-                          <p className="text-xs text-gray-500">If charts don't load, please install: npm install apexcharts react-apexcharts</p>
+                          <p className="text-xs text-gray-500">If charts don't load, please install: yarn add apexcharts react-apexcharts</p>
                         </div>
             </div>
           )}
@@ -1969,7 +1965,7 @@ function CustomerPortalContent() {
                       <div className="h-[300px] flex items-center justify-center text-gray-400">
                         <div className="text-center">
                           <p className="mb-2">Chart loading...</p>
-                          <p className="text-xs text-gray-500">If charts don't load, please install: npm install apexcharts react-apexcharts</p>
+                          <p className="text-xs text-gray-500">If charts don't load, please install: yarn add apexcharts react-apexcharts</p>
                         </div>
                       </div>
                     )}

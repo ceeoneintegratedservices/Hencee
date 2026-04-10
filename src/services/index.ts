@@ -1,6 +1,3 @@
-// Authentication
-export * from './authFetch';
-
 // Sales and Orders
 export * from './sales';
 

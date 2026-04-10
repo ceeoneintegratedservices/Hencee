@@ -121,7 +121,7 @@ async function httpRequest(url, options = {}) {
     try {
       fetchFn = globalThis.fetch || require('node-fetch');
     } catch {
-      console.error('❌ fetch API not available. Please install node-fetch: npm install node-fetch');
+      console.error('❌ fetch API not available. Please install node-fetch: yarn add node-fetch');
       process.exit(1);
     }
     

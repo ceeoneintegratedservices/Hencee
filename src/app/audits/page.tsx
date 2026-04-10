@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useConvexAuth } from 'convex/react';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import FilterByDateModal from '@/components/FilterByDateModal';
 import Sidebar from '@/components/Sidebar';
@@ -22,10 +23,9 @@ interface AuditLog {
 
 export default function AuditsPage() {
   const router = useRouter();
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const { notifications, removeNotification, showSuccess, showError } = useNotifications();
   
-  // Authentication check
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
@@ -47,16 +47,14 @@ export default function AuditsPage() {
   const filterDropdownRef = useRef<HTMLDivElement>(null);
   const bulkActionDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Authentication check
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      setIsAuthenticated(true);
-    } else {
-      router.push('/login');
+    if (!authLoading) {
+      setLoading(false);
+      if (!isAuthenticated) {
+        router.replace('/login');
+      }
     }
-    setLoading(false);
-  }, [router]);
+  }, [authLoading, isAuthenticated, router]);
 
   // Fetch audit logs from API
   const fetchAuditLogs = async () => {
@@ -239,7 +237,7 @@ export default function AuditsPage() {
     );
   }
 
-  if (!isAuthenticated) {
+  if (authLoading || !isAuthenticated) {
     return null;
   }
 

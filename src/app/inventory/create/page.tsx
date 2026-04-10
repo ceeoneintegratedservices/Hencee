@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useConvexAuth } from 'convex/react';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
@@ -101,6 +102,7 @@ const numberValue = (value: string) =>
 
 export default function CreateInventoryPage() {
   const router = useRouter();
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const { notifications, removeNotification, showError, showSuccess } = useNotifications();
   const { uploadImage, uploadProgress } = useCloudinaryUpload();
 
@@ -109,7 +111,6 @@ export default function CreateInventoryPage() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [useSameExpiryWarehouse, setUseSameExpiryWarehouse] = useState(true);
   const [showWarehouseForm, setShowWarehouseForm] = useState(false);
@@ -121,17 +122,15 @@ export default function CreateInventoryPage() {
   });
 
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-    if (token) {
-      setIsAuthenticated(true);
-    } else {
-      router.push('/login');
+    if (!authLoading && !isAuthenticated) {
+      router.replace('/login');
     }
-    setLoading(false);
-  }, [router]);
+  }, [authLoading, isAuthenticated, router]);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (authLoading || !isAuthenticated) return;
+
+    let cancelled = false;
 
     const fetchDependencies = async () => {
       try {
@@ -139,6 +138,7 @@ export default function CreateInventoryPage() {
           getCategories(),
           getWarehouses(),
         ]);
+        if (cancelled) return;
         setCategories(fetchedCategories);
         setWarehouses(fetchedWarehouses);
 
@@ -151,11 +151,16 @@ export default function CreateInventoryPage() {
       } catch (error) {
         console.error(error);
         showError('Error', 'Failed to load categories or warehouses');
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     };
 
-    fetchDependencies();
-  }, [isAuthenticated, showError]);
+    void fetchDependencies();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, isAuthenticated, showError]);
 
   useEffect(() => {
     if (useSameExpiryWarehouse) {
@@ -308,7 +313,7 @@ export default function CreateInventoryPage() {
     }
   };
 
-  if (loading) {
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -320,6 +325,17 @@ export default function CreateInventoryPage() {
   }
 
   if (!isAuthenticated) return null;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" />
+          <p className="mt-4 text-gray-600">Loading inventory form...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full h-screen bg-gray-50 overflow-hidden">

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useConvexAuth } from "convex/react";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import Breadcrumb from "@/components/Breadcrumb";
@@ -35,9 +37,10 @@ const formatPercent = (value?: number) => {
 };
 
 export default function OutsourcedReportsPage() {
+  const router = useRouter();
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const { showError, notifications, removeNotification } = useNotifications();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
   const [report, setReport] = useState<OutsourcedReportResponse | null>(null);
@@ -50,13 +53,10 @@ export default function OutsourcedReportsPage() {
   const [pendingFilters, setPendingFilters] = useState(activeFilters);
 
   useEffect(() => {
-    const token = localStorage.getItem("authToken");
-    if (token) {
-      setIsAuthenticated(true);
-    } else {
-      window.location.href = "/login";
+    if (!authLoading && !isAuthenticated) {
+      router.replace("/login");
     }
-  }, []);
+  }, [authLoading, isAuthenticated, router]);
 
   const fetchReport = async (filters = activeFilters) => {
     if (!isAuthenticated) return;
@@ -155,7 +155,7 @@ export default function OutsourcedReportsPage() {
     [summary]
   );
 
-  if (!isAuthenticated) return null;
+  if (authLoading || !isAuthenticated) return null;
 
   return (
     <div className="flex w-full h-screen bg-gray-50 overflow-hidden">

@@ -1,13 +1,12 @@
-import { API_ENDPOINTS } from "../config/api";
-import { authFetch } from "./authFetch";
+import { getConvexClient, api } from "@/lib/convexClient";
 
 export interface SalesReportParams {
-  startDate?: string; // YYYY-MM-DD
-  endDate?: string; // YYYY-MM-DD
-  groupBy?: 'day' | 'week' | 'month' | 'year';
+  startDate?: string;
+  endDate?: string;
+  groupBy?: "day" | "week" | "month" | "year";
   productId?: string;
   categoryId?: string;
-  dateRange?: string; // Backend compatibility
+  dateRange?: string;
 }
 
 export interface SalesReportItem {
@@ -55,10 +54,10 @@ export interface SalesReportResponse {
 }
 
 export interface FinanceReportParams {
-  startDate?: string; // YYYY-MM-DD
-  endDate?: string; // YYYY-MM-DD
-  groupBy?: 'day' | 'week' | 'month' | 'year';
-  dateRange?: string; // Backend compatibility
+  startDate?: string;
+  endDate?: string;
+  groupBy?: "day" | "week" | "month" | "year";
+  dateRange?: string;
 }
 
 export interface FinanceReportItem {
@@ -141,173 +140,99 @@ export interface OutsourcedReportResponse {
   timeline?: OutsourcedTimelinePoint[];
 }
 
-/**
- * Get sales report data
- */
-export async function getSalesReport(params: SalesReportParams = {}): Promise<SalesReportResponse> {
-  try {
-    const qp = new URLSearchParams();
-    // Use dateRange parameter for backend compatibility
-    if (params.startDate && params.endDate) {
-      qp.set("dateRange", "custom");
-      qp.set("startDate", params.startDate);
-      qp.set("endDate", params.endDate);
-    } else if (params.dateRange) {
-      qp.set("dateRange", params.dateRange);
-    } else {
-      qp.set("dateRange", "this_month"); // Default to this month
-    }
-    if (params.groupBy) qp.set("groupBy", params.groupBy);
-    if (params.productId) qp.set("productId", params.productId);
-    if (params.categoryId) qp.set("categoryId", params.categoryId);
-    
-    const url = `${API_ENDPOINTS.reports.sales}${qp.toString() ? `?${qp.toString()}` : ""}`;
-    console.log('Fetching Sales Report from:', url);
-    const res = await authFetch(url);
-    
-    if (!res.ok) {
-      console.error('Sales Report API Error:', res.status, res.statusText);
-      const errorText = await res.text();
-      console.error('Error Response:', errorText);
-      throw new Error(`Sales report API error: ${res.status} ${res.statusText}`);
-    }
-    
-    const data = await res.json();
-    console.log('Sales Report Raw Response:', JSON.stringify(data, null, 2));
-    return data;
-  } catch (error) {
-    console.error('Error in getSalesReport:', error);
-    throw error;
-  }
+function currentMonthRange(): { startDate: string; endDate: string } {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return {
+    startDate: start.toISOString().slice(0, 10),
+    endDate: end.toISOString().slice(0, 10),
+  };
 }
 
-/**
- * Get finance report data
- */
-export async function getFinanceReport(params: FinanceReportParams = {}): Promise<FinanceReportResponse> {
-  try {
-    const qp = new URLSearchParams();
-    // Use dateRange parameter for backend compatibility
-    if (params.startDate && params.endDate) {
-      qp.set("dateRange", "custom");
-      qp.set("startDate", params.startDate);
-      qp.set("endDate", params.endDate);
-    } else if (params.dateRange) {
-      qp.set("dateRange", params.dateRange);
-    } else {
-      qp.set("dateRange", "this_month"); // Default to this month
-    }
-    if (params.groupBy) qp.set("groupBy", params.groupBy);
-    
-    const url = `${API_ENDPOINTS.reports.finance}${qp.toString() ? `?${qp.toString()}` : ""}`;
-    console.log('Fetching Finance Report from:', url);
-    const res = await authFetch(url);
-    
-    if (!res.ok) {
-      console.error('Finance Report API Error:', res.status, res.statusText);
-      const errorText = await res.text();
-      console.error('Error Response:', errorText);
-      throw new Error(`Finance report API error: ${res.status} ${res.statusText}`);
-    }
-    
-    const data = await res.json();
-    console.log('Finance Report Raw Response:', JSON.stringify(data, null, 2));
-    return data;
-  } catch (error) {
-    console.error('Error in getFinanceReport:', error);
-    throw error;
+function resolveDateRange(params: {
+  startDate?: string;
+  endDate?: string;
+  dateRange?: string;
+}): { startDate?: string; endDate?: string } {
+  if (params.startDate && params.endDate) {
+    return { startDate: params.startDate, endDate: params.endDate };
   }
+  if (!params.dateRange || params.dateRange === "this_month") {
+    return currentMonthRange();
+  }
+  return {};
 }
 
-/**
- * Get dashboard overview data
- */
-export async function getDashboardOverview(timeframe: string = 'thisWeek'): Promise<any> {
-  try {
-    const url = `${API_ENDPOINTS.dashboardOverview}?timeframe=${timeframe}`;
-    const res = await authFetch(url);
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    throw error;
-  }
+export async function getSalesReport(
+  params: SalesReportParams = {}
+): Promise<SalesReportResponse> {
+  const { startDate, endDate } = resolveDateRange(params);
+  const data = await getConvexClient().query(api.reports.sales, {
+    startDate,
+    endDate,
+    groupBy: params.groupBy,
+    productId: params.productId,
+    categoryId: params.categoryId,
+  });
+  return data as SalesReportResponse;
 }
 
-/**
- * Get dashboard sales data
- */
-export async function getDashboardSales(timeframe: string = 'thisWeek'): Promise<any> {
-  try {
-    const url = `${API_ENDPOINTS.dashboardSales}?timeframe=${timeframe}`;
-    const res = await authFetch(url);
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    throw error;
-  }
+export async function getFinanceReport(
+  params: FinanceReportParams = {}
+): Promise<FinanceReportResponse> {
+  const { startDate, endDate } = resolveDateRange(params);
+  const data = await getConvexClient().query(api.reports.finance, {
+    startDate,
+    endDate,
+    groupBy: params.groupBy,
+  });
+  return data as FinanceReportResponse;
 }
 
-/**
- * Get dashboard customers data
- */
-export async function getDashboardCustomers(timeframe: string = 'thisWeek'): Promise<any> {
-  try {
-    const url = `${API_ENDPOINTS.dashboardCustomers}?timeframe=${timeframe}`;
-    const res = await authFetch(url);
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    throw error;
-  }
+export async function getDashboardOverview(
+  timeframe: string = "thisWeek"
+): Promise<unknown> {
+  return getConvexClient().query(api.dashboard.overview, { timeframe });
 }
 
-/**
- * Get dashboard products data
- */
-export async function getDashboardProducts(timeframe: string = 'thisWeek'): Promise<any> {
-  try {
-    const url = `${API_ENDPOINTS.dashboardProducts}?timeframe=${timeframe}`;
-    const res = await authFetch(url);
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    throw error;
-  }
+export async function getDashboardSales(
+  timeframe: string = "thisWeek"
+): Promise<unknown> {
+  return getConvexClient().query(api.dashboard.salesSlice, { timeframe });
 }
 
-/**
- * Get dashboard orders data
- */
-export async function getDashboardOrders(timeframe: string = 'thisWeek'): Promise<any> {
-  try {
-    const url = `${API_ENDPOINTS.dashboardOrders}?timeframe=${timeframe}`;
-    const res = await authFetch(url);
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    throw error;
-  }
+export async function getDashboardCustomers(
+  timeframe: string = "thisWeek"
+): Promise<unknown> {
+  return getConvexClient().query(api.dashboard.customersSlice, { timeframe });
+}
+
+export async function getDashboardProducts(
+  timeframe: string = "thisWeek"
+): Promise<unknown> {
+  return getConvexClient().query(api.dashboard.productsSlice, { timeframe });
+}
+
+export async function getDashboardOrders(
+  timeframe: string = "thisWeek"
+): Promise<unknown> {
+  return getConvexClient().query(api.dashboard.ordersSlice, { timeframe });
 }
 
 export async function getOutsourcedReport(
   params: OutsourcedReportParams = {}
 ): Promise<OutsourcedReportResponse> {
-  const qp = new URLSearchParams();
-  if (params.startDate && params.endDate) {
-    qp.set("startDate", params.startDate);
-    qp.set("endDate", params.endDate);
-    qp.set("dateRange", "custom");
-  } else if (params.dateRange) {
-    qp.set("dateRange", params.dateRange);
-  }
-  if (params.outsourcedSupplier) {
-    qp.set("outsourcedSupplier", params.outsourcedSupplier);
-  } else if (params.supplierId) {
-    qp.set("outsourcedSupplier", params.supplierId);
-  }
-  const url = `${API_ENDPOINTS.reports.outsourced}${
-    qp.toString() ? `?${qp.toString()}` : ""
-  }`;
-  const res = await authFetch(url);
-  return res.json();
+  const { startDate, endDate } = resolveDateRange(params);
+  const data = await getConvexClient().query(api.reports.outsourced, {
+    startDate,
+    endDate,
+  });
+  const raw = data as OutsourcedReportResponse & { outsourcedProducts?: number };
+  return {
+    summary: raw.summary,
+    suppliers: raw.suppliers,
+    paymentStatus: raw.paymentStatus,
+    timeline: raw.timeline,
+  };
 }

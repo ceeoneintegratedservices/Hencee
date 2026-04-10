@@ -1,9 +1,5 @@
-import { API_ENDPOINTS } from "../config/api";
-import { authFetch } from "./authFetch";
-
-const JSON_HEADERS: HeadersInit = {
-  "Content-Type": "application/json",
-};
+import { getConvexClient, api } from "@/lib/convexClient";
+import type { Id } from "../../convex/_generated/dataModel";
 
 const NUMBER_FIELDS = new Set([
   "purchasePrice",
@@ -131,6 +127,7 @@ export interface BaseInventoryPayload {
   expiryAlertThreshold?: number;
   status?: InventoryStatus;
   metadata?: Record<string, any>;
+  categoryId?: string;
 }
 
 export type CreateInventoryProduct = BaseInventoryPayload;
@@ -234,86 +231,72 @@ export interface InventoryDamageResponse {
   total?: number;
 }
 
-function buildQuery(params: InventoryListParams): string {
-  const qp = new URLSearchParams();
-  if (params.search) qp.set("search", params.search);
-  if (params.categoryId) qp.set("categoryId", params.categoryId);
-  if (params.warehouseId) qp.set("warehouseId", params.warehouseId);
-  if (params.outsourcedOnly) qp.set("outsourcedOnly", "true");
-  if (params.expiryStatus) qp.set("expiryStatus", params.expiryStatus);
-  if (params.page != null) qp.set("page", String(params.page));
-  if (params.limit != null) qp.set("limit", String(params.limit));
-  return qp.toString();
-}
-
-async function parseResponse<T>(response: Response): Promise<T> {
-  const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
-  if (!response.ok) {
-    const errorMessage = data?.message || data?.error || "Request failed";
-    throw new Error(errorMessage);
-  }
-  return data as T;
-}
-
 export async function getInventoryProducts(
   params: InventoryListParams = {}
 ): Promise<InventoryListResponse> {
-  const query = buildQuery(params);
-  const url = query ? `${API_ENDPOINTS.inventory}?${query}` : API_ENDPOINTS.inventory;
-  const response = await authFetch(url);
-  const data = await parseResponse<any>(response);
-
-  if (Array.isArray(data)) {
-    return {
-      data,
-      total: data.length,
-      page: params.page ?? 1,
-      limit: params.limit ?? data.length,
-    };
-  }
-
-  return {
-    data: data?.data ?? [],
-    total: data?.total ?? (data?.data?.length ?? 0),
-    page: data?.page ?? params.page ?? 1,
-    limit: data?.limit ?? params.limit ?? (data?.data?.length ?? 20),
-  };
+  return getConvexClient().query(api.inventory.list, {
+    search: params.search,
+    categoryId: params.categoryId as Id<"categories"> | undefined,
+    warehouseId: params.warehouseId as Id<"warehouses"> | undefined,
+    page: params.page,
+    limit: params.limit,
+  }) as Promise<InventoryListResponse>;
 }
 
 export async function getInventoryProductById(id: string): Promise<InventoryProduct> {
-  const response = await authFetch(API_ENDPOINTS.inventoryById(id));
-  return parseResponse<InventoryProduct>(response);
+  const data = await getConvexClient().query(api.inventory.get, {
+    id: id as Id<"inventoryItems">,
+  });
+  return data as InventoryProduct;
 }
 
 export async function createInventoryProduct(
   payload: CreateInventoryProduct
 ): Promise<InventoryProduct> {
-    const response = await authFetch(API_ENDPOINTS.inventory, {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify(payload),
+  const data = await getConvexClient().mutation(api.inventory.create, {
+    name: payload.name,
+    sku: payload.sku,
+    barcode: payload.barcode,
+    description: payload.description,
+    categoryName: payload.categoryName,
+    warehouseId: payload.warehouseId as Id<"warehouses">,
+    expiryWarehouseId: payload.expiryWarehouseId as Id<"warehouses"> | undefined,
+    purchasePrice: payload.purchasePrice,
+    sellingPrice: payload.sellingPrice,
+    pricePerPiece: payload.pricePerPiece,
+    pricePerCarton: payload.pricePerCarton,
+    pricePerRoll: payload.pricePerRoll,
+    piecesPerCarton: payload.piecesPerCarton,
+    piecesPerRoll: payload.piecesPerRoll,
+    inventoryUnits: payload.inventoryUnits,
+    expiryDate: payload.expiryDate,
+    productSize: payload.productSize,
+    productSizeUnit: payload.productSizeUnit,
+    packSize: payload.packSize,
+    reorderPoint: payload.reorderPoint,
+    isOutsourced: payload.isOutsourced,
+    outsourcedDetails: payload.outsourcedDetails,
+    expiryAlertThreshold: payload.expiryAlertThreshold,
+    status: payload.status,
+    metadata: payload.metadata,
+    categoryId: payload.categoryId as Id<"categories"> | undefined,
   });
-  return parseResponse<InventoryProduct>(response);
+  return data as InventoryProduct;
 }
 
 export async function updateInventoryProduct(
   id: string,
   payload: UpdateInventoryProduct
 ): Promise<InventoryProduct> {
-    const response = await authFetch(API_ENDPOINTS.inventoryById(id), {
-    method: "PUT",
-    headers: JSON_HEADERS,
-    body: JSON.stringify(payload),
+  const data = await getConvexClient().mutation(api.inventory.update, {
+    id: id as Id<"inventoryItems">,
+    patch: payload,
   });
-  return parseResponse<InventoryProduct>(response);
+  return data as InventoryProduct;
 }
 
 export async function deleteInventoryProduct(id: string): Promise<void> {
-    const response = await authFetch(API_ENDPOINTS.inventoryById(id), {
-    method: "DELETE",
-  });
-  await parseResponse(response);
+  await getConvexClient().mutation(api.inventory.remove, { id: id as Id<"inventoryItems"> });
 }
 
 export async function importInventoryProducts(
@@ -341,103 +324,17 @@ export async function importInventoryProducts(
     return JSON.parse(JSON.stringify(row));
   });
   
-  const requestBody = { rows: cleanRows };
-  const requestBodyString = JSON.stringify(requestBody);
-  
-  // Verify the request body structure
-  try {
-    const verifyBody = JSON.parse(requestBodyString);
-    
-    // Final check - ensure first row has data
-    if (verifyBody.rows?.[0] && Object.keys(verifyBody.rows[0]).length === 0) {
-      throw new Error('Request body contains empty rows. This should not happen.');
-    }
-  } catch (e) {
-    throw new Error('Request body verification failed');
-  }
-  
-  const response = await authFetch(API_ENDPOINTS.inventoryImport, {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: requestBodyString,
+  const result = await getConvexClient().mutation(api.inventory.importProducts, {
+    rows: cleanRows,
   });
-  
-  if (!response.ok) {
-    const errorText = await response.text();
-    let errorMessage = 'Failed to import inventory';
-    
-    try {
-      const errorData = JSON.parse(errorText);
-      errorMessage = errorData?.message || errorData?.error || errorMessage;
-    } catch {
-      errorMessage = errorText || errorMessage;
-    }
-    throw new Error(errorMessage);
-  }
-  
-  // Parse response manually to better handle errors
-  const text = await response.text();
-  let result: InventoryImportResult;
-  
-  try {
-    result = text ? JSON.parse(text) : { total: 0, created: 0, failed: 0, results: [] };
-  } catch (e) {
-    throw new Error(`Invalid response from server: ${text.substring(0, 200)}`);
-  }
-  
-  // Ensure results array has proper error messages
-  if (result.results && Array.isArray(result.results)) {
-    result.results = result.results.map((r: any) => {
-      if (!r.success) {
-        // Check if it's an empty object
-        if (!r || Object.keys(r).length === 0) {
-          return {
-            ...r,
-            success: false,
-            message: 'Backend returned empty error object. This usually means the request payload was empty or malformed. Check that CSV data was parsed correctly.',
-            error: 'Empty error response',
-            raw: r,
-          };
-        }
-        
-        // Extract error message from various possible fields
-        const errorMsg = r.message || 
-                        r.error || 
-                        r.errorMessage || 
-                        r.details || 
-                        (r.errors && Array.isArray(r.errors) ? r.errors.join(', ') : undefined) ||
-                        (typeof r === 'string' ? r : undefined) ||
-                        (r.data && typeof r.data === 'string' ? r.data : undefined) ||
-                        (r.response && r.response.message ? r.response.message : undefined) ||
-                        'Validation failed - check required fields';
-        
-        return {
-          ...r,
-          success: false,
-          message: errorMsg,
-          raw: r,
-        };
-      }
-      return r;
-    });
-  }
-  
-  return result;
+  return result as InventoryImportResult;
 }
 
 export async function getInventoryExpiryAlerts(
-  threshold: number = 30
+  _threshold: number = 30
 ): Promise<InventoryProduct[]> {
-  const url = `${API_ENDPOINTS.inventoryExpiryAlerts}?threshold=${threshold}`;
-  const response = await authFetch(url);
-  const data = await parseResponse<any>(response);
-  if (Array.isArray(data)) {
-    return data;
-  }
-  if (Array.isArray(data?.data)) {
-    return data.data;
-  }
-  return [];
+  const data = await getConvexClient().query(api.inventory.expiryAlerts, {});
+  return (data as InventoryProduct[]) ?? [];
 }
 
 export interface InventoryExpirySummaryTotals {
@@ -472,57 +369,58 @@ export interface InventoryExpirySummary {
 }
 
 export async function getInventoryExpirySummary(): Promise<InventoryExpirySummary> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.inventoryExpirySummary);
-    const data = await parseResponse<any>(response);
-    if (data && typeof data === "object") {
-      return {
-        totals: data.totals ?? data.summary ?? {},
-        warehouses: Array.isArray(data.warehouses)
-          ? data.warehouses
-          : Array.isArray(data.breakdown)
-          ? data.breakdown
-          : [],
-        upcoming: Array.isArray(data.upcoming) ? data.upcoming : [],
-      };
-    }
-    return {};
-  } catch (error: any) {
-    // Handle 403 Forbidden errors gracefully - return empty summary instead of throwing
-    if (error?.status === 403 || error?.statusCode === 403 || error?.message?.includes('403') || error?.message?.includes('Forbidden')) {
-      return {};
-    }
-    // Re-throw other errors
-    throw error;
-  }
+  const data = await getConvexClient().query(api.inventory.expirySummary, {});
+  const d = data as {
+    total: number;
+    expired: number;
+    critical: number;
+    warning: number;
+    healthy: number;
+  };
+  return {
+    totals: {
+      total: d.total,
+      expired: d.expired,
+      critical: d.critical,
+      warning: d.warning,
+      healthy: d.healthy,
+    },
+    warehouses: [],
+    upcoming: [],
+  };
 }
 
 export async function listInventoryDamages(
   filters: InventoryDamageFilters = {}
 ): Promise<InventoryDamageResponse> {
-  const qp = new URLSearchParams();
-  if (filters.startDate) qp.set("startDate", filters.startDate);
-  if (filters.endDate) qp.set("endDate", filters.endDate);
-  if (filters.warehouseId) qp.set("warehouseId", filters.warehouseId);
-  if (filters.reason) qp.set("reason", filters.reason);
-  if (filters.productId) qp.set("productId", filters.productId);
-  if (filters.action) qp.set("action", filters.action);
-  if (filters.page != null) qp.set("page", String(filters.page));
-  if (filters.limit != null) qp.set("limit", String(filters.limit));
-  const url = qp.toString()
-    ? `${API_ENDPOINTS.inventoryDamages}?${qp.toString()}`
-    : API_ENDPOINTS.inventoryDamages;
-  const response = await authFetch(url);
-  const data = await parseResponse<any>(response);
-  if (Array.isArray(data)) {
-    return { data, total: data.length, page: filters.page ?? 1, limit: filters.limit ?? data.length };
-  }
+  const rows = await getConvexClient().query(api.inventory.listDamages, {
+    startDate: filters.startDate,
+    endDate: filters.endDate,
+  });
+  const data: InventoryDamageRecord[] = (rows as Array<{
+    _id: Id<"inventoryDamages">;
+    productId: Id<"inventoryItems">;
+    quantity: number;
+    warehouseId?: Id<"warehouses">;
+    reason: string;
+    action: string;
+    inspectorNotes?: string;
+    createdAt: number;
+  }>).map((d) => ({
+    id: d._id,
+    productId: d.productId,
+    quantity: d.quantity,
+    warehouseId: d.warehouseId,
+    reason: d.reason,
+    action: d.action,
+    inspectorNotes: d.inspectorNotes,
+    createdAt: new Date(d.createdAt).toISOString(),
+  }));
   return {
-    data: data?.data ?? [],
-    summary: data?.summary,
-    total: data?.total ?? data?.data?.length ?? 0,
-    page: data?.page ?? filters.page ?? 1,
-    limit: data?.limit ?? filters.limit ?? data?.data?.length ?? 20,
+    data,
+    total: data.length,
+    page: filters.page ?? 1,
+    limit: filters.limit ?? data.length,
   };
 }
 
@@ -530,27 +428,25 @@ export async function recordProductDamage(
   productId: string,
   payload: RecordDamagePayload
 ): Promise<InventoryProduct> {
-  const response = await authFetch(API_ENDPOINTS.inventoryRecordDamage(productId), {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify(payload),
+  await getConvexClient().mutation(api.inventory.recordDamage, {
+    productId: productId as Id<"inventoryItems">,
+    quantity: payload.quantity,
+    reason: payload.reason,
+    warehouseId: payload.warehouseId as Id<"warehouses"> | undefined,
+    action: payload.action,
+    inspectorNotes: payload.inspectorNotes,
   });
-  return parseResponse<InventoryProduct>(response);
+  return getInventoryProductById(productId);
 }
 
 export async function getProductPurchaseHistory(
   id: string,
-  limit: number = 20,
-  filters?: { status?: string }
+  _limit: number = 20,
+  _filters?: { status?: string }
 ): Promise<PurchaseHistoryResponse> {
-  let url = `${API_ENDPOINTS.inventoryById(id)}/purchase-history?limit=${limit}`;
-  
-  if (filters?.status) {
-    url += `&status=${encodeURIComponent(filters.status)}`;
-  }
-  
-  const response = await authFetch(url);
-  return parseResponse<PurchaseHistoryResponse>(response);
+  return getConvexClient().query(api.inventory.purchaseHistory, {
+    productId: id as Id<"inventoryItems">,
+  });
 }
 
 // Utility helpers for CSV import ------------------------------------------------

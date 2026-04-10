@@ -6,7 +6,7 @@ This guide covers how to test payment functionality in the CeeoneApp-pharma appl
 ## Prerequisites
 
 1. **Backend Running**: Ensure your backend API is running on `http://localhost:5000`
-2. **Frontend Running**: Start your Next.js app with `yarn dev` or `npm run dev`
+2. **Frontend Running**: Start your Next.js app with `yarn dev`
 3. **User Account**: Login with an admin or managing director account (for payment approval permissions)
 4. **Browser DevTools**: Open Network tab to monitor API calls
 

@@ -1,219 +1,90 @@
-import { API_ENDPOINTS } from "../config/api";
-import { authFetch } from "./authFetch";
-import type { CustomersListQuery, CustomersListResponse, CustomerRecord, CreateCustomerBody, UpdateCustomerBody, PaginatedCustomersResponse } from "../types/customers";
+import { getConvexClient, api } from "@/lib/convexClient";
+import type { Id } from "../../convex/_generated/dataModel";
+import type {
+  CustomersListQuery,
+  CustomersListResponse,
+  CustomerRecord,
+  CreateCustomerBody,
+  UpdateCustomerBody,
+  PaginatedCustomersResponse,
+} from "../types/customers";
 
-function buildQuery(params: CustomersListQuery = {}): string {
-  const qp = new URLSearchParams();
-  if (params.page != null) qp.set("page", String(params.page));
-  if (params.limit != null) qp.set("limit", String(params.limit));
-  if (params.search) qp.set("search", params.search);
-  const qs = qp.toString();
-  return qs ? `?${qs}` : "";
+function asCustomerId(id: string): Id<"customers"> {
+  return id as Id<"customers">;
 }
 
 export async function listCustomers(params: CustomersListQuery = {}): Promise<CustomersListResponse> {
-  try {
-    const res = await authFetch(`${API_ENDPOINTS.customers}${buildQuery(params)}`);
-    const data = await res.json();
-    
-    // The API returns a paginated object with data, total, page, limit
-    if (data && Array.isArray(data.data)) {
-      return data.data;
-    } 
-    // Fallback if the response is an array directly
-    else if (Array.isArray(data)) {
-      return data;
-    } 
-    // If we can't find an array, return an empty array
-    else {
-      console.error("Unexpected API response format:", data);
-      return [];
-    }
-  } catch (error) {
-    console.error("Error fetching customers:", error);
-    throw error;
-  }
+  const data = await getConvexClient().query(api.customers.listPaginated, {
+    page: params.page,
+    limit: params.limit,
+    search: params.search,
+  });
+  return data.data;
 }
 
-// New function that returns paginated response with total count
-export async function listCustomersPaginated(params: CustomersListQuery = {}): Promise<PaginatedCustomersResponse> {
-  try {
-    const res = await authFetch(`${API_ENDPOINTS.customers}${buildQuery(params)}`);
-    const data = await res.json();
-    
-    // The API returns a paginated object with data, total, page, limit
-    if (data && Array.isArray(data.data)) {
-      return {
-        data: data.data,
-        total: data.total ?? data.data.length,
-        page: data.page ?? 1,
-        limit: data.limit ?? params.limit ?? 10,
-      };
-    } 
-    // Fallback if the response is an array directly
-    else if (Array.isArray(data)) {
-      return {
-        data: data,
-        total: data.length,
-        page: 1,
-        limit: params.limit ?? data.length,
-      };
-    } 
-    // If we can't find an array, return empty
-    else {
-      console.error("Unexpected API response format:", data);
-      return { data: [], total: 0, page: 1, limit: params.limit ?? 10 };
-    }
-  } catch (error) {
-    console.error("Error fetching customers:", error);
-    throw error;
-  }
+export async function listCustomersPaginated(
+  params: CustomersListQuery = {}
+): Promise<PaginatedCustomersResponse> {
+  return getConvexClient().query(api.customers.listPaginated, {
+    page: params.page,
+    limit: params.limit,
+    search: params.search,
+  });
 }
 
 export async function getCustomer(id: string): Promise<CustomerRecord> {
-  try {
-    const res = await authFetch(`${API_ENDPOINTS.customers}/${encodeURIComponent(id)}`);
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    console.error(`Error fetching customer ${id}:`, error);
-    throw error;
-  }
+  return getConvexClient().query(api.customers.get, { id: asCustomerId(id) });
 }
 
 export async function createCustomer(body: CreateCustomerBody): Promise<CustomerRecord> {
-  try {
-    const res = await authFetch(API_ENDPOINTS.customers, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-    
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.message || `Failed to create customer (${res.status})`);
-    }
-    
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    console.error("Error creating customer:", error);
-    throw error;
-  }
+  return getConvexClient().mutation(api.customers.create, {
+    name: body.name,
+    email: body.email,
+    phone: body.phone,
+    address: body.address,
+    creditLimit: body.creditLimit,
+  });
 }
 
 export async function updateCustomer(id: string, body: UpdateCustomerBody): Promise<CustomerRecord> {
-  try {
-    const res = await authFetch(`${API_ENDPOINTS.customers}/${encodeURIComponent(id)}`, {
-      method: "PATCH",
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    console.error(`Error updating customer ${id}:`, error);
-    throw error;
-  }
+  return getConvexClient().mutation(api.customers.update, {
+    id: asCustomerId(id),
+    ...body,
+  });
 }
 
 export async function deleteCustomer(id: string): Promise<void> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.customerById(id), {
-      method: 'DELETE',
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to delete customer');
-    }
-  } catch (error) {
-    console.error('Error deleting customer:', error);
-    throw error;
-  }
+  await getConvexClient().mutation(api.customers.remove, { id: asCustomerId(id) });
 }
 
-export async function getCustomerSales(id: string): Promise<any[]> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.customerSales(id));
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching customer sales:', error);
-    throw error;
-  }
+export async function getCustomerSales(id: string): Promise<unknown[]> {
+  return getConvexClient().query(api.customers.customerSales, {
+    customerId: asCustomerId(id),
+  });
 }
-
 
 export async function searchCustomers(query: string): Promise<CustomerRecord[]> {
-  try {
-    const queryParams = new URLSearchParams({ search: query });
-    const url = `${API_ENDPOINTS.customerSearch}?${queryParams.toString()}`;
-    const response = await authFetch(url);
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error searching customers:', error);
-    throw error;
-  }
+  return getConvexClient().query(api.customers.searchCustomers, { query });
 }
 
-export async function getOutstandingBalances(): Promise<any[]> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.customerOutstandingBalance);
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching outstanding balances:', error);
-    throw error;
-  }
+export async function getOutstandingBalances(): Promise<unknown[]> {
+  return getConvexClient().query(api.customers.outstandingBalances, {});
 }
 
 export async function getTopCustomers(): Promise<CustomerRecord[]> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.customerTop);
-    const data = await response.json();
-    
-    // Handle different response formats
-    if (data && Array.isArray(data.data)) {
-      return data.data;
-    } else if (Array.isArray(data)) {
-      return data;
-    } else {
-      console.error("Unexpected top customers API response format:", data);
-      return [];
-    }
-  } catch (error) {
-    console.error('Error fetching top customers:', error);
-    throw error;
-  }
+  return getConvexClient().query(api.customers.topCustomers, {});
 }
 
-export async function updateCustomerCreditLimit(id: string, creditLimit: number): Promise<CustomerRecord> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.customerCreditLimit(id), {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ creditLimit }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to update credit limit');
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error updating credit limit:', error);
-    throw error;
-  }
+export async function updateCustomerCreditLimit(
+  id: string,
+  creditLimit: number
+): Promise<CustomerRecord> {
+  return getConvexClient().mutation(api.customers.updateCreditLimit, {
+    id: asCustomerId(id),
+    creditLimit,
+  });
 }
 
-// Customer Summary Types
 export interface CustomerStats {
   totalPurchases: number;
   totalAmount: number;
@@ -243,27 +114,31 @@ export interface OutstandingBalanceCustomer {
   lastPurchaseDate?: string;
 }
 
-// Customer Summary Functions
 export async function getCustomerStats(id: string): Promise<CustomerStats> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.customerStats(id));
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching customer stats:', error);
-    throw error;
-  }
+  const s = await getConvexClient().query(api.customers.customerStats, {
+    customerId: asCustomerId(id),
+  });
+  const totalPurchases = s.totalOrders;
+  const totalAmount = s.totalSpent;
+  return {
+    totalPurchases,
+    totalAmount,
+    outstandingBalance: 0,
+    lastPurchaseDate: s.lastOrderDate,
+    averagePurchaseAmount: totalPurchases ? totalAmount / totalPurchases : 0,
+  };
 }
 
 export async function getOutstandingBalanceCustomers(): Promise<OutstandingBalanceCustomer[]> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.customerOutstandingBalance);
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching outstanding balance customers:', error);
-    throw error;
-  }
+  const rows = await getConvexClient().query(api.customers.outstandingBalanceCustomers, {});
+  return rows.map((r, i) => ({
+    id: String(r.id),
+    name: r.name,
+    email: r.email,
+    phone: undefined,
+    outstandingBalance: r.outstandingBalance,
+    creditLimit: 0,
+    lastPurchaseDate: undefined,
+    rank: i + 1,
+  }));
 }
-
-

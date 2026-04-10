@@ -1,5 +1,5 @@
-import { API_ENDPOINTS } from "../config/api";
-import { authFetch } from "./authFetch";
+import { getConvexClient, api } from "@/lib/convexClient";
+import type { Id } from "../../convex/_generated/dataModel";
 
 export interface AuditLog {
   id: string;
@@ -13,7 +13,7 @@ export interface AuditLog {
     firstName: string;
     lastName: string;
   };
-  details: any;
+  details: unknown;
   ipAddress: string;
   userAgent: string;
   createdAt: string;
@@ -33,30 +33,52 @@ export interface AuditLogParams {
   action?: string;
   entityType?: string;
   entityId?: string;
-  startDate?: string; // YYYY-MM-DD
-  endDate?: string; // YYYY-MM-DD
+  startDate?: string;
+  endDate?: string;
 }
 
-/**
- * Fetch audit logs with optional filtering
- */
-export async function getAuditLogs(params: AuditLogParams = {}): Promise<AuditLogsResponse> {
-  try {
-    const qp = new URLSearchParams();
-    if (params.page != null) qp.set("page", String(params.page));
-    if (params.limit != null) qp.set("limit", String(params.limit));
-    if (params.userId) qp.set("userId", params.userId);
-    if (params.action) qp.set("action", params.action);
-    if (params.entityType) qp.set("entityType", params.entityType);
-    if (params.entityId) qp.set("entityId", params.entityId);
-    if (params.startDate) qp.set("startDate", params.startDate);
-    if (params.endDate) qp.set("endDate", params.endDate);
-    
-    const url = `${API_ENDPOINTS.auditLogs}${qp.toString() ? `?${qp.toString()}` : ""}`;
-    const res = await authFetch(url);
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    throw error;
-  }
+type AuditDoc = {
+  _id: Id<"auditLogs">;
+  userId?: string;
+  action: string;
+  resource: string;
+  resourceId?: string;
+  details?: unknown;
+  createdAt: number;
+};
+
+function mapAuditLog(doc: AuditDoc): AuditLog {
+  const details = doc.details as Record<string, unknown> | undefined;
+  return {
+    id: doc._id,
+    action: doc.action,
+    entityType: doc.resource,
+    entityId: doc.resourceId ?? "",
+    userId: doc.userId ?? "",
+    details: doc.details,
+    ipAddress: (details?.ipAddress as string) ?? "",
+    userAgent: (details?.userAgent as string) ?? "",
+    createdAt: new Date(doc.createdAt).toISOString(),
+  };
+}
+
+export async function getAuditLogs(
+  params: AuditLogParams = {}
+): Promise<AuditLogsResponse> {
+  const raw = await getConvexClient().query(api.auditLogs.list, {
+    page: params.page,
+    limit: params.limit,
+    userId: params.userId,
+    action: params.action,
+    entityType: params.entityType,
+    entityId: params.entityId,
+    startDate: params.startDate,
+    endDate: params.endDate,
+  });
+  return {
+    data: (raw.data as AuditDoc[]).map(mapAuditLog),
+    total: raw.total,
+    page: raw.page,
+    limit: raw.limit,
+  };
 }

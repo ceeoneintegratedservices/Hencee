@@ -1,5 +1,5 @@
-import { API_ENDPOINTS } from "../config/api";
-import { authFetch } from "./authFetch";
+import { getConvexClient, api } from "@/lib/convexClient";
+import type { Id } from "../../convex/_generated/dataModel";
 // @ts-ignore - jsPDF types may not be available
 import jsPDF from "jspdf";
 
@@ -82,6 +82,8 @@ export interface SaleItem {
   selectedUnit?: SaleUnitType;
   originalPrice?: number;
   discountAmount?: number;
+  productSize?: string;
+  productSizeUnit?: string;
   product?: {
     id: string;
     name: string;
@@ -103,7 +105,12 @@ export interface Sale {
     id?: string;
     name?: string;
     email?: string;
+    phone?: string;
   };
+  homeAddress?: string;
+  billingAddress?: string;
+  orderNumber?: string;
+  trackingId?: string;
   items: SaleItem[];
   totalAmount: number;
   paymentStatus: PaymentStatus;
@@ -177,75 +184,172 @@ export interface RejectSalePayload {
   note: string;
 }
 
-async function parseJson<T>(response: Response): Promise<T> {
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data?.message || "Request failed");
-  }
-  return data;
+function computeSaleTotal(items: SaleItemPayload[]): number {
+  return items.reduce((sum, i) => {
+    const line =
+      (i.unitPrice ?? 0) * i.quantity - (i.discountAmount ?? 0);
+    return sum + line;
+  }, 0);
+}
+
+function derivePaymentStatus(o: Record<string, unknown>): PaymentStatus {
+  const pay = String(o.payment ?? "").toLowerCase();
+  const st = String(o.status ?? "").toUpperCase();
+  if (st.includes("COMPLET") || pay === "paid") return "COMPLETED";
+  if (st.includes("FAIL")) return "FAILED";
+  if (st.includes("REFUND")) return "REFUNDED";
+  return "PENDING";
+}
+
+function normalizeSaleItems(raw: unknown): SaleItem[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((it: Record<string, unknown>, i: number) => ({
+    id: String(it.id ?? `line-${i}`),
+    productId: String(it.productId ?? ""),
+    productName: String(it.productName ?? it.name ?? "Product"),
+    quantity: Number(it.quantity ?? 0),
+    unitPrice: Number(it.unitPrice ?? it.price ?? 0),
+    totalPrice: Number(
+      it.totalPrice ??
+        it.orderTotal ??
+        Number(it.quantity ?? 0) * Number(it.unitPrice ?? it.price ?? 0)
+    ),
+    selectedUnit: it.selectedUnit as SaleItem["selectedUnit"],
+    originalPrice: it.originalPrice as number | undefined,
+    discountAmount: it.discountAmount as number | undefined,
+    product: it.product as SaleItem["product"],
+    productSize: it.productSize as string | undefined,
+    productSizeUnit: it.productSizeUnit as string | undefined,
+  }));
+}
+
+/** Maps Convex `sales.formatOrder` payload to the legacy `Sale` shape. */
+export function convexOrderToSale(o: Record<string, unknown>): Sale {
+  const meta = (o.metadata as SaleMetadata | undefined) ?? {};
+  const cust = o.customer as
+    | { id?: string; name?: string; email?: string; phone?: string }
+    | undefined;
+  return {
+    id: String(o.id),
+    customerId: String(o.customerId ?? cust?.id ?? ""),
+    customerName: cust?.name,
+    customer: {
+      id: cust?.id,
+      name: cust?.name,
+      email: cust?.email,
+      phone: cust?.phone,
+    },
+    homeAddress: o.homeAddress as string | undefined,
+    billingAddress: o.billingAddress as string | undefined,
+    orderNumber: o.orderNumber as string | undefined,
+    trackingId: o.trackingId as string | undefined,
+    items: normalizeSaleItems(o.items),
+    totalAmount: Number(o.totalAmount ?? 0),
+    paymentStatus: derivePaymentStatus(o),
+    paymentMethod: o.paymentMethod as Sale["paymentMethod"],
+    status: String(o.status),
+    notes:
+      typeof meta.notes === "string"
+        ? meta.notes
+        : (meta as { notes?: string }).notes,
+    showDiscountOnInvoice: meta.showDiscountOnInvoice as boolean | undefined,
+    metadata: meta,
+    payments: [],
+    createdAt: String(o.createdAt),
+    updatedAt: String(o.updatedAt),
+  };
 }
 
 export async function fetchSalesDashboard(
   params: SalesListParams = {}
 ): Promise<SalesDashboardResponse> {
-  const queryParams = new URLSearchParams();
-  if (params.page) queryParams.set("page", params.page.toString());
-  if (params.limit) queryParams.set("limit", params.limit.toString());
-  if (params.search) queryParams.set("search", params.search);
-  if (params.status) queryParams.set("status", params.status);
-  if (params.dateFrom) queryParams.set("dateFrom", params.dateFrom);
-  if (params.dateTo) queryParams.set("dateTo", params.dateTo);
-  if (params.sortBy) queryParams.set("sortBy", params.sortBy);
-  if (params.sortDir) queryParams.set("sortDir", params.sortDir);
-  const url = `${API_ENDPOINTS.salesDashboard}${
-    queryParams.toString() ? `?${queryParams.toString()}` : ""
-  }`;
-    const response = await authFetch(url);
-  return parseJson<SalesDashboardResponse>(response);
+  return getConvexClient().query(api.sales.ordersDashboard, {
+    page: params.page,
+    limit: params.limit,
+    search: params.search,
+    status: params.status,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+    sortBy: params.sortBy,
+    sortDir: params.sortDir,
+  });
 }
 
 export async function createSale(payload: CreateSalePayload): Promise<Sale> {
-    const response = await authFetch(API_ENDPOINTS.sales, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const totalAmount = computeSaleTotal(payload.items ?? []);
+  const created = await getConvexClient().mutation(api.sales.create, {
+    customerId: payload.customerId as Id<"customers">,
+    items: payload.items,
+    totalAmount,
+    paymentMethod: payload.payment?.method,
+    metadata: {
+      notes: payload.notes,
+      showDiscountOnInvoice: payload.showDiscountOnInvoice,
+      payment: payload.payment,
     },
-    body: JSON.stringify(payload),
   });
-  return parseJson<Sale>(response);
+  return convexOrderToSale(created as unknown as Record<string, unknown>);
 }
 
 export async function getSaleById(id: string): Promise<Sale> {
-    const response = await authFetch(API_ENDPOINTS.saleById(id));
-  return parseJson<Sale>(response);
+  const o = await getConvexClient().query(api.sales.getById, {
+    id: id as Id<"sales">,
+  });
+  return convexOrderToSale(o as unknown as Record<string, unknown>);
 }
 
 export async function updateSaleStatus(
   id: string,
   payload: UpdateSaleStatusPayload
 ): Promise<Sale> {
-    const response = await authFetch(API_ENDPOINTS.saleStatus(id), {
-    method: "PUT",
-      headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
+  const updated = await getConvexClient().mutation(api.sales.updateStatus, {
+    id: id as Id<"sales">,
+    status: String(payload.status),
   });
-  return parseJson<Sale>(response);
+  return convexOrderToSale(updated as unknown as Record<string, unknown>);
 }
 
 export async function addSalePayment(
   saleId: string,
   payload: SalePaymentPayload
 ): Promise<SalePayment> {
-  const response = await authFetch(API_ENDPOINTS.salePayments(saleId), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
+  const order = await getConvexClient().query(api.sales.getById, {
+    id: saleId as Id<"sales">,
   });
-  return parseJson<SalePayment>(response);
+  const customerId = (order as { customerId: Id<"customers"> }).customerId;
+  const paymentId = await getConvexClient().mutation(api.payments.create, {
+    saleId: saleId as Id<"sales">,
+    customerId,
+    amount: payload.amount ?? 0,
+    method: payload.method,
+    status: payload.status ?? "PENDING",
+    reference: payload.reference,
+  });
+  const row = await getConvexClient().query(api.payments.get, {
+    id: paymentId as Id<"payments">,
+  });
+  const p = row as {
+    _id: Id<"payments">;
+    method?: string;
+    status: string;
+    amount: number;
+    reference?: string;
+    createdAt: number;
+    updatedAt: number;
+  };
+  return {
+    id: p._id,
+    method: p.method as PaymentMethod,
+    status: p.status as PaymentStatus,
+    amount: p.amount,
+    reference: p.reference,
+    senderName: payload.senderName,
+    transactionReference: payload.transactionReference,
+    chequeNumber: payload.chequeNumber,
+    accountName: payload.accountName,
+    createdAt: new Date(p.createdAt).toISOString(),
+    updatedAt: new Date(p.updatedAt).toISOString(),
+  };
 }
 
 // Helper function to generate PDF from invoice JSON data
@@ -547,226 +651,122 @@ export async function downloadSaleInvoice(
   saleId: string,
   variant: "standard" | "outsourced" = "standard"
 ): Promise<Blob> {
-  // Try with format=pdf parameter first
-  let url = API_ENDPOINTS.saleInvoice(saleId, variant);
-  const urlObj = new URL(url);
-  urlObj.searchParams.set('format', 'pdf');
-  url = urlObj.toString();
-  
-  // Get token manually to avoid authFetch's default Content-Type header
-  let token: string | null = null;
-  if (typeof window !== "undefined") {
-    try { 
-      token = localStorage.getItem("accessToken") || localStorage.getItem("authToken"); 
-    } catch { 
-      token = null; 
-    }
-  }
-  
-  // Make request directly with fetch to avoid Content-Type: application/json header
-  // which interferes with PDF downloads
-  // Add Accept header to request PDF format explicitly
-  const headers: HeadersInit = {
-    'Accept': 'application/pdf, application/octet-stream, */*',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-  
-  const response = await fetch(url, {
-    method: 'GET',
-    headers,
+  void variant;
+  const order = await getConvexClient().query(api.sales.getById, {
+    id: saleId as Id<"sales">,
   });
-  
-  // Handle 401 - redirect to login
-  if (response.status === 401) {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("authToken");
-      localStorage.removeItem("refreshToken");
-      localStorage.removeItem("userData");
-      window.location.href = "/login";
-    }
-    throw new Error("Unauthorized. Please log in to continue.");
-  }
-  
-  if (response.status === 403) {
-    throw new Error("Forbidden. You do not have permission to download this invoice.");
-  }
-  
-  // Check content type FIRST - even if status is 200, JSON means backend returned data instead of PDF
-  const contentType = response.headers.get('content-type') || '';
-  
-  // If response is JSON, the backend is returning invoice data, not a PDF
-  // Generate PDF client-side from the JSON data
-  if (contentType.includes('application/json') || contentType.includes('text/json')) {
-    try {
-      const invoiceData = await response.json();
-      
-      // Check if it's actually an error message
-      if (invoiceData?.message || invoiceData?.error) {
-        throw new Error(invoiceData.message || invoiceData.error);
-      }
-      
-      // Generate PDF from invoice data
-      try {
-        const pdfBlob = generatePDFFromInvoiceData(invoiceData);
-        return pdfBlob;
-      } catch (pdfError: any) {
-        console.error('Error generating PDF:', pdfError);
-        throw new Error(`Failed to generate PDF: ${pdfError.message}`);
-      }
-    } catch (e: any) {
-      // If it's already our error, throw it
-      if (e.message && (e.message.includes('Failed to generate') || e.message.includes('Server error'))) {
-        throw e;
-      }
-      // If JSON parsing failed, try text
-      const textResponse = response.clone();
-      const text = await textResponse.text();
-      throw new Error(`Server returned JSON instead of PDF: ${text.substring(0, 300)}`);
-    }
-  }
-  
-  // Check if response is ok
-  if (!response.ok) {
-    // Try to get error message from response
-    let errorMessage = "Failed to download invoice";
-    try {
-      const contentType = response.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const data = await response.json();
-        errorMessage = data?.message || data?.error || errorMessage;
-      } else {
-        // Try to read as text first
-        const text = await response.text();
-        if (text) {
-          // Check if it's JSON
-          try {
-            const errorData = JSON.parse(text);
-            errorMessage = errorData?.message || errorData?.error || errorMessage;
-          } catch {
-            errorMessage = text.substring(0, 200);
-          }
-        }
-      }
-    } catch (e) {
-      // If we can't parse error, use default message
-      console.error('Error parsing error response:', e);
-    }
-    throw new Error(errorMessage);
-  }
-  
-  // Clone the response before reading (we might need to read it multiple times)
-  const responseClone = response.clone();
-  
-  // Read the blob from the cloned response
-  const blob = await responseClone.blob();
-  
-  // Verify blob is not empty
-  if (blob.size === 0) {
-    throw new Error("Received empty PDF file");
-  }
-  
-  // Check if blob appears to be a PDF by reading first bytes
-  const arrayBuffer = await blob.slice(0, 4).arrayBuffer();
-  const uint8Array = new Uint8Array(arrayBuffer);
-  const pdfSignature = String.fromCharCode(...uint8Array);
-  
-  // PDF files start with %PDF
-  if (!pdfSignature.startsWith('%PDF')) {
-    // Might be HTML error page or JSON error
-    const textBlob = blob.slice(0, 500); // Only read first 500 bytes for error checking
-    const text = await textBlob.text();
-    if (text.trim().startsWith('<') || text.trim().startsWith('{')) {
-      try {
-        const errorData = JSON.parse(text);
-        throw new Error(errorData?.message || errorData?.error || "Server returned error instead of PDF");
-      } catch {
-        throw new Error("Server returned invalid response. Expected PDF but received: " + text.substring(0, 100));
-      }
-    }
-    console.warn('PDF signature check failed. First bytes:', pdfSignature, 'Content-Type:', contentType);
-    // Don't throw here - some PDFs might have different headers, but still be valid
-  }
-  
-  // Return blob with explicit PDF type
-  return new Blob([blob], { type: 'application/pdf' });
+  const o = order as Record<string, unknown>;
+  const sale = convexOrderToSale(o);
+  const cust = o.customer as
+    | { name?: string; email?: string; phone?: string }
+    | undefined;
+  const invoiceData = {
+    saleId,
+    issuedAt: sale.createdAt,
+    showDiscountOnInvoice: sale.showDiscountOnInvoice,
+    notes: sale.notes,
+    customer: {
+      name: cust?.name,
+      email: cust?.email,
+      phone: cust?.phone,
+      address: String(o.homeAddress ?? ""),
+    },
+    items: sale.items.map((it) => ({
+      productName: it.productName,
+      quantity: it.quantity,
+      unitPrice: it.unitPrice,
+      totalPrice: it.totalPrice,
+      discountAmount: it.discountAmount,
+      productSize: it.productSize,
+      productSizeUnit: it.productSizeUnit,
+      warehouseName: undefined,
+      warehouse: undefined,
+    })),
+    totals: {
+      total: sale.totalAmount,
+      subtotal: sale.totalAmount,
+      discount: sale.metadata?.discountTotal,
+      paid:
+        o.paymentAmount != null ? Number(o.paymentAmount) : undefined,
+      outstanding: sale.outstandingBalance,
+    },
+    paymentSummary: sale.payments ?? [],
+  };
+  return generatePDFFromInvoiceData(invoiceData);
 }
 
 export async function approveSalePayment(
   saleId: string,
   payload: ApproveSalePayload
 ): Promise<Sale> {
-  const response = await authFetch(API_ENDPOINTS.saleApprove(saleId), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
+  const updated = await getConvexClient().mutation(api.sales.approvePayment, {
+    id: saleId as Id<"sales">,
+    amountPaid: payload.amountPaid,
+    note: payload.note,
   });
-  return parseJson<Sale>(response);
+  return convexOrderToSale(updated as unknown as Record<string, unknown>);
 }
 
 export async function querySalePayment(
   saleId: string,
   payload: QuerySalePayload
 ): Promise<Sale> {
-  const response = await authFetch(API_ENDPOINTS.saleQuery(saleId), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
+  const updated = await getConvexClient().mutation(api.sales.queryPayment, {
+    id: saleId as Id<"sales">,
+    note: payload.note,
   });
-  return parseJson<Sale>(response);
+  return convexOrderToSale(updated as unknown as Record<string, unknown>);
 }
 
 export async function rejectSalePayment(
   saleId: string,
   payload: RejectSalePayload
 ): Promise<Sale> {
-  const response = await authFetch(API_ENDPOINTS.saleReject(saleId), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
+  const updated = await getConvexClient().mutation(api.sales.rejectPayment, {
+    id: saleId as Id<"sales">,
+    note: payload.note,
   });
-  return parseJson<Sale>(response);
+  return convexOrderToSale(updated as unknown as Record<string, unknown>);
 }
 
 export async function getSalesByCustomer(customerId: string): Promise<Sale[]> {
-    const response = await authFetch(API_ENDPOINTS.salesByCustomer(customerId));
-  return parseJson<Sale[]>(response);
+  const rows = await getConvexClient().query(api.sales.byCustomer, {
+    customerId: customerId as Id<"customers">,
+  });
+  return (rows as Record<string, unknown>[]).map((r) => convexOrderToSale(r));
 }
 
 export async function getSalesByDateRange(
   dateFrom: string,
   dateTo: string
 ): Promise<Sale[]> {
-  const queryParams = new URLSearchParams({ dateFrom, dateTo });
-    const url = `${API_ENDPOINTS.salesDateRange}?${queryParams.toString()}`;
-    const response = await authFetch(url);
-  return parseJson<Sale[]>(response);
+  const rows = await getConvexClient().query(api.sales.byDateRange, {
+    dateFrom,
+    dateTo,
+  });
+  return (rows as Record<string, unknown>[]).map((r) => convexOrderToSale(r));
 }
 
 export async function getSalesWithPendingPayments(): Promise<Sale[]> {
-    const response = await authFetch(API_ENDPOINTS.salesPendingPayments);
-  return parseJson<Sale[]>(response);
+  const rows = await getConvexClient().query(api.sales.pendingPaymentSales, {});
+  return (rows as Record<string, unknown>[]).map((r) => convexOrderToSale(r));
 }
 
-export async function searchSales(query: string): Promise<Sale[]> {
-    const queryParams = new URLSearchParams({ search: query });
-    const url = `${API_ENDPOINTS.salesSearch}?${queryParams.toString()}`;
-    const response = await authFetch(url);
-  return parseJson<Sale[]>(response);
+export async function searchSales(searchQuery: string): Promise<Sale[]> {
+  const rows = await getConvexClient().query(api.sales.searchOrders, {
+    query: searchQuery,
+  });
+  return (rows as Record<string, unknown>[]).map((r) => convexOrderToSale(r));
 }
 
 export async function getDailySales(date: string): Promise<Sale[]> {
-    const response = await authFetch(API_ENDPOINTS.salesDaily(date));
-  return parseJson<Sale[]>(response);
+  const rows = await getConvexClient().query(api.sales.dailyOrders, { date });
+  return (rows as Record<string, unknown>[]).map((r) => convexOrderToSale(r));
 }
 
-export async function getMonthlySalesReport(): Promise<any> {
-    const response = await authFetch(API_ENDPOINTS.salesMonthlyReport);
-  return parseJson<any>(response);
+export async function getMonthlySalesReport(): Promise<{
+  total: number;
+  revenue: number;
+}> {
+  return getConvexClient().query(api.sales.monthlyReport, {});
 }

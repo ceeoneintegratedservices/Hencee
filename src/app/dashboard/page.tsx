@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useConvexAuth } from "convex/react";
 import Image from "next/image";
 import Sidebar from "../../components/Sidebar";
 import Header from "../../components/Header";
@@ -36,7 +37,7 @@ export default function AdminDashboard() {
   const [selectedTimePeriod, setSelectedTimePeriod] = useState<"This Week" | "This Month" | "All Time">("This Week");
   // Sidebar toggle for mobile
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   
   // API data state
   const [dashboardData, setDashboardData] = useState<DashboardOverview | null>(null);
@@ -51,33 +52,11 @@ export default function AdminDashboard() {
     setMounted(true);
   }, []);
 
-  // Check authentication on component mount
   useEffect(() => {
-    const checkAuth = () => {
-      const token = localStorage.getItem('authToken');
-      const userData = localStorage.getItem('userData');
-      
-      // Check if we have any form of authentication
-      const hasAuth = token || userData;
-      
-      if (!hasAuth) {
-        router.push('/login');
-      } else {
-        setIsAuthenticated(true);
-      }
-    };
-
-    // Small delay to ensure localStorage is available
-    const timer = setTimeout(checkAuth, 100);
-    
-    // Also check again after a longer delay to catch any timing issues
-    const backupTimer = setTimeout(checkAuth, 500);
-    
-    return () => {
-      clearTimeout(timer);
-      clearTimeout(backupTimer);
-    };
-  }, [router]);
+    if (!authLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [authLoading, isAuthenticated, router]);
 
   // Handle sidebar keyboard events
   useEffect(() => {
@@ -93,13 +72,6 @@ export default function AdminDashboard() {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [sidebarOpen]);
-
-  // Handle logout
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userData');
-    router.push('/login');
-  };
 
   // Handle time period selection
   const handleTimePeriodChange = (period: "This Week" | "This Month" | "All Time") => {
@@ -241,14 +213,14 @@ export default function AdminDashboard() {
   }
 
   // Show loading while checking authentication or fetching data
-  if (!isAuthenticated || loading) {
+  if (authLoading || !isAuthenticated || loading) {
     return (
       <div className="flex w-full h-screen bg-[#f4f5fa] items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading dashboard...</p>
           <p className="text-sm text-gray-500 mt-2">
-            {!isAuthenticated ? 'Checking authentication...' : 'Fetching dashboard data...'}
+            {authLoading || !isAuthenticated ? "Checking authentication..." : "Fetching dashboard data..."}
           </p>
         </div>
       </div>

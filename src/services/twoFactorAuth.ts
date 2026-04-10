@@ -1,7 +1,6 @@
-import { API_ENDPOINTS, API_BASE_URL } from "../config/api";
-import { authFetch } from "./authFetch";
+// Two-factor authentication is handled by Clerk, not a legacy REST API.
+// These stubs keep call sites compiling; prefer Clerk user/security settings in the UI.
 
-// 2FA Types
 export interface TwoFactorSetupResponse {
   qrCode: string;
   secret: string;
@@ -51,153 +50,54 @@ export interface RegenerateBackupCodesResponse {
   message: string;
 }
 
-// 2FA Service
+const CLERK_2FA =
+  "Two-factor authentication is managed in Clerk (user profile / security). " +
+  "Configure MFA in the Clerk Dashboard or your account security settings.";
+
 export class TwoFactorAuthService {
-  /**
-   * Setup 2FA - Get QR code and initial backup codes
-   */
-  static async setup(password: string): Promise<TwoFactorSetupResponse> {
-    try {
-      const response = await authFetch(`${API_BASE_URL}/auth/2fa/setup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ password }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to setup 2FA');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error setting up 2FA:', error);
-      throw error;
-    }
+  static async setup(_password: string): Promise<TwoFactorSetupResponse> {
+    throw new Error(CLERK_2FA);
   }
 
-  /**
-   * Verify 2FA setup with token
-   */
-  static async verifySetup(token: string, password: string): Promise<TwoFactorVerifySetupResponse> {
-    try {
-      const response = await authFetch(`${API_BASE_URL}/auth/2fa/verify-setup`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ token, password }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to verify 2FA setup');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error verifying 2FA setup:', error);
-      throw error;
-    }
+  static async verifySetup(
+    _token: string,
+    _password: string
+  ): Promise<TwoFactorVerifySetupResponse> {
+    throw new Error(CLERK_2FA);
   }
 
-  /**
-   * Get 2FA status
-   */
   static async getStatus(): Promise<TwoFactorStatusResponse> {
-    try {
-      const response = await authFetch(`${API_BASE_URL}/auth/2fa/status`);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to get 2FA status');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error getting 2FA status:', error);
-      throw error;
-    }
+    return {
+      isEnabled: false,
+      hasBackupCodes: false,
+      unusedBackupCodes: 0,
+      message: CLERK_2FA,
+    };
   }
 
-  /**
-   * Disable 2FA
-   */
-  static async disable(password: string, token: string): Promise<TwoFactorDisableResponse> {
-    try {
-      const response = await authFetch(`${API_BASE_URL}/auth/2fa/disable`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ password, token }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to disable 2FA');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error disabling 2FA:', error);
-      throw error;
-    }
+  static async disable(
+    _password: string,
+    _token: string
+  ): Promise<TwoFactorDisableResponse> {
+    throw new Error(CLERK_2FA);
   }
 
-  /**
-   * Get backup codes
-   */
   static async getBackupCodes(): Promise<BackupCodesResponse> {
-    try {
-      const response = await authFetch(`${API_BASE_URL}/auth/2fa/backup-codes`);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to get backup codes');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error getting backup codes:', error);
-      throw error;
-    }
+    throw new Error(CLERK_2FA);
   }
 
-  /**
-   * Regenerate backup codes
-   */
-  static async regenerateBackupCodes(password: string): Promise<RegenerateBackupCodesResponse> {
-    try {
-      const response = await authFetch(`${API_BASE_URL}/auth/2fa/backup-codes/regenerate`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ password }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to regenerate backup codes');
-      }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Error regenerating backup codes:', error);
-      throw error;
-    }
+  static async regenerateBackupCodes(
+    _password: string
+  ): Promise<RegenerateBackupCodesResponse> {
+    throw new Error(CLERK_2FA);
   }
 }
 
-// Export individual functions for convenience
 export const {
   setup: setupTwoFactor,
   verifySetup: verifyTwoFactorSetup,
   getStatus: getTwoFactorStatus,
   disable: disableTwoFactor,
   getBackupCodes: getTwoFactorBackupCodes,
-  regenerateBackupCodes: regenerateTwoFactorBackupCodes
+  regenerateBackupCodes: regenerateTwoFactorBackupCodes,
 } = TwoFactorAuthService;

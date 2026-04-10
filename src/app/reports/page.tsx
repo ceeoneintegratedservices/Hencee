@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useConvexAuth } from "convex/react";
 import Sidebar from "@/components/Sidebar";
 import Header from "@/components/Header";
 import Breadcrumb from "@/components/Breadcrumb";
@@ -47,6 +49,8 @@ const generateEmptyData = () => {
 };
 
 export default function ReportsPage() {
+  const router = useRouter();
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const { showError, showSuccess } = useNotifications();
   
   // UI State
@@ -67,7 +71,6 @@ export default function ReportsPage() {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   
   // API State
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [apiData, setApiData] = useState({
     salesReport: null as any,
@@ -91,16 +94,14 @@ export default function ReportsPage() {
   const [loadingSalesTransactions, setLoadingSalesTransactions] = useState(false);
   const [loadingOrders, setLoadingOrders] = useState(false);
   
-  // Authentication check
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      setIsAuthenticated(true);
-    } else {
-      window.location.href = '/login';
+    if (!authLoading) {
+      setLoading(false);
+      if (!isAuthenticated) {
+        router.replace("/login");
+      }
     }
-    setLoading(false);
-  }, []);
+  }, [authLoading, isAuthenticated, router]);
 
   // Fetch API data
   const fetchReportsData = async () => {

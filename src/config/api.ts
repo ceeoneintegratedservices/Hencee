@@ -22,12 +22,6 @@ export const API_ENDPOINTS = {
   // Public endpoints (Pharma/CeeOne)
   roles: `${API_BASE_URL}${CEEONE_PREFIX}/roles`,
   
-  // Registration drafts (Pharma/CeeOne - tenant-specific)
-  registrationDrafts: `${API_BASE_URL}${CEEONE_PREFIX}/auth/registration-drafts`,
-  registrationDraftById: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/auth/registration-drafts/${id}`,
-  registrationDraftByEmail: (email: string) => `${API_BASE_URL}${CEEONE_PREFIX}/auth/registration-drafts?email=${encodeURIComponent(email)}`,
-  registrationDraftSubmit: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/auth/registration-drafts/${id}/submit`,
-  
   // User management (Pharma/CeeOne - tenant-specific)
   deactivateUser: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/users/${id}/deactivate`,
   deleteUser: (id: string) => `${API_BASE_URL}${CEEONE_PREFIX}/users/${id}`,

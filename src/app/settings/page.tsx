@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useConvexAuth } from "convex/react";
+import { useAuth } from "@clerk/nextjs";
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 import Breadcrumb from "@/components/Breadcrumb";
@@ -50,11 +52,9 @@ console.log('First 5 states:', nigerianStates.slice(0, 5));
 
 export default function SettingsPage() {
   const router = useRouter();
+  const { getToken } = useAuth();
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const { notifications, removeNotification, showSuccess, showError } = useNotifications();
-  
-  // Authentication and loading states
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [apiLoading, setApiLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
   
@@ -177,16 +177,11 @@ export default function SettingsPage() {
     }
   }, []);
 
-  // Authentication check
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      setIsAuthenticated(true);
-    } else {
-      router.push('/login');
+    if (!authLoading && !isAuthenticated) {
+      router.replace("/login");
     }
-    setLoading(false);
-  }, [router]);
+  }, [authLoading, isAuthenticated, router]);
 
   // Fetch settings data from API
   const fetchSettingsData = async () => {
@@ -654,11 +649,13 @@ export default function SettingsPage() {
     setApiLoading(true);
     
     try {
+      const token = await getToken();
+      const authHeader = token ? `Bearer ${token}` : null;
       const response = await fetch(API_ENDPOINTS.changePassword, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken') || localStorage.getItem('authToken')}`
+          ...(authHeader ? { Authorization: authHeader } : {}),
         },
         body: JSON.stringify({
           currentPassword: securityData.currentPassword,
@@ -829,14 +826,12 @@ export default function SettingsPage() {
 
   // Show loading only in main content area, keep sidebar visible
   const renderMainContent = () => {
-    if (loading || apiLoading) {
+    if (apiLoading) {
       return (
         <div className="flex-1 bg-gray-50 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">
-              {loading ? 'Loading...' : 'Fetching settings data...'}
-            </p>
+            <p className="mt-4 text-gray-600">Fetching settings data...</p>
           </div>
         </div>
       );
@@ -862,6 +857,17 @@ export default function SettingsPage() {
 
     return null; // No loading or error, show main content
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto" />
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return null;

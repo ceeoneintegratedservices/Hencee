@@ -3,9 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@clerk/nextjs";
 import { usePermissions } from "@/hooks/usePermissions";
 import { getAllNotifications, type Notification } from "@/services/notifications";
-import { hasValidAuth } from "@/utils/tokenUtils";
 
 interface HeaderProps {
   title: string;
@@ -15,6 +15,7 @@ interface HeaderProps {
 
 export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderProps) {
   const router = useRouter();
+  const { isLoaded: authLoaded, isSignedIn } = useAuth();
   const { hasPermission, hasAnyPermission, getUserRole, getUserPermissions, user, isInitialized } = usePermissions();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showPermissions, setShowPermissions] = useState(false);
@@ -85,10 +86,7 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
     const fetchNotifications = async () => {
       if (!isInitialized) return;
       
-      // Check if we have valid auth before making the request
-      // This prevents the login/logout loop when tokens are expired
-      if (!hasValidAuth()) {
-        // No valid auth, stop fetching notifications
+      if (!authLoaded || !isSignedIn) {
         return;
       }
       
@@ -124,13 +122,13 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
     
     // Refresh notifications every 30 seconds, but only if we have valid auth
     const interval = setInterval(() => {
-      if (hasValidAuth()) {
+      if (authLoaded && isSignedIn) {
         fetchNotifications();
       }
     }, 30000);
     
     return () => clearInterval(interval);
-  }, [isInitialized]);
+  }, [isInitialized, authLoaded, isSignedIn, hasPermission]);
 
   // Get default permissions based on role
   const getDefaultPermissions = (role: string): string[] => {

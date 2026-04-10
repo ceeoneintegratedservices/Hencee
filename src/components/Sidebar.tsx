@@ -3,8 +3,38 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useClerk } from "@clerk/nextjs";
 import { usePermissions } from "@/hooks/usePermissions";
+
+function SidebarLogout() {
+  const { signOut } = useClerk();
+  const handleLogout = async () => {
+    try {
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("userData");
+      localStorage.removeItem("refreshToken");
+    } catch {
+      /* ignore */
+    }
+    await signOut({ redirectUrl: "/login" });
+  };
+  return (
+    <button
+      type="button"
+      onClick={handleLogout}
+      className="flex items-center gap-3 px-4 py-3 rounded-xl text-[#ee174b] font-medium w-full text-left hover:bg-red-50 transition-colors mt-2"
+    >
+      <span className="w-5 h-5 flex items-center justify-center">
+        <svg className="w-4 h-4" fill="none" viewBox="0 0 20 20">
+          <path d="M0 4.447C0 1.996 2.03024 0 4.52453 0H9.48564C11.9748 0 14 1.99 14 4.437V15.553C14 18.005 11.9698 20 9.47445 20H4.51537C2.02515 20 0 18.01 0 15.563V14.623V4.447Z" fill="#EE174B" opacity="0.4"/>
+          <path d="M19.7789 9.4548L16.9331 6.5458C16.639 6.2458 16.1657 6.2458 15.8725 6.5478C15.5804 6.8498 15.5813 7.3368 15.8745 7.6368L17.4337 9.2298H15.9388H7.54845C7.13454 9.2298 6.79854 9.5748 6.79854 9.9998C6.79854 10.4258 7.13454 10.7698 7.54845 10.7698H17.4337L15.8745 12.3628C15.5813 12.6628 15.5804 13.1498 15.8725 13.4518C16.0196 13.6028 16.2115 13.6788 16.4043 13.6788C16.5952 13.6788 16.787 13.6028 16.9331 13.4538L19.7789 10.5458C19.9201 10.4008 20 10.2048 20 9.9998C20 9.7958 19.9201 9.5998 19.7789 9.4548" fill="#EE174B"/>
+        </svg>
+      </span>
+      <span className="text-sm">Logout</span>
+    </button>
+  );
+}
 
 interface SidebarProps {
   currentPage?: string;
@@ -13,8 +43,6 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true, setSidebarOpen }: SidebarProps) {
-  const router = useRouter();
-  
   // Safely access permissions with error handling
   const permissions = (() => {
     try {
@@ -28,13 +56,6 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
       };
     }
   })();
-
-  // Handle logout
-  const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('userData');
-    router.push('/login');
-  };
 
   // Get permission-based menu items
   const menuItems = permissions.isInitialized ? permissions.getMenuItems() : [];
@@ -268,6 +289,26 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
           
           {/* Logout section */}
           <div className="mt-8 pt-4 border-t border-gray-100">
+            <Link
+              href="/account"
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium hover:bg-[#02016a] hover:text-white transition-colors ${
+                currentPage === "account"
+                  ? "bg-[#02016a] text-white"
+                  : "text-[#101828]"
+              }`}
+            >
+              <span className="w-5 h-5 flex items-center justify-center">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                  />
+                </svg>
+              </span>
+              <span className="text-sm">Account</span>
+            </Link>
             {/* Settings link - right above Logout */}
               <Link 
                 href="/settings"
@@ -283,19 +324,7 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
                 <span className="text-sm">Settings</span>
               </Link>
             
-            {/* Logout button - always show */}
-            <button 
-              onClick={handleLogout}
-              className="flex items-center gap-3 px-4 py-3 rounded-xl text-[#ee174b] font-medium w-full text-left hover:bg-red-50 transition-colors mt-2"
-            >
-              <span className="w-5 h-5 flex items-center justify-center">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 20 20">
-                  <path d="M0 4.447C0 1.996 2.03024 0 4.52453 0H9.48564C11.9748 0 14 1.99 14 4.437V15.553C14 18.005 11.9698 20 9.47445 20H4.51537C2.02515 20 0 18.01 0 15.563V14.623V4.447Z" fill="#EE174B" opacity="0.4"/>
-                  <path d="M19.7789 9.4548L16.9331 6.5458C16.639 6.2458 16.1657 6.2458 15.8725 6.5478C15.5804 6.8498 15.5813 7.3368 15.8745 7.6368L17.4337 9.2298H15.9388H7.54845C7.13454 9.2298 6.79854 9.5748 6.79854 9.9998C6.79854 10.4258 7.13454 10.7698 7.54845 10.7698H17.4337L15.8745 12.3628C15.5813 12.6628 15.5804 13.1498 15.8725 13.4518C16.0196 13.6028 16.2115 13.6788 16.4043 13.6788C16.5952 13.6788 16.787 13.6028 16.9331 13.4538L19.7789 10.5458C19.9201 10.4008 20 10.2048 20 9.9998C20 9.7958 19.9201 9.5998 19.7789 9.4548" fill="#EE174B"/>
-                </svg>
-              </span>
-              <span className="text-sm">Logout</span>
-            </button>
+            <SidebarLogout />
           </div>
         </nav>
       </div>

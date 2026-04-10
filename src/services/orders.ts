@@ -1,5 +1,13 @@
-import { API_ENDPOINTS } from "../config/api";
-import { authFetch } from "./authFetch";
+import { getConvexClient, api } from "@/lib/convexClient";
+import type { Id } from "../../convex/_generated/dataModel";
+
+function asOrder(data: unknown): Order {
+  return data as Order;
+}
+
+function asOrderList(data: unknown): Order[] {
+  return data as Order[];
+}
 
 // Types for Orders API
 export interface OrderStatusUpdatePayload {
@@ -83,40 +91,23 @@ export interface OrdersDashboardResponse {
   limit: number;
 }
 
-// Orders API Functions
+// Orders API Functions (Convex `sales` table)
 export async function fetchOrdersDashboard(params: OrdersListParams = {}): Promise<OrdersDashboardResponse> {
-  const queryParams = new URLSearchParams();
-  
-  if (params.page) queryParams.set('page', params.page.toString());
-  if (params.limit) queryParams.set('limit', params.limit.toString());
-  if (params.search) queryParams.set('search', params.search);
-  if (params.status) queryParams.set('status', params.status);
-  if (params.dateFrom) queryParams.set('dateFrom', params.dateFrom);
-  if (params.dateTo) queryParams.set('dateTo', params.dateTo);
-  if (params.sortBy) queryParams.set('sortBy', params.sortBy);
-  if (params.sortDir) queryParams.set('sortDir', params.sortDir);
-
-  const url = `${API_ENDPOINTS.orders}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-  
-  try {
-    const response = await authFetch(url);
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching orders dashboard:', error);
-    throw error;
-  }
+  return getConvexClient().query(api.sales.ordersDashboard, {
+    page: params.page,
+    limit: params.limit,
+    search: params.search,
+    status: params.status,
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+    sortBy: params.sortBy,
+    sortDir: params.sortDir,
+  });
 }
 
 export async function getOrderById(id: string): Promise<Order> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.orderById(id));
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching order:', error);
-    throw error;
-  }
+  const data = await getConvexClient().query(api.sales.getById, { id: id as Id<"sales"> });
+  return asOrder(data);
 }
 
 /**
@@ -126,28 +117,11 @@ export async function getOrderById(id: string): Promise<Order> {
  * @returns Promise<void>
  */
 export async function updateOrderStatus(id: string, status: "PENDING" | "COMPLETED" | "CANCELLED"): Promise<Order> {
-  try {
-    const payload: OrderStatusUpdatePayload = { status };
-    
-    const response = await authFetch(API_ENDPOINTS.orderStatus(id), {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to update order status');
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error updating order status:', error);
-    throw error;
-  }
+  const data = await getConvexClient().mutation(api.sales.updateStatus, {
+    id: id as Id<"sales">,
+    status,
+  });
+  return asOrder(data);
 }
 
 /**
@@ -155,27 +129,23 @@ export async function updateOrderStatus(id: string, status: "PENDING" | "COMPLET
  * @param orderData - Order creation data
  * @returns Promise<Order>
  */
-export async function createOrder(orderData: any): Promise<Order> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.orders, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(orderData),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to create order');
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error creating order:', error);
-    throw error;
-  }
+export async function createOrder(orderData: {
+  customerId: string;
+  items: unknown;
+  totalAmount: number;
+  status?: string;
+  orderType?: string;
+  paymentMethod?: string;
+}): Promise<Order> {
+  const data = await getConvexClient().mutation(api.sales.create, {
+    customerId: orderData.customerId as Id<"customers">,
+    items: orderData.items,
+    totalAmount: orderData.totalAmount,
+    status: orderData.status,
+    orderType: orderData.orderType,
+    paymentMethod: orderData.paymentMethod,
+  });
+  return asOrder(data);
 }
 
 /**
@@ -184,14 +154,10 @@ export async function createOrder(orderData: any): Promise<Order> {
  * @returns Promise<Order[]>
  */
 export async function getOrdersByCustomer(customerId: string): Promise<Order[]> {
-  try {
-    const response = await authFetch(`${API_ENDPOINTS.orders}/customer/${customerId}`);
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching customer orders:', error);
-    throw error;
-  }
+  const data = await getConvexClient().query(api.sales.byCustomer, {
+    customerId: customerId as Id<"customers">,
+  });
+  return asOrderList(data);
 }
 
 /**
@@ -201,20 +167,8 @@ export async function getOrdersByCustomer(customerId: string): Promise<Order[]> 
  * @returns Promise<Order[]>
  */
 export async function getOrdersByDateRange(dateFrom: string, dateTo: string): Promise<Order[]> {
-  try {
-    const queryParams = new URLSearchParams({
-      dateFrom,
-      dateTo,
-    });
-    
-    const url = `${API_ENDPOINTS.orders}/date-range?${queryParams.toString()}`;
-    const response = await authFetch(url);
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching orders by date range:', error);
-    throw error;
-  }
+  const data = await getConvexClient().query(api.sales.byDateRange, { dateFrom, dateTo });
+  return asOrderList(data);
 }
 
 /**
@@ -223,16 +177,8 @@ export async function getOrdersByDateRange(dateFrom: string, dateTo: string): Pr
  * @returns Promise<Order[]>
  */
 export async function searchOrders(query: string): Promise<Order[]> {
-  try {
-    const queryParams = new URLSearchParams({ search: query });
-    const url = `${API_ENDPOINTS.orders}/search?${queryParams.toString()}`;
-    const response = await authFetch(url);
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error searching orders:', error);
-    throw error;
-  }
+  const data = await getConvexClient().query(api.sales.searchOrders, { query });
+  return asOrderList(data);
 }
 
 /**
@@ -241,27 +187,14 @@ export async function searchOrders(query: string): Promise<Order[]> {
  * @returns Promise<Order[]>
  */
 export async function getDailyOrders(date: string): Promise<Order[]> {
-  try {
-    const response = await authFetch(`${API_ENDPOINTS.orders}/daily/${date}`);
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching daily orders:', error);
-    throw error;
-  }
+  const data = await getConvexClient().query(api.sales.dailyOrders, { date });
+  return asOrderList(data);
 }
 
 /**
  * Get monthly orders report
  * @returns Promise<any>
  */
-export async function getMonthlyOrdersReport(): Promise<any> {
-  try {
-    const response = await authFetch(`${API_ENDPOINTS.orders}/monthly-report`);
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching monthly orders report:', error);
-    throw error;
-  }
+export async function getMonthlyOrdersReport(): Promise<unknown> {
+  return getConvexClient().query(api.sales.monthlyReport, {});
 }

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useConvexAuth } from 'convex/react';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import FilterByDateModal from '@/components/FilterByDateModal';
 import Sidebar from '@/components/Sidebar';
@@ -35,6 +36,7 @@ interface ApprovalItem {
 
 export default function ApprovalsPage() {
   const router = useRouter();
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const { notifications, removeNotification, showSuccess, showError } = useNotifications();
   const { hasPermission } = usePermissions();
   
@@ -46,8 +48,6 @@ export default function ApprovalsPage() {
   // Check if user can approve expenses (for action buttons)
   const canApproveExpenses = hasPermission('approve.daily_expense') || hasPermission('approve_expenses');
   
-  // Authentication check
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   
@@ -84,16 +84,14 @@ export default function ApprovalsPage() {
   const filterDropdownRef = useRef<HTMLDivElement>(null);
   const bulkActionDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Authentication check
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      setIsAuthenticated(true);
-    } else {
-      router.push('/login');
+    if (!authLoading) {
+      setLoading(false);
+      if (!isAuthenticated) {
+        router.replace('/login');
+      }
     }
-    setLoading(false);
-  }, [router]);
+  }, [authLoading, isAuthenticated, router]);
 
   // Fetch approvals from API
   const fetchApprovalsData = async () => {
@@ -302,7 +300,7 @@ export default function ApprovalsPage() {
     );
   }
 
-  if (!isAuthenticated) {
+  if (authLoading || !isAuthenticated) {
     return null;
   }
 

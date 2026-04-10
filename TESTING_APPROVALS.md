@@ -7,7 +7,7 @@ This guide covers how to test all three approval systems: Expense Approvals, Acc
 ## Prerequisites
 
 1. **Backend Running**: Ensure your backend API is running on `http://localhost:5000`
-2. **Frontend Running**: Start your Next.js app with `npm run dev`
+2. **Frontend Running**: Start your Next.js app with `yarn dev`
 3. **User Account**: Login with an admin account (or account with approval permissions)
 4. **Browser DevTools**: Open Network tab to monitor API calls
 

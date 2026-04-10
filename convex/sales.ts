@@ -1,0 +1,420 @@
+import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
+import { requireStaff } from "./lib/auth";
+import type { Doc, Id } from "./_generated/dataModel";
+
+function ts() {
+  return Date.now();
+}
+
+function randomTracking() {
+  return `TRK-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+}
+
+function formatOrder(sale: Doc<"sales">, customer: Doc<"customers"> | null) {
+  const c = customer;
+  return {
+    id: sale._id,
+    customerId: sale.customerId,
+    orderNumber: sale.orderNumber,
+    orderDate: sale.orderDate,
+    trackingId: sale.trackingId ?? randomTracking(),
+    customer: {
+      id: customer?._id ?? sale.customerId,
+      name: c?.name ?? "Unknown",
+      email: c?.email ?? "",
+      phone: c?.phone ?? "",
+      customerSince: c?.customerSince ?? new Date(c?.createdAt ?? 0).toISOString(),
+      status: (c?.status as "Active" | "Pending" | "Inactive") ?? "Active",
+    },
+    homeAddress: sale.homeAddress ?? c?.address ?? "",
+    billingAddress: sale.billingAddress ?? c?.address ?? "",
+    paymentMethod: sale.paymentMethod ?? "—",
+    payment: sale.payment ?? "—",
+    paymentAmount: sale.paymentAmount != null ? String(sale.paymentAmount) : undefined,
+    orderType: sale.orderType ?? "Standard",
+    saleVariant: sale.saleVariant ?? "standard",
+    outsourcedSupplierName: sale.outsourcedSupplierName,
+    outsourcedCost: sale.outsourcedCost,
+    outsourcedSellingPrice: sale.outsourcedSellingPrice,
+    outsourcedNotes: sale.outsourcedNotes,
+    outsourcedImageUrl: sale.outsourcedImageUrl,
+    items: Array.isArray(sale.items) ? sale.items : [],
+    totalAmount: sale.totalAmount,
+    status: sale.status as Doc<"sales">["status"],
+    metadata: sale.metadata,
+    createdAt: new Date(sale.createdAt).toISOString(),
+    updatedAt: new Date(sale.updatedAt).toISOString(),
+  };
+}
+
+export const ordersDashboard = query({
+  args: {
+    page: v.optional(v.number()),
+    limit: v.optional(v.number()),
+    search: v.optional(v.string()),
+    status: v.optional(v.string()),
+    dateFrom: v.optional(v.string()),
+    dateTo: v.optional(v.string()),
+    sortBy: v.optional(v.string()),
+    sortDir: v.optional(v.union(v.literal("asc"), v.literal("desc"))),
+  },
+  handler: async (ctx, args) => {
+    await requireStaff(ctx);
+    const limit = Math.min(args.limit ?? 20, 100);
+    const page = Math.max(args.page ?? 1, 1);
+    let rows = await ctx.db.query("sales").order("desc").collect();
+    if (args.status) {
+      rows = rows.filter((r) => r.status === args.status);
+    }
+    if (args.search) {
+      const s = args.search.toLowerCase();
+      rows = rows.filter((r) => r.orderNumber.toLowerCase().includes(s));
+    }
+    if (args.dateFrom) {
+      const from = args.dateFrom;
+      rows = rows.filter((r) => r.orderDate >= from);
+    }
+    if (args.dateTo) {
+      const to = args.dateTo;
+      const end = to.length <= 10 ? `${to}T23:59:59.999Z` : to;
+      rows = rows.filter((r) => r.orderDate <= end);
+    }
+    const total = rows.length;
+    const start = (page - 1) * limit;
+    const slice = rows.slice(start, start + limit);
+    const orders = [];
+    for (const sale of slice) {
+      const customer = await ctx.db.get(sale.customerId);
+      orders.push({
+        id: sale._id,
+        customerName: customer?.name ?? "—",
+        orderDate: sale.orderDate,
+        orderType: sale.orderType ?? "—",
+        trackingId: sale.trackingId ?? "—",
+        orderTotal: String(sale.totalAmount),
+        status: sale.status,
+        statusColor: undefined,
+        action: undefined,
+      });
+    }
+    const summary = {
+      allOrders: rows.length,
+      pending: rows.filter((r) => r.status === "Pending" || r.status === "PENDING").length,
+      completed: rows.filter((r) => r.status === "Completed" || r.status === "COMPLETED").length,
+      canceled: rows.filter((r) => String(r.status).toLowerCase().includes("cancel")).length,
+      returned: 0,
+      damaged: 0,
+      abandonedCart: 0,
+      customers: (await ctx.db.query("customers").collect()).length,
+    };
+    return {
+      summary,
+      orders,
+      total,
+      page,
+      limit,
+    };
+  },
+});
+
+export const getById = query({
+  args: { id: v.id("sales") },
+  handler: async (ctx, { id }) => {
+    await requireStaff(ctx);
+    const sale = await ctx.db.get(id);
+    if (!sale) {
+      throw new Error("Not found");
+    }
+    const customer = await ctx.db.get(sale.customerId);
+    return formatOrder(sale, customer);
+  },
+});
+
+export const updateStatus = mutation({
+  args: {
+    id: v.id("sales"),
+    status: v.string(),
+  },
+  handler: async (ctx, { id, status }) => {
+    await requireStaff(ctx);
+    await ctx.db.patch(id, { status, updatedAt: ts() });
+    const sale = await ctx.db.get(id);
+    const customer = sale ? await ctx.db.get(sale.customerId) : null;
+    return formatOrder(sale!, customer);
+  },
+});
+
+export const create = mutation({
+  args: {
+    customerId: v.id("customers"),
+    items: v.any(),
+    totalAmount: v.number(),
+    status: v.optional(v.string()),
+    orderType: v.optional(v.string()),
+    paymentMethod: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+    saleVariant: v.optional(
+      v.union(v.literal("standard"), v.literal("outsourced"))
+    ),
+    outsourcedSupplierName: v.optional(v.string()),
+    outsourcedCost: v.optional(v.number()),
+    outsourcedSellingPrice: v.optional(v.number()),
+    outsourcedNotes: v.optional(v.string()),
+    outsourcedImageUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireStaff(ctx);
+    const variant = args.saleVariant ?? "standard";
+    if (variant === "outsourced") {
+      const supplier = args.outsourcedSupplierName?.trim();
+      if (!supplier) {
+        throw new Error("Outsourced sales require outsourcedSupplierName");
+      }
+      if (
+        args.outsourcedCost == null ||
+        args.outsourcedSellingPrice == null
+      ) {
+        throw new Error(
+          "Outsourced sales require outsourcedCost and outsourcedSellingPrice"
+        );
+      }
+    }
+    const t = ts();
+    const orderNumber = `ORD-${t}`;
+    const id = await ctx.db.insert("sales", {
+      customerId: args.customerId,
+      orderNumber,
+      orderDate: new Date(t).toISOString(),
+      trackingId: randomTracking(),
+      status: args.status ?? "Pending",
+      orderType: args.orderType ?? "Standard",
+      saleVariant: variant,
+      outsourcedSupplierName:
+        variant === "outsourced"
+          ? args.outsourcedSupplierName?.trim()
+          : undefined,
+      outsourcedCost:
+        variant === "outsourced" ? args.outsourcedCost : undefined,
+      outsourcedSellingPrice:
+        variant === "outsourced" ? args.outsourcedSellingPrice : undefined,
+      outsourcedNotes:
+        variant === "outsourced" ? args.outsourcedNotes : undefined,
+      outsourcedImageUrl:
+        variant === "outsourced" ? args.outsourcedImageUrl : undefined,
+      items: args.items,
+      totalAmount: args.totalAmount,
+      paymentMethod: args.paymentMethod,
+      metadata: args.metadata,
+      createdAt: t,
+      updatedAt: t,
+    });
+    const sale = await ctx.db.get(id);
+    const customer = await ctx.db.get(args.customerId);
+    return formatOrder(sale!, customer);
+  },
+});
+
+export const byCustomer = query({
+  args: { customerId: v.id("customers") },
+  handler: async (ctx, { customerId }) => {
+    await requireStaff(ctx);
+    const rows = await ctx.db
+      .query("sales")
+      .withIndex("by_customer", (q) => q.eq("customerId", customerId))
+      .collect();
+    const out = [];
+    for (const sale of rows) {
+      const customer = await ctx.db.get(sale.customerId);
+      out.push(formatOrder(sale, customer));
+    }
+    return out;
+  },
+});
+
+export const searchOrders = query({
+  args: { query: v.string() },
+  handler: async (ctx, { query: q }) => {
+    await requireStaff(ctx);
+    const s = q.toLowerCase();
+    const rows = await ctx.db.query("sales").collect();
+    const filtered = rows.filter((r) => r.orderNumber.toLowerCase().includes(s));
+    const out = [];
+    for (const sale of filtered.slice(0, 50)) {
+      const customer = await ctx.db.get(sale.customerId);
+      out.push(formatOrder(sale, customer));
+    }
+    return out;
+  },
+});
+
+export const monthlyReport = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireStaff(ctx);
+    const rows = await ctx.db.query("sales").collect();
+    return { total: rows.length, revenue: rows.reduce((a, r) => a + r.totalAmount, 0) };
+  },
+});
+
+export const byDateRange = query({
+  args: { dateFrom: v.string(), dateTo: v.string() },
+  handler: async (ctx, { dateFrom, dateTo }) => {
+    await requireStaff(ctx);
+    const rows = await ctx.db.query("sales").collect();
+    const filtered = rows.filter(
+      (r) => r.orderDate >= dateFrom && r.orderDate <= dateTo + "T23:59:59"
+    );
+    const out = [];
+    for (const sale of filtered) {
+      const customer = await ctx.db.get(sale.customerId);
+      out.push(formatOrder(sale, customer));
+    }
+    return out;
+  },
+});
+
+export const dailyOrders = query({
+  args: { date: v.string() },
+  handler: async (ctx, { date }) => {
+    await requireStaff(ctx);
+    const rows = await ctx.db.query("sales").collect();
+    const filtered = rows.filter((r) => r.orderDate.startsWith(date));
+    const out = [];
+    for (const sale of filtered) {
+      const customer = await ctx.db.get(sale.customerId);
+      out.push(formatOrder(sale, customer));
+    }
+    return out;
+  },
+});
+
+export const pendingPaymentSales = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireStaff(ctx);
+    const rows = await ctx.db.query("sales").collect();
+    const pending = rows.filter((r) => {
+      const s = String(r.status).toUpperCase();
+      return (
+        s.includes("PENDING") ||
+        s.includes("AWAIT") ||
+        s === "UNPAID"
+      );
+    });
+    const out = [];
+    for (const sale of pending) {
+      const customer = await ctx.db.get(sale.customerId);
+      out.push(formatOrder(sale, customer));
+    }
+    return out;
+  },
+});
+
+export const approvePayment = mutation({
+  args: {
+    id: v.id("sales"),
+    amountPaid: v.number(),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await requireStaff(ctx);
+    const sale = await ctx.db.get(args.id);
+    if (!sale) {
+      throw new Error("Not found");
+    }
+    const t = ts();
+    await ctx.db.insert("payments", {
+      saleId: args.id,
+      customerId: sale.customerId,
+      amount: args.amountPaid,
+      method: sale.paymentMethod ?? "cash",
+      status: "COMPLETED",
+      metadata: args.note ? { note: args.note } : undefined,
+      createdAt: t,
+      updatedAt: t,
+    });
+    const prevMeta = (sale.metadata ?? {}) as Record<string, unknown>;
+    const trail = Array.isArray(prevMeta.approvalTrail)
+      ? [...(prevMeta.approvalTrail as unknown[])]
+      : [];
+    trail.push({
+      action: "APPROVE",
+      amountPaid: args.amountPaid,
+      note: args.note,
+      timestamp: new Date().toISOString(),
+    });
+    await ctx.db.patch(args.id, {
+      status: "Completed",
+      payment: "paid",
+      paymentAmount: args.amountPaid,
+      metadata: { ...prevMeta, approvalTrail: trail },
+      updatedAt: t,
+    });
+    const updated = await ctx.db.get(args.id);
+    const customer = await ctx.db.get(sale.customerId);
+    return formatOrder(updated!, customer);
+  },
+});
+
+export const queryPayment = mutation({
+  args: { id: v.id("sales"), note: v.string() },
+  handler: async (ctx, { id, note }) => {
+    await requireStaff(ctx);
+    const sale = await ctx.db.get(id);
+    if (!sale) {
+      throw new Error("Not found");
+    }
+    const t = ts();
+    const prevMeta = (sale.metadata ?? {}) as Record<string, unknown>;
+    const trail = Array.isArray(prevMeta.approvalTrail)
+      ? [...(prevMeta.approvalTrail as unknown[])]
+      : [];
+    trail.push({
+      action: "QUERY",
+      note,
+      timestamp: new Date().toISOString(),
+    });
+    await ctx.db.patch(id, {
+      status: "Queried",
+      metadata: { ...prevMeta, approvalTrail: trail, queryNote: note },
+      updatedAt: t,
+    });
+    const updated = await ctx.db.get(id);
+    const customer = await ctx.db.get(sale.customerId);
+    return formatOrder(updated!, customer);
+  },
+});
+
+export const rejectPayment = mutation({
+  args: { id: v.id("sales"), note: v.string() },
+  handler: async (ctx, { id, note }) => {
+    await requireStaff(ctx);
+    const sale = await ctx.db.get(id);
+    if (!sale) {
+      throw new Error("Not found");
+    }
+    const t = ts();
+    const prevMeta = (sale.metadata ?? {}) as Record<string, unknown>;
+    const trail = Array.isArray(prevMeta.approvalTrail)
+      ? [...(prevMeta.approvalTrail as unknown[])]
+      : [];
+    trail.push({
+      action: "REJECT",
+      note,
+      timestamp: new Date().toISOString(),
+    });
+    await ctx.db.patch(id, {
+      status: "Rejected",
+      metadata: {
+        ...prevMeta,
+        approvalTrail: trail,
+        rejectionReason: note,
+      },
+      updatedAt: t,
+    });
+    const updated = await ctx.db.get(id);
+    const customer = await ctx.db.get(sale.customerId);
+    return formatOrder(updated!, customer);
+  },
+});

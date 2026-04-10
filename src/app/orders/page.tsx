@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useConvexAuth } from "convex/react";
 import Image from "next/image";
 import FilterModal from "../../components/FilterModal";
 import FilterByDateModal from "../../components/FilterByDateModal";
@@ -25,7 +26,7 @@ import type {
 export default function OrdersPage() {
   const router = useRouter();
   const { notifications, removeNotification, showSuccess, showError } = useNotifications();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
@@ -424,29 +425,11 @@ export default function OrdersPage() {
     };
   }, [showBulkDropdown, showActionDropdown, showMobileMenu]);
 
-  // Check authentication on component mount
   useEffect(() => {
-    const checkAuth = () => {
-      const token = localStorage.getItem('authToken');
-      const userData = localStorage.getItem('userData');
-      
-      const hasAuth = token || userData;
-      
-      if (!hasAuth) {
-        router.push('/login');
-      } else {
-        setIsAuthenticated(true);
-      }
-    };
-
-    const timer = setTimeout(checkAuth, 100);
-    const backupTimer = setTimeout(checkAuth, 500);
-    
-    return () => {
-      clearTimeout(timer);
-      clearTimeout(backupTimer);
-    };
-  }, [router]);
+    if (!authLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [authLoading, isAuthenticated, router]);
 
   // Fetch orders data when component mounts or dependencies change
   useEffect(() => {
@@ -470,7 +453,7 @@ export default function OrdersPage() {
   }, [sidebarOpen]);
 
   // Show loading while checking authentication
-  if (!isAuthenticated) {
+  if (authLoading || !isAuthenticated) {
     return (
       <div className="flex w-full h-screen bg-[#f4f5fa] items-center justify-center">
         <div className="text-center">

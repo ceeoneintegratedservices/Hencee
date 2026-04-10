@@ -1,5 +1,4 @@
-import { API_ENDPOINTS } from "../config/api";
-import { authFetch } from "./authFetch";
+import { getConvexClient, api } from "@/lib/convexClient";
 
 // Dashboard interfaces
 export interface DashboardOverview {
@@ -229,123 +228,84 @@ export interface DashboardSummary {
 
 export type TimeFrame = 'thisWeek' | 'lastWeek' | 'thisMonth' | 'last7days' | 'allTime';
 
-// Dashboard API functions
+// Dashboard API functions (Convex)
 export async function getDashboardOverview(timeframe: TimeFrame = 'thisWeek'): Promise<DashboardOverview> {
-  try {
-    const response = await authFetch(`${API_ENDPOINTS.dashboard}/overview?timeframe=${timeframe}`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    throw new Error(`Failed to fetch dashboard overview: ${error}`);
-  }
+  const data = await getConvexClient().query(api.dashboard.overview, { timeframe });
+  return data as unknown as DashboardOverview;
 }
 
 export async function getDashboardSales(timeframe: TimeFrame = 'thisWeek'): Promise<DashboardSales> {
-  try {
-    const response = await authFetch(`${API_ENDPOINTS.dashboard}/sales?timeframe=${timeframe}`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    throw new Error(`Failed to fetch dashboard sales: ${error}`);
-  }
+  const raw = await getConvexClient().query(api.dashboard.salesSlice, { timeframe });
+  return {
+    sales: {
+      value: (raw as { sales: { value: number; change?: number; count?: number } }).sales.value,
+      change: (raw as { sales: { change?: number } }).sales.change ?? 0,
+      volume: (raw as { sales: { count?: number } }).sales.count ?? 0,
+    },
+  };
 }
 
 export async function getDashboardCustomers(timeframe: TimeFrame = 'thisWeek'): Promise<DashboardCustomers> {
-  try {
-    const response = await authFetch(`${API_ENDPOINTS.dashboard}/customers?timeframe=${timeframe}`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    throw new Error(`Failed to fetch dashboard customers: ${error}`);
-  }
+  const raw = await getConvexClient().query(api.dashboard.customersSlice, { timeframe });
+  const total = (raw as { total?: number }).total ?? 0;
+  return {
+    allCustomers: { value: total, change: 0 },
+    activeCustomers: { value: total, change: 0 },
+    inactiveCustomers: { value: 0, change: 0 },
+    newCustomers: { value: 0, change: 0 },
+    purchasingCustomers: { value: total, change: 0 },
+    abandonedCarts: { value: 0, change: 0 },
+  };
 }
 
 export async function getDashboardProducts(timeframe: TimeFrame = 'thisWeek'): Promise<DashboardProducts> {
-  try {
-    const response = await authFetch(`${API_ENDPOINTS.dashboard}/products?timeframe=${timeframe}`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    throw new Error(`Failed to fetch dashboard products: ${error}`);
-  }
+  const raw = await getConvexClient().query(api.dashboard.productsSlice, { timeframe });
+  const total = (raw as { total?: number }).total ?? 0;
+  return {
+    allProducts: { value: total, change: 0 },
+    active: { value: total, change: 0 },
+  };
 }
 
 export async function getDashboardOrders(timeframe: TimeFrame = 'thisWeek'): Promise<DashboardOrders> {
-  try {
-    const response = await authFetch(`${API_ENDPOINTS.dashboard}/orders?timeframe=${timeframe}`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    throw new Error(`Failed to fetch dashboard orders: ${error}`);
-  }
+  const raw = await getConvexClient().query(api.dashboard.ordersSlice, { timeframe });
+  const total = (raw as { total?: number }).total ?? 0;
+  return {
+    allOrders: { value: total, change: 0 },
+    pending: { value: 0 },
+    completed: { value: total, change: 0 },
+  };
 }
 
 export async function getDashboardMarketing(timeframe: TimeFrame = 'thisWeek'): Promise<DashboardMarketing> {
-  try {
-    const response = await authFetch(`${API_ENDPOINTS.dashboard}/marketing?timeframe=${timeframe}`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    throw new Error(`Failed to fetch dashboard marketing: ${error}`);
-  }
+  return getConvexClient().query(api.dashboard.marketing, { timeframe });
 }
 
 export async function getDashboardVolume(timeframe: TimeFrame = 'thisWeek'): Promise<DashboardVolume> {
-  try {
-    const response = await authFetch(`${API_ENDPOINTS.dashboard}/volume?timeframe=${timeframe}`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    throw new Error(`Failed to fetch dashboard volume: ${error}`);
-  }
+  const data = await getConvexClient().query(api.dashboard.volume, { timeframe });
+  return data as unknown as DashboardVolume;
 }
 
 export async function getDashboardUsers(timeframe: TimeFrame = 'thisWeek'): Promise<DashboardUsers> {
-  try {
-    const response = await authFetch(`${API_ENDPOINTS.dashboard}/users?timeframe=${timeframe}`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    throw new Error(`Failed to fetch dashboard users: ${error}`);
-  }
+  const raw = await getConvexClient().query(api.dashboard.usersSlice, { timeframe });
+  const total = (raw as { total?: number }).total ?? 0;
+  return {
+    allUsers: { value: total, change: 0 },
+    pending: { value: 0, change: 0 },
+    approved: { value: total, change: 0 },
+    rejected: { value: 0, change: 0 },
+  };
 }
 
 export async function getDashboardActivities(timeframe: TimeFrame = 'thisWeek'): Promise<DashboardActivities> {
-  try {
-    const response = await authFetch(`${API_ENDPOINTS.dashboard}/activities?timeframe=${timeframe}`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    throw new Error(`Failed to fetch dashboard activities: ${error}`);
-  }
+  const rows = await getConvexClient().query(api.dashboard.activities, { timeframe });
+  return {
+    activities: Array.isArray(rows) ? rows : [],
+    recentActivities: Array.isArray(rows) ? rows : [],
+  };
 }
 
 export async function getDashboardSummary(timeframe: TimeFrame = 'thisWeek'): Promise<DashboardSummary> {
-  try {
-    const response = await authFetch(`${API_ENDPOINTS.dashboard}/summary?timeframe=${timeframe}`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    throw new Error(`Failed to fetch dashboard summary: ${error}`);
-  }
+  const data = await getConvexClient().query(api.dashboard.summary, { timeframe });
+  return data as unknown as DashboardSummary;
 }

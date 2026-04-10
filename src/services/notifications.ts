@@ -1,5 +1,5 @@
-import { authFetch } from "./authFetch";
-import { API_ENDPOINTS } from "../config/api";
+import { getConvexClient, api } from "@/lib/convexClient";
+import type { Id } from "../../convex/_generated/dataModel";
 
 export type ActivityType = 
   | 'order'      // New orders/sales
@@ -52,37 +52,23 @@ export async function fetchActivities(
   limit: number = 50
 ): Promise<ActivitiesResponse> {
   try {
-    const url = `${API_ENDPOINTS.dashboard}/activities?timeframe=${timeframe}&limit=${limit}`;
-    const response = await authFetch(url, {
-      method: 'GET',
+    const data = await getConvexClient().query(api.dashboard.activities, {
+      timeframe,
+      limit,
     });
-
-    if (!response.ok) {
-      // If 403 Forbidden, user doesn't have dashboard.view permission
-      // Return empty activities instead of throwing error
-      if (response.status === 403) {
-        console.log('User does not have dashboard.view permission, returning empty activities');
-        return {
-          activities: [],
-          recentActivities: [],
-          message: null,
-          description: null
-        };
-      }
-      throw new Error(`Failed to fetch activities: ${response.status} ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error: any) {
-    // If error is 403, return empty activities
-    if (error.message?.includes('403') || error.message?.includes('Forbidden')) {
-      console.log('User does not have dashboard.view permission, returning empty activities');
+    return data as ActivitiesResponse;
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (
+      msg.includes('403') ||
+      msg.includes('Forbidden') ||
+      msg.includes('Unauthorized')
+    ) {
       return {
         activities: [],
         recentActivities: [],
         message: null,
-        description: null
+        description: null,
       };
     }
     console.error('Error fetching activities:', error);
@@ -399,8 +385,12 @@ export async function getAllNotifications(
  * Mark notification as read
  */
 export async function markNotificationAsRead(notificationId: string): Promise<void> {
-  // TODO: Implement API endpoint for marking notifications as read
-  // For now, this is a placeholder
-  console.log('Marking notification as read:', notificationId);
+  try {
+    await getConvexClient().mutation(api.notifications.markRead, {
+      notificationId: notificationId as Id<'notifications'>,
+    });
+  } catch {
+    // Activity rows from audit logs use non-notification ids; ignore.
+  }
 }
 

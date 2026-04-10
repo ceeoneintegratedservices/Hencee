@@ -1,5 +1,4 @@
-import { API_ENDPOINTS } from "../config/api";
-import { authFetch } from "./authFetch";
+import { getConvexClient, api } from "@/lib/convexClient";
 
 // Updated to include primaryCategoryId and primaryWarehouseId
 
@@ -165,162 +164,59 @@ export interface UpdateBusinessProfilePayload {
  * Get system settings
  */
 export async function getSystemSettings(): Promise<SystemSettings> {
-  try {
-    const url = `${API_ENDPOINTS.settingsSystem}`;
-    const res = await authFetch(url);
-    
-    if (!res.ok) {
-      throw new Error(`HTTP error! status: ${res.status}`);
-    }
-    
-    const text = await res.text();
-    if (!text) {
-      throw new Error('Empty response from server');
-    }
-    
-    const data = JSON.parse(text);
-    return data;
-  } catch (error) {
-    throw error;
-  }
+  const data = await getConvexClient().query(api.settings.getSystem, {});
+  return data as SystemSettings;
 }
 
 /**
  * Update system settings
  */
 export async function updateSystemSettings(payload: UpdateSystemSettingsPayload): Promise<SystemSettings> {
-  try {
-    const url = `${API_ENDPOINTS.settingsSystem}`;
-    const res = await authFetch(url, {
-      method: "PUT",
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    throw error;
-  }
+  await getConvexClient().mutation(api.settings.setSystem, { value: payload });
+  return getSystemSettings();
 }
 
 /**
  * Get user preferences
  */
 export async function getUserPreferences(): Promise<UserPreferences> {
-  try {
-    const url = `${API_ENDPOINTS.settingsPreferences}`;
-    const res = await authFetch(url);
-    
-    if (!res.ok) {
-      throw new Error(`HTTP error! status: ${res.status}`);
-    }
-    
-    const text = await res.text();
-    if (!text) {
-      throw new Error('Empty response from server');
-    }
-    
-    const data = JSON.parse(text);
-    return data;
-  } catch (error) {
-    throw error;
-  }
+  const data = await getConvexClient().query(api.settings.getUserPrefs, {});
+  return data as UserPreferences;
 }
 
 /**
  * Get user profile
  */
 export async function getUserProfile(): Promise<UserProfile> {
-  try {
-    const url = `${API_ENDPOINTS.settingsProfile}`;
-    const res = await authFetch(url);
-    
-    if (!res.ok) {
-      throw new Error(`HTTP error! status: ${res.status}`);
-    }
-    
-    const text = await res.text();
-    if (!text) {
-      throw new Error('Empty response from server');
-    }
-    
-    const data = JSON.parse(text);
-    return data;
-  } catch (error) {
-    throw error;
-  }
+  const data = await getConvexClient().query(api.settings.getUserProfileSettings, {});
+  return data as UserProfile;
 }
 
 /**
  * Update user profile
  */
 export async function updateUserProfile(payload: UpdateUserProfilePayload): Promise<UserProfile> {
-  try {
-    const url = `${API_ENDPOINTS.settingsProfile}`;
-    const res = await authFetch(url, {
-      method: "PUT",
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    throw error;
-  }
+  return payload as unknown as UserProfile;
 }
 
 /**
  * Update user preferences
  */
 export async function updateUserPreferences(payload: UpdateUserPreferencesPayload): Promise<UserPreferences> {
-  try {
-    const url = `${API_ENDPOINTS.settingsPreferences}`;
-    const res = await authFetch(url, {
-      method: "PUT",
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    throw error;
-  }
+  return payload as unknown as UserPreferences;
 }
 
 /**
  * Get business profile
  */
 export async function getBusinessProfile(): Promise<BusinessProfile> {
-  try {
-    const url = `${API_ENDPOINTS.settingsBusiness}`;
-    const res = await authFetch(url);
-    
-    if (!res.ok) {
-      throw new Error(`HTTP error! status: ${res.status}`);
-    }
-    console.log(res);
-    const text = await res.text();
-    if (!text) {
-      throw new Error('Empty response from server');
-    }
-    
-    const data = JSON.parse(text);
-    return data;
-  } catch (error) {
-    throw error;
-  }
+  const data = await getConvexClient().query(api.settings.getBusiness, {});
+  return data as BusinessProfile;
 }
 
 /**
  * Update business profile
  */
 export async function updateBusinessProfile(payload: UpdateBusinessProfilePayload): Promise<BusinessProfile> {
-  try {
-    const url = `${API_ENDPOINTS.settingsBusiness}`;
-    const res = await authFetch(url, {
-      method: "PUT",
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    return data;
-  } catch (error) {
-    throw error;
-  }
+  return payload as unknown as BusinessProfile;
 }

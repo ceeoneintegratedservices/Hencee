@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useConvexAuth } from 'convex/react';
 import { ExpensesDataService, ExpenseItem, ExpenseSummary } from '@/services/ExpensesDataService';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import Sidebar from '@/components/Sidebar';
@@ -23,8 +24,7 @@ export default function ExpensesPage() {
   // Check if user can create expense requests
   const canCreateExpenses = hasPermission('expenses.create');
   
-  // Authentication check
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const [loading, setLoading] = useState(true);
   const [apiLoading, setApiLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -70,16 +70,14 @@ export default function ExpensesPage() {
   const bulkActionDropdownRef = useRef<HTMLDivElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
-  // Authentication check
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      setIsAuthenticated(true);
-    } else {
-      router.push('/login');
+    if (!authLoading) {
+      setLoading(false);
+      if (!isAuthenticated) {
+        router.replace("/login");
+      }
     }
-    setLoading(false);
-  }, [router]);
+  }, [authLoading, isAuthenticated, router]);
 
   // Fetch expenses from API
   const fetchExpenses = async () => {
@@ -376,7 +374,7 @@ export default function ExpensesPage() {
     );
   }
 
-  if (!isAuthenticated) {
+  if (authLoading || !isAuthenticated) {
     return null;
   }
 

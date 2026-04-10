@@ -1,5 +1,4 @@
-import { API_ENDPOINTS } from "@/config/api";
-import { authFetch } from "./authFetch";
+import { getConvexClient, api } from "@/lib/convexClient";
 
 export interface PharmaPresets {
   unitTypes?: string[];
@@ -13,19 +12,13 @@ export interface PharmaPresets {
 
 export async function getPharmaPresets(): Promise<PharmaPresets> {
   try {
-    const res = await authFetch(`${API_ENDPOINTS.pharmaPresets ?? `${API_ENDPOINTS.inventory}/presets`}`);
-    if (!res.ok) {
-      throw new Error("Failed to fetch pharma presets");
+    const data = await getConvexClient().query(api.pharmaPresets.get, {});
+    if (data && typeof data === "object") {
+      return data as PharmaPresets;
     }
-    const data: any = await res.json();
-    if (data && typeof data === "object" && "data" in data && data.data) {
-      return data.data as PharmaPresets;
-    }
-    return (data as PharmaPresets) ?? {};
+    return {};
   } catch (error) {
     console.error("Error fetching pharma presets:", error);
     return {};
   }
 }
-
-

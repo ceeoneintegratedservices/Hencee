@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
-import { PermissionService, getDefaultPermissions } from '@/services/permissions';
+import { PermissionService, getDefaultPermissions, isAdministratorRole } from '@/services/permissions';
 
 // User interface
 interface User {
@@ -9,6 +9,7 @@ interface User {
   role?: {
     name: string;
     permissions?: string[];
+    roleType?: string;
   } | string;
   permissions?: string[];
   firstName?: string;
@@ -65,37 +66,21 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const initializePermissions = useMemo(() => (userData: User) => {
     setUser(userData);
     
-    // Determine role name
+    // Determine role name + Convex roleType (e.g. Admin) for menu / permission resolution
     let roleName = "guest";
+    let roleType = "";
     if (userData.role) {
-      roleName = typeof userData.role === 'object' ? userData.role.name || 'guest' : userData.role;
-    }
-    
-    // Try to get permissions from JWT token first (most up-to-date)
-    let tokenPermissions: string[] = [];
-    try {
-      const token = localStorage.getItem('authToken');
-      if (token) {
-        // Decode JWT token to get permissions
-        const parts = token.split('.');
-        if (parts.length === 3) {
-          const payload = JSON.parse(atob(parts[1]));
-          if (payload.permissions && Array.isArray(payload.permissions)) {
-            tokenPermissions = payload.permissions;
-          }
-        }
+      if (typeof userData.role === "object") {
+        roleName = userData.role.name || "guest";
+        roleType = userData.role.roleType ?? "";
+      } else {
+        roleName = userData.role;
       }
-    } catch (e) {
-      // If JWT decode fails, continue with other methods
-      console.warn('Failed to decode JWT token for permissions:', e);
     }
     
-    // Get permissions from user data or default to role-based permissions
+    // Permissions come from ProfileSync / Convex profile (userData), not legacy localStorage JWT.
     let userPermissions: string[] = [];
-    // Prefer JWT token permissions as they're most current, then user permissions, then role permissions
-    if (tokenPermissions.length > 0) {
-      userPermissions = tokenPermissions;
-    } else if (userData.permissions && userData.permissions.length > 0) {
+    if (userData.permissions && userData.permissions.length > 0) {
       // Use permissions directly from user data
       userPermissions = userData.permissions;
     } else if (typeof userData.role === 'object' && userData.role.permissions && userData.role.permissions.length > 0) {
@@ -107,7 +92,7 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     
     // For admin users, ensure they have approval permissions even if not in the list
     // This handles cases where the backend hasn't included all admin permissions
-    if (roleName.toLowerCase() === 'admin' && !userPermissions.some(p => 
+    if (isAdministratorRole(roleName, roleType) && !userPermissions.some(p => 
       p.includes('approval') || p.includes('approve') || p === 'approvals.view'
     )) {
       // Add approval permissions for admin if missing
@@ -126,7 +111,7 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     
     // For admin users, ensure they have expenses permissions even if not in the list
     // This handles cases where the backend hasn't included all admin permissions
-    if (roleName.toLowerCase() === 'admin' && !userPermissions.some(p => 
+    if (isAdministratorRole(roleName, roleType) && !userPermissions.some(p => 
       p.includes('expenses') || p === 'expenses.view'
     )) {
       // Add expenses permissions for admin if missing
@@ -140,7 +125,7 @@ export const PermissionsProvider: React.FC<{ children: React.ReactNode }> = ({ c
     }
     
     // Set permissions in the service
-    permissionService.setUserPermissions(userPermissions, roleName);
+    permissionService.setUserPermissions(userPermissions, roleName, roleType);
     setIsInitialized(true);
   }, [permissionService]);
 

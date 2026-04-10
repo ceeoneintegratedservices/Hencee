@@ -1,20 +1,55 @@
-import { API_ENDPOINTS } from "@/config/api";
-import { authFetch } from "./authFetch";
+import { getConvexClient, api } from "@/lib/convexClient";
+import type { Id } from "../../convex/_generated/dataModel";
 // Permission service for handling role-based access control
+/** Convex seed / RBAC strings that are equivalent to UI menu checks in PermissionService. */
+const PERMISSION_UI_ALIASES: [string, string][] = [
+  ["reports.view", "view_reports"],
+  ["audit.view_logs", "audits.view"],
+  ["settings.view", "settings.maintenance"],
+];
+
+/** Exported for PermissionsProvider (Administrator vs legacy "admin" string). */
+export function isAdministratorRole(roleName: string, roleType: string): boolean {
+  const n = roleName.trim().toLowerCase();
+  const t = roleType.trim().toLowerCase();
+  return t === "admin" || n === "administrator" || n === "admin";
+}
+
 export class PermissionService {
   private userPermissions: string[] = [];
-  private userRole: string = '';
+  private userRole: string = "";
+  private userRoleType: string = "";
 
   // Initialize permissions for a user
-  setUserPermissions(permissions: string[] = [], role: string = '') {
+  setUserPermissions(permissions: string[] = [], role: string = "", roleType: string = "") {
     this.userPermissions = permissions;
     this.userRole = role;
+    this.userRoleType = roleType;
+  }
+
+  private matchesAlias(permission: string): boolean {
+    for (const [ui, backend] of PERMISSION_UI_ALIASES) {
+      if (permission === ui && this.userPermissions.includes(backend)) {
+        return true;
+      }
+      if (permission === backend && this.userPermissions.includes(ui)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // Check if user has specific permission
   hasPermission(permission: string): boolean {
     // Direct match
     if (this.userPermissions.includes(permission)) {
+      return true;
+    }
+    if (this.matchesAlias(permission)) {
+      return true;
+    }
+    // Convex Administrator (name + roleType): full UI access; Convex still enforces server-side.
+    if (isAdministratorRole(this.userRole, this.userRoleType)) {
       return true;
     }
 
@@ -111,7 +146,10 @@ export class PermissionService {
       { key: 'expenses', label: 'Expenses', icon: 'expenses', permissions: ['expenses.view'] }
     ];
 
-    return menuItems.filter(item => this.hasAnyPermission(item.permissions));
+    if (isAdministratorRole(this.userRole, this.userRoleType)) {
+      return menuItems;
+    }
+    return menuItems.filter((item) => this.hasAnyPermission(item.permissions));
   }
 }
 
@@ -121,28 +159,25 @@ export interface RoleSummary {
   name: string;
   description?: string;
   roleType?: string;
+  permissions?: string[];
 }
 
 export async function listRoles(): Promise<RoleSummary[]> {
   try {
-    const res = await authFetch(API_ENDPOINTS.permissionsRoles);
-    const data = await res.json();
-    if (Array.isArray(data)) return data as RoleSummary[];
-    if (Array.isArray((data as any)?.roles)) return (data as any).roles as RoleSummary[];
-    return [];
-  } catch (e) {
+    return await getConvexClient().query(api.permissions.listRoles, {});
+  } catch {
     return [];
   }
 }
 
 export async function saveUserPermissions(userId: string, permissions: Record<string, boolean>): Promise<void> {
   try {
-    await authFetch(API_ENDPOINTS.permissionsUserPermissions, {
-      method: 'PUT',
-      body: JSON.stringify({ userId, permissions })
+    await getConvexClient().mutation(api.permissions.saveUserPermissions, {
+      userId: userId as Id<"profiles">,
+      permissions,
     });
-  } catch (e) {
-    // swallow to avoid breaking UI; caller may show error
+  } catch {
+    /* caller may show error */
   }
 }
 
@@ -196,6 +231,7 @@ export const ROLES = {
 // Default permissions by role
 export const getDefaultPermissions = (role: string): string[] => {
   switch (role.toLowerCase()) {
+    case "administrator":
     case ROLES.ADMIN:
       return [
         PERMISSIONS.DASHBOARD_VIEW,

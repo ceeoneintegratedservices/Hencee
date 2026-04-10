@@ -1,13 +1,13 @@
-import { API_ENDPOINTS } from "../config/api";
-import { authFetch } from "./authFetch";
+import { getConvexClient, api } from "@/lib/convexClient";
+import type { Doc } from "../../convex/_generated/dataModel";
+import type { Id } from "../../convex/_generated/dataModel";
 
-// Types for Payments API
 export interface Payment {
   id: string;
   saleId: string;
   amount: number;
   method: string;
-  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  status: "pending" | "completed" | "failed" | "refunded";
   reference?: string;
   notes?: string;
   createdAt: string;
@@ -17,18 +17,17 @@ export interface Payment {
 export interface CreatePayment {
   saleId: string;
   amount: number;
-  method: string; // 'CASH' | 'CARD' | 'BANK_TRANSFER' | 'CHEQUE' | 'MOBILE_MONEY' | 'CREDIT'
+  method: string;
   reference?: string;
   notes?: string;
-  // Pharma-specific payment fields
-  senderName?: string; // For BANK_TRANSFER
-  transactionReference?: string; // For BANK_TRANSFER
-  chequeNumber?: string; // For CHEQUE
-  accountName?: string; // For CHEQUE
+  senderName?: string;
+  transactionReference?: string;
+  chequeNumber?: string;
+  accountName?: string;
 }
 
 export interface UpdatePaymentStatus {
-  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  status: "pending" | "completed" | "failed" | "refunded";
   notes?: string;
 }
 
@@ -48,7 +47,25 @@ export interface PaymentStats {
   averagePaymentAmount: number;
 }
 
-// Payments API Functions
+function mapPayment(p: Doc<"payments">): Payment {
+  const st = String(p.status).toLowerCase();
+  const status =
+    st === "completed" || st === "pending" || st === "failed" || st === "refunded"
+      ? (st as Payment["status"])
+      : "pending";
+  return {
+    id: String(p._id),
+    saleId: p.saleId ? String(p.saleId) : "",
+    amount: p.amount,
+    method: p.method ?? "",
+    status,
+    reference: p.reference,
+    notes: undefined,
+    createdAt: new Date(p.createdAt).toISOString(),
+    updatedAt: new Date(p.updatedAt).toISOString(),
+  };
+}
+
 export async function getPayments(params: {
   page?: number;
   limit?: number;
@@ -57,195 +74,109 @@ export async function getPayments(params: {
   dateFrom?: string;
   dateTo?: string;
 } = {}): Promise<Payment[]> {
-  try {
-    const queryParams = new URLSearchParams();
-    if (params.page) queryParams.set('page', params.page.toString());
-    if (params.limit) queryParams.set('limit', params.limit.toString());
-    if (params.status) queryParams.set('status', params.status);
-    if (params.method) queryParams.set('method', params.method);
-    if (params.dateFrom) queryParams.set('dateFrom', params.dateFrom);
-    if (params.dateTo) queryParams.set('dateTo', params.dateTo);
-
-    const url = `${API_ENDPOINTS.payments}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    const response = await authFetch(url);
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching payments:', error);
-    throw error;
+  const rows = await getConvexClient().query(api.payments.list, {
+    page: params.page,
+    limit: params.limit,
+    status: params.status,
+    method: params.method,
+  });
+  let list = rows.map(mapPayment);
+  if (params.dateFrom) {
+    list = list.filter((p) => p.createdAt >= params.dateFrom!);
   }
+  if (params.dateTo) {
+    list = list.filter((p) => p.createdAt <= params.dateTo! + "T23:59:59");
+  }
+  return list;
 }
 
 export async function getPaymentById(id: string): Promise<Payment> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.paymentById(id));
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching payment:', error);
-    throw error;
-  }
+  const doc = await getConvexClient().query(api.payments.get, { id: id as Id<"payments"> });
+  return mapPayment(doc);
 }
 
 export async function createPayment(paymentData: CreatePayment): Promise<Payment> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.payments, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(paymentData),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to create payment');
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error creating payment:', error);
-    throw error;
-  }
+  const paymentId = await getConvexClient().mutation(api.payments.create, {
+    saleId: paymentData.saleId as Id<"sales">,
+    amount: paymentData.amount,
+    method: paymentData.method,
+    status: "pending",
+    reference: paymentData.reference ?? paymentData.transactionReference,
+    paymentDate: new Date().toISOString(),
+  });
+  const doc = await getConvexClient().query(api.payments.get, {
+    id: paymentId as Id<"payments">,
+  });
+  return mapPayment(doc!);
 }
 
 export async function updatePaymentStatus(id: string, statusData: UpdatePaymentStatus): Promise<Payment> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.paymentStatus(id), {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(statusData),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to update payment status');
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error updating payment status:', error);
-    throw error;
-  }
+  const doc = await getConvexClient().mutation(api.payments.updateStatus, {
+    id: id as Id<"payments">,
+    status: statusData.status,
+  });
+  return mapPayment(doc!);
 }
 
 export async function getPaymentsBySale(saleId: string): Promise<Payment[]> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.paymentsBySale(saleId));
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching payments by sale:', error);
-    throw error;
-  }
+  const rows = await getConvexClient().query(api.payments.bySale, {
+    saleId: saleId as Id<"sales">,
+  });
+  return rows.map(mapPayment);
 }
 
 export async function getPaymentsByMethod(method: string): Promise<Payment[]> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.paymentsByMethod(method));
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching payments by method:', error);
-    throw error;
-  }
+  return getPayments({ method });
 }
 
 export async function getPaymentsByStatus(status: string): Promise<Payment[]> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.paymentsByStatus(status));
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching payments by status:', error);
-    throw error;
-  }
+  return getPayments({ status });
 }
 
 export async function getPaymentsByDateRange(dateFrom: string, dateTo: string): Promise<Payment[]> {
-  try {
-    const queryParams = new URLSearchParams({
-      dateFrom,
-      dateTo,
-    });
-    
-    const url = `${API_ENDPOINTS.paymentsDateRange}?${queryParams.toString()}`;
-    const response = await authFetch(url);
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching payments by date range:', error);
-    throw error;
-  }
+  return getPayments({ dateFrom, dateTo });
 }
 
 export async function getPaymentByReference(reference: string): Promise<Payment> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.paymentByReference(reference));
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching payment by reference:', error);
-    throw error;
+  const doc = await getConvexClient().query(api.payments.byReference, { reference });
+  if (!doc) {
+    throw new Error("Payment not found");
   }
+  return mapPayment(doc);
 }
 
 export async function getDailyPayments(date: string): Promise<Payment[]> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.paymentsDaily(date));
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching daily payments:', error);
-    throw error;
-  }
+  const rows = await getConvexClient().query(api.payments.list, {});
+  return rows
+    .map(mapPayment)
+    .filter((p) => p.createdAt.startsWith(date.slice(0, 10)));
 }
 
 export async function getPendingPayments(): Promise<Payment[]> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.paymentsPending);
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching pending payments:', error);
-    throw error;
-  }
+  const rows = await getConvexClient().query(api.payments.pending, {});
+  return rows.map(mapPayment);
 }
 
 export async function getPaymentStats(): Promise<PaymentStats> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.paymentsStats);
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching payment stats:', error);
-    throw error;
-  }
+  const raw = await getConvexClient().query(api.payments.stats, {});
+  const count = (raw as { count?: number }).count ?? 0;
+  const totalAmount = (raw as { totalAmount?: number }).totalAmount ?? 0;
+  const rows = await getConvexClient().query(api.payments.list, {});
+  const mapped = rows.map(mapPayment);
+  return {
+    totalPayments: count,
+    totalAmount,
+    pendingPayments: mapped.filter((p) => p.status === "pending").length,
+    completedPayments: mapped.filter((p) => p.status === "completed").length,
+    failedPayments: mapped.filter((p) => p.status === "failed").length,
+    refundedPayments: mapped.filter((p) => p.status === "refunded").length,
+    averagePaymentAmount: count ? totalAmount / count : 0,
+  };
 }
 
-export async function processPaymentRefund(id: string, refundData: PaymentRefund): Promise<Payment> {
-  try {
-    const response = await authFetch(API_ENDPOINTS.paymentRefund(id), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(refundData),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to process payment refund');
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error processing payment refund:', error);
-    throw error;
-  }
+export async function processPaymentRefund(id: string, _refundData: PaymentRefund): Promise<Payment> {
+  const doc = await getConvexClient().mutation(api.payments.refund, {
+    id: id as Id<"payments">,
+  });
+  return mapPayment(doc!);
 }

@@ -1,6 +1,10 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useConvexAuth } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import Sidebar from '@/components/Sidebar';
 import Header from '@/components/Header';
 import Breadcrumb from '@/components/Breadcrumb';
@@ -56,11 +60,19 @@ function buildPermissionKey(entity: string, action: string) {
 }
 
 export default function UsersRolesPage() {
+  const router = useRouter();
+  const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const { notifications, removeNotification, showSuccess } = useNotifications();
-  const { hasRole, isInitialized: permissionsInitialized } = usePermissions();
+  const { hasRole, hasPermission, isInitialized: permissionsInitialized } = usePermissions();
+
+  const pendingRoleRequests = useQuery(
+    api.roleRequests.listPending,
+    permissionsInitialized && hasPermission('users.assign_roles') ? {} : 'skip'
+  );
+  const approveRoleRequest = useMutation(api.roleRequests.approve);
+  const rejectRoleRequest = useMutation(api.roleRequests.reject);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const [apiLoading, setApiLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -142,12 +154,14 @@ export default function UsersRolesPage() {
 
   const [permissionMatrix, setPermissionMatrix] = useState<PermissionMatrix>(buildDefaultMatrix);
 
-  // Auth check
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    setIsAuthenticated(!!token);
-    setLoading(false);
-  }, []);
+    if (!authLoading) {
+      setLoading(false);
+      if (!isAuthenticated) {
+        router.replace('/login');
+      }
+    }
+  }, [authLoading, isAuthenticated, router]);
 
   // Fetch users from API
   const fetchUsers = async () => {
@@ -383,7 +397,7 @@ export default function UsersRolesPage() {
     );
   }
 
-  if (!isAuthenticated) {
+  if (authLoading || !isAuthenticated) {
     return null;
   }
 
@@ -460,6 +474,57 @@ export default function UsersRolesPage() {
 
         <div className="p-4 sm:p-6">
           <Breadcrumb items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Users & Roles', href: '/users-roles' }]} />
+
+          {permissionsInitialized && hasPermission('users.assign_roles') && pendingRoleRequests && pendingRoleRequests.length > 0 ? (
+            <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5">
+              <h2 className="text-sm font-semibold text-amber-950">Pending role requests</h2>
+              <ul className="mt-3 divide-y divide-amber-200/80">
+                {pendingRoleRequests.map((req) => (
+                  <li key={req.id} className="flex flex-col gap-2 py-3 first:pt-0 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{req.requesterName}</p>
+                      <p className="text-xs text-gray-600">{req.requesterEmail}</p>
+                      <p className="text-xs text-amber-900 mt-1">
+                        Requests: <strong>{req.requestedRoleName}</strong> ({req.requestedRoleType})
+                      </p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        type="button"
+                        className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-700"
+                        onClick={async () => {
+                          try {
+                            await approveRoleRequest({ requestId: req.id });
+                            showSuccess('Approved', 'Role request approved');
+                            await fetchUsers();
+                          } catch (e: unknown) {
+                            showSuccess('Error', e instanceof Error ? e.message : 'Approve failed');
+                          }
+                        }}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-800 hover:bg-gray-50"
+                        onClick={async () => {
+                          try {
+                            await rejectRoleRequest({ requestId: req.id });
+                            showSuccess('Rejected', 'Role request rejected');
+                            await fetchUsers();
+                          } catch (e: unknown) {
+                            showSuccess('Error', e instanceof Error ? e.message : 'Reject failed');
+                          }
+                        }}
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
 
           {/* Summary Row */}
           <div className="mt-6 grid grid-cols-1 xl:grid-cols-3 gap-6">
