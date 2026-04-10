@@ -778,11 +778,11 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
           
           <div class="invoice-details">
             <div class="company-info">
-              <h3>Ceeone Wheels</h3>
+              <h3>Hencee Pharmaceuticals</h3>
               <p>123 Business Street</p>
               <p>Lagos, Nigeria</p>
               <p>Phone: +234 800 123 4567</p>
-              <p>Email: info@ceeonewheels.com</p>
+              <p>Email: henceepharmaceuticals@outlook.com</p>
             </div>
             <div class="customer-info">
               <h3>Bill To:</h3>
@@ -1119,11 +1119,11 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                 {/* Company and Customer Info */}
                 <div className="flex justify-between mb-8">
                   <div className="flex-1">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Ceeone Wheels</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Hencee Pharmaceuticals</h3>
                     <p className="text-gray-600">123 Business Street</p>
                     <p className="text-gray-600">Lagos, Nigeria</p>
                     <p className="text-gray-600">Phone: +234 800 123 4567</p>
-                    <p className="text-gray-600">Email: info@ceeonewheels.com</p>
+                    <p className="text-gray-600">Email: henceepharmaceuticals@outlook.com</p>
                   </div>
                   <div className="flex-1 text-right">
                     <h3 className="text-lg font-semibold text-gray-900 mb-3">Bill To:</h3>

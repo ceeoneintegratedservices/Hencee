@@ -1,7 +1,7 @@
 // API Configuration
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000';
 
-// Pharma App (CeeOne) API prefix
+// Hencee Pharmaceuticals app — REST API path prefix (legacy path retained for backend compatibility)
 const CEEONE_PREFIX = '/api/ceeone';
 
 const PHARMA_INVENTORY_BASE = `${API_BASE_URL}${CEEONE_PREFIX}/pharma/inventory`;

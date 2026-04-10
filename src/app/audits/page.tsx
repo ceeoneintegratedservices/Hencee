@@ -94,7 +94,7 @@ export default function AuditsPage() {
         {
           id: 'audit-1',
           timestamp: '2024-01-15 10:30:25',
-          user: 'admin@ceeonewheels.com',
+          user: 'admin@hencee.pharm',
           action: 'Login',
           resource: 'Authentication',
           details: 'Successful login from Chrome browser',
@@ -104,7 +104,7 @@ export default function AuditsPage() {
         {
           id: 'audit-2',
           timestamp: '2024-01-15 10:25:15',
-          user: 'manager@ceeonewheels.com',
+          user: 'manager@hencee.pharm',
           action: 'Create',
           resource: 'Product',
           details: 'Created new product: Michelin Pilot Sport 4',
@@ -114,7 +114,7 @@ export default function AuditsPage() {
         {
           id: 'audit-3',
           timestamp: '2024-01-15 10:20:45',
-          user: 'staff@ceeonewheels.com',
+          user: 'staff@hencee.pharm',
           action: 'Update',
           resource: 'Inventory',
           details: 'Updated stock quantity for Bridgestone Potenza',

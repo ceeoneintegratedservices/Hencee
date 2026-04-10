@@ -3,8 +3,8 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  --ceeone-black: #101828;
-  --ceeone-white: #F9F9F9;
+  --hencee-black: #101828;
+  --hencee-white: #F9F9F9;
   --primary-main: #02016A;
   --primary-100: #5570F1;
   --primary-50: #97A5EB;
@@ -44,8 +44,8 @@
 }
 
 body {
-  background: var(--ceeone-white);
-  color: var(--ceeone-black);
+  background: var(--hencee-white);
+  color: var(--hencee-black);
   font-family: 'Inter', 'Work Sans', 'Poppins', Arial, sans-serif;
 }
 

@@ -224,7 +224,7 @@ export default function CustomerInfoPage() {
           <div className="flex items-center gap-3">
             <Image
               src="/icons/logoIcon.png"
-              alt="Ceeone Logo"
+              alt="Hencee Pharmaceuticals"
               width={100}
               height={100}
               className="w-20 h-20 object-contain"

@@ -388,7 +388,7 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
   doc.setFontSize(14);
   doc.setTextColor(2, 1, 106);
   doc.setFont('helvetica', 'bold');
-  doc.text('Ceeone Wheels', margin, yPos);
+  doc.text('Hencee Pharmaceuticals', margin, yPos);
   yPos += lineHeight;
   
   doc.setFontSize(10);
@@ -400,7 +400,7 @@ function generatePDFFromInvoiceData(invoiceData: any): Blob {
   yPos += lineHeight;
   doc.text('Phone: +234 800 123 4567', margin, yPos);
   yPos += lineHeight;
-  doc.text('Email: info@ceeonewheels.com', margin, yPos);
+  doc.text('Email: henceepharmaceuticals@outlook.com', margin, yPos);
   
   // Customer Info (Right)
   yPos = 35;

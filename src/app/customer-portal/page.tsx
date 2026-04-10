@@ -1226,13 +1226,13 @@ function CustomerPortalContent() {
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <Image
               src="/icons/logoIcon.png"
-              alt="Ceeone Wheels Logo"
+              alt="Hencee Pharmaceuticals"
               width={100}
               height={100}
               className="w-12 h-12 sm:w-14 md:w-16 sm:h-14 md:h-16 object-contain flex-shrink-0"
             />
             <h1 className="text-base sm:text-lg md:text-[22px] font-medium text-[#45464e] truncate">
-              Ceeone Wheels
+              Hencee Pharmaceuticals
             </h1>
                 </div>
           <span className="text-gray-300 text-base sm:text-lg hidden sm:inline">|</span>
@@ -2190,11 +2190,11 @@ function CustomerPortalContent() {
                       >
                         <span className={selectedBank ? "text-gray-900" : "text-gray-500"}>
                           {selectedBank === "gtb"
-                            ? "GTBank • 0123456789 • Ceeone Wheels Ltd"
+                            ? "GTBank • 0123456789 • Hencee Pharmaceuticals Ltd"
                             : selectedBank === "access"
-                            ? "Access Bank • 1234567890 • Ceeone Wheels Ltd"
+                            ? "Access Bank • 1234567890 • Hencee Pharmaceuticals Ltd"
                             : selectedBank === "zenith"
-                            ? "Zenith Bank • 9876543210 • Ceeone Wheels Ltd"
+                            ? "Zenith Bank • 9876543210 • Hencee Pharmaceuticals Ltd"
                             : "Select bank account"}
                         </span>
                         <div className="flex items-center gap-2">
@@ -2277,7 +2277,7 @@ function CustomerPortalContent() {
                               selectedBank === "gtb" ? "bg-[#02016a]/10" : ""
                             }`}
                           >
-                            <p className="text-sm font-medium text-gray-900">GTBank • 0123456789 • Ceeone Wheels Ltd</p>
+                            <p className="text-sm font-medium text-gray-900">GTBank • 0123456789 • Hencee Pharmaceuticals Ltd</p>
                       </button>
                         <button
                             type="button"
@@ -2289,7 +2289,7 @@ function CustomerPortalContent() {
                               selectedBank === "access" ? "bg-[#02016a]/10" : ""
                             }`}
                           >
-                            <p className="text-sm font-medium text-gray-900">Access Bank • 1234567890 • Ceeone Wheels Ltd</p>
+                            <p className="text-sm font-medium text-gray-900">Access Bank • 1234567890 • Hencee Pharmaceuticals Ltd</p>
                           </button>
                           <button
                             type="button"
@@ -2301,7 +2301,7 @@ function CustomerPortalContent() {
                               selectedBank === "zenith" ? "bg-[#02016a]/10" : ""
                             }`}
                           >
-                            <p className="text-sm font-medium text-gray-900">Zenith Bank • 9876543210 • Ceeone Wheels Ltd</p>
+                            <p className="text-sm font-medium text-gray-900">Zenith Bank • 9876543210 • Hencee Pharmaceuticals Ltd</p>
                         </button>
                       </div>
                       )}
@@ -3333,7 +3333,7 @@ function CustomerPortalContent() {
                                 </div>
                                 <div className="p-3 bg-white rounded border border-gray-200">
                                   <p className="text-xs text-gray-500 mb-1">Account Name</p>
-                                  <p className="text-sm font-medium text-gray-900">Ceeone Wheels Ltd</p>
+                                  <p className="text-sm font-medium text-gray-900">Hencee Pharmaceuticals Ltd</p>
                                 </div>
                               </div>
                               <p className="text-xs text-gray-600 mt-3">
@@ -3641,7 +3641,7 @@ function CustomerPortalContent() {
                 <h3 className="text-lg lg:text-xl xl:text-2xl font-medium text-gray-900 mb-4 lg:mb-6">Get in Touch</h3>
                 <div className="space-y-4 lg:space-y-5">
                   <a
-                    href="mailto:support@ceeonewheels.com"
+                    href="mailto:henceepharmaceuticals@outlook.com"
                     className="flex items-start gap-3 lg:gap-4 p-3 lg:p-4 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
                   >
                     <div className="w-10 h-10 lg:w-12 lg:h-12 xl:w-14 xl:h-14 bg-[#f4f5fa] rounded-lg flex items-center justify-center flex-shrink-0">
@@ -3651,7 +3651,7 @@ function CustomerPortalContent() {
                   </div>
                     <div>
                       <p className="font-medium text-gray-900 text-sm lg:text-base xl:text-lg">Email</p>
-                      <p className="text-sm lg:text-base text-gray-600">support@ceeonewheels.com</p>
+                      <p className="text-sm lg:text-base text-gray-600">henceepharmaceuticals@outlook.com</p>
                     </div>
                   </a>
                   
@@ -4342,11 +4342,11 @@ function CustomerPortalContent() {
                       >
                         <span className={debtSelectedBank ? "text-gray-900" : "text-gray-500"}>
                           {debtSelectedBank === "gtb"
-                            ? "GTBank • 0123456789 • Ceeone Wheels Ltd"
+                            ? "GTBank • 0123456789 • Hencee Pharmaceuticals Ltd"
                             : debtSelectedBank === "access"
-                            ? "Access Bank • 1234567890 • Ceeone Wheels Ltd"
+                            ? "Access Bank • 1234567890 • Hencee Pharmaceuticals Ltd"
                             : debtSelectedBank === "zenith"
-                            ? "Zenith Bank • 9876543210 • Ceeone Wheels Ltd"
+                            ? "Zenith Bank • 9876543210 • Hencee Pharmaceuticals Ltd"
                             : "Select bank account"}
                         </span>
                         <div className="flex items-center gap-2">
@@ -4429,7 +4429,7 @@ function CustomerPortalContent() {
                               debtSelectedBank === "gtb" ? "bg-[#02016a]/10" : ""
                             }`}
                           >
-                            <p className="text-sm font-medium text-gray-900">GTBank • 0123456789 • Ceeone Wheels Ltd</p>
+                            <p className="text-sm font-medium text-gray-900">GTBank • 0123456789 • Hencee Pharmaceuticals Ltd</p>
                           </button>
                           <button
                             type="button"
@@ -4441,7 +4441,7 @@ function CustomerPortalContent() {
                               debtSelectedBank === "access" ? "bg-[#02016a]/10" : ""
                             }`}
                           >
-                            <p className="text-sm font-medium text-gray-900">Access Bank • 1234567890 • Ceeone Wheels Ltd</p>
+                            <p className="text-sm font-medium text-gray-900">Access Bank • 1234567890 • Hencee Pharmaceuticals Ltd</p>
                           </button>
                           <button
                             type="button"
@@ -4453,7 +4453,7 @@ function CustomerPortalContent() {
                               debtSelectedBank === "zenith" ? "bg-[#02016a]/10" : ""
                             }`}
                           >
-                            <p className="text-sm font-medium text-gray-900">Zenith Bank • 9876543210 • Ceeone Wheels Ltd</p>
+                            <p className="text-sm font-medium text-gray-900">Zenith Bank • 9876543210 • Hencee Pharmaceuticals Ltd</p>
                           </button>
           </div>
           )}

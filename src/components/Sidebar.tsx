@@ -186,7 +186,7 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
           <div className="flex items-center gap-3">
             <Image 
               src="/Ceeone Asset/removehencee.png" 
-              alt="Ceeone Wheels Logo" 
+              alt="Hencee Pharmaceuticals" 
               width={60} 
               height={60} 
               className="w-15 h-15 object-contain" 
