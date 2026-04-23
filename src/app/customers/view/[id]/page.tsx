@@ -63,12 +63,28 @@ export default function CustomerDetailsPage() {
   }, [customerId]);
 
   // Order statistics from customer data (and from sales when available)
+  const totalSalesValue = sales.reduce((sum, s) => sum + (s.totalAmount || 0), 0);
+  const inProgressOrders = sales.filter((s) =>
+    ["IN-PROGRESS", "IN_PROGRESS", "PENDING"].includes(
+      String(s.status || "").toUpperCase()
+    )
+  ).length;
+  const completedOrders = sales.filter(
+    (s) => String(s.status || "").toUpperCase() === "COMPLETED"
+  ).length;
+  const canceledOrders = sales.filter((s) =>
+    String(s.status || "").toLowerCase().includes("cancel")
+  ).length;
+  const outstandingSales = sales
+    .filter((s) => (s.outstandingBalance ?? 0) > 0)
+    .sort((a, b) => (b.outstandingBalance ?? 0) - (a.outstandingBalance ?? 0));
+
   const orderStats = {
-    totalOrders: customer?.totalOrders ?? sales.length,
-    totalValue: customer?.totalPurchases ?? sales.reduce((sum, s) => sum + (s.totalAmount || 0), 0),
-    pendingOrders: 0,
-    completedOrders: 0,
-    canceledOrders: 0,
+    totalOrders: sales.length,
+    totalValue: totalSalesValue,
+    pendingOrders: inProgressOrders,
+    completedOrders,
+    canceledOrders,
     returnedOrders: 0,
     damagedOrders: 0,
     abandonedCarts: 0
@@ -285,7 +301,7 @@ export default function CustomerDetailsPage() {
                 </div>
               </div>
               <p className="text-2xl font-bold text-gray-900">₦{(customer.totalPurchases ?? 0).toLocaleString()}</p>
-              <p className="text-sm text-gray-500 mt-1">{customer.totalOrders ?? 0} orders</p>
+              <p className="text-sm text-gray-500 mt-1">{orderStats.totalOrders} orders</p>
             </div>
 
             {/* Order Summary */}
@@ -303,7 +319,7 @@ export default function CustomerDetailsPage() {
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">Total Orders</span>
-                  <span className="text-sm font-semibold text-gray-900">{customer.totalOrders ?? 0}</span>
+                  <span className="text-sm font-semibold text-gray-900">{orderStats.totalOrders}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-gray-600">Outstanding Balance</span>
@@ -447,6 +463,62 @@ export default function CustomerDetailsPage() {
                           >
                             View order
                           </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Outstanding Balances per account/order */}
+          <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Outstanding Balances</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                Accounts/orders with outstanding balances for this customer.
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Order
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Payment Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Outstanding Balance
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {outstandingSales.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                        No outstanding balances for this customer.
+                      </td>
+                    </tr>
+                  ) : (
+                    outstandingSales.map((sale) => (
+                      <tr key={sale.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          #{sale.id.slice(0, 8)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {formatDate(sale.createdAt)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {sale.paymentStatus || sale.status || "—"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-orange-600">
+                          ₦{(sale.outstandingBalance ?? 0).toLocaleString()}
                         </td>
                       </tr>
                     ))

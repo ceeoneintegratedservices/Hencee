@@ -11,8 +11,64 @@ function randomTracking() {
   return `TRK-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
 }
 
-function formatOrder(sale: Doc<"sales">, customer: Doc<"customers"> | null) {
+type PaymentRow = Doc<"payments">;
+
+function sumCompletedPayments(rows: PaymentRow[]): number {
+  return rows.reduce((acc, row) => {
+    const status = String(row.status ?? "").toUpperCase();
+    if (status !== "COMPLETED") return acc;
+    return acc + (Number(row.amount) || 0);
+  }, 0);
+}
+
+function derivePaymentState(totalAmount: number, paidAmount: number) {
+  const outstanding = Math.max(totalAmount - paidAmount, 0);
+  if (outstanding <= 0) {
+    return { payment: "Full Payment", paymentStatus: "COMPLETED", outstanding };
+  }
+  if (paidAmount > 0) {
+    return { payment: "Part Payment", paymentStatus: "PENDING", outstanding };
+  }
+  return { payment: "Unpaid", paymentStatus: "PENDING", outstanding };
+}
+
+async function loadSalePayments(ctx: any, saleId: Id<"sales">) {
+  return await ctx.db
+    .query("payments")
+    .withIndex("by_sale", (q: any) => q.eq("saleId", saleId))
+    .collect();
+}
+
+async function adjustCustomerOutstanding(
+  ctx: any,
+  customerId: Id<"customers">,
+  delta: number
+) {
+  if (!delta) return;
+  const customer = await ctx.db.get(customerId);
+  if (!customer) return;
+  const current = Number(customer.outstandingBalance ?? 0);
+  await ctx.db.patch(customerId, {
+    outstandingBalance: Math.max(current + delta, 0),
+    updatedAt: ts(),
+  });
+}
+
+function formatOrder(
+  sale: Doc<"sales">,
+  customer: Doc<"customers"> | null,
+  payments: PaymentRow[] = []
+) {
   const c = customer;
+  const totalPaid = sumCompletedPayments(payments);
+  const paymentState = derivePaymentState(sale.totalAmount, totalPaid);
+  const metadata = (sale.metadata ?? {}) as Record<string, unknown>;
+  const storedOutstanding =
+    typeof metadata.outstandingBalance === "number"
+      ? Number(metadata.outstandingBalance)
+      : undefined;
+  const outstandingBalance =
+    storedOutstanding != null ? storedOutstanding : paymentState.outstanding;
   return {
     id: sale._id,
     customerId: sale.customerId,
@@ -30,10 +86,14 @@ function formatOrder(sale: Doc<"sales">, customer: Doc<"customers"> | null) {
     homeAddress: sale.homeAddress ?? c?.address ?? "",
     billingAddress: sale.billingAddress ?? c?.address ?? "",
     paymentMethod: sale.paymentMethod ?? "—",
-    payment: sale.payment ?? "—",
-    paymentAmount: sale.paymentAmount != null ? String(sale.paymentAmount) : undefined,
+    payment: sale.payment ?? paymentState.payment,
+    paymentAmount:
+      sale.paymentAmount != null ? String(sale.paymentAmount) : String(totalPaid),
+    paymentStatus: paymentState.paymentStatus,
+    outstandingBalance,
     orderType: sale.orderType ?? "Standard",
     saleVariant: sale.saleVariant ?? "standard",
+    isOutsourced: sale.saleVariant === "outsourced",
     outsourcedSupplierName: sale.outsourcedSupplierName,
     outsourcedCost: sale.outsourcedCost,
     outsourcedSellingPrice: sale.outsourcedSellingPrice,
@@ -42,7 +102,21 @@ function formatOrder(sale: Doc<"sales">, customer: Doc<"customers"> | null) {
     items: Array.isArray(sale.items) ? sale.items : [],
     totalAmount: sale.totalAmount,
     status: sale.status as Doc<"sales">["status"],
-    metadata: sale.metadata,
+    metadata: { ...metadata, outstandingBalance, totalPaid },
+    payments: payments.map((row) => ({
+      id: row._id,
+      method: row.method,
+      status: row.status,
+      amount: row.amount,
+      reference: row.reference,
+      senderName: (row.metadata as Record<string, unknown> | undefined)?.senderName,
+      transactionReference:
+        (row.metadata as Record<string, unknown> | undefined)?.transactionReference,
+      chequeNumber: (row.metadata as Record<string, unknown> | undefined)?.chequeNumber,
+      accountName: (row.metadata as Record<string, unknown> | undefined)?.accountName,
+      createdAt: new Date(row.createdAt).toISOString(),
+      updatedAt: new Date(row.updatedAt).toISOString(),
+    })),
     createdAt: new Date(sale.createdAt).toISOString(),
     updatedAt: new Date(sale.updatedAt).toISOString(),
   };
@@ -86,6 +160,9 @@ export const ordersDashboard = query({
     const orders = [];
     for (const sale of slice) {
       const customer = await ctx.db.get(sale.customerId);
+      const salePayments = await loadSalePayments(ctx, sale._id);
+      const paidAmount = sumCompletedPayments(salePayments);
+      const paymentState = derivePaymentState(sale.totalAmount, paidAmount);
       orders.push({
         id: sale._id,
         customerName: customer?.name ?? "—",
@@ -94,8 +171,10 @@ export const ordersDashboard = query({
         trackingId: sale.trackingId ?? "—",
         orderTotal: String(sale.totalAmount),
         status: sale.status,
+        paymentStatus: paymentState.paymentStatus,
+        outstandingBalance: paymentState.outstanding,
         statusColor: undefined,
-        action: undefined,
+        action: paymentState.payment,
       });
     }
     const summary = {
@@ -127,7 +206,8 @@ export const getById = query({
       throw new Error("Not found");
     }
     const customer = await ctx.db.get(sale.customerId);
-    return formatOrder(sale, customer);
+    const salePayments = await loadSalePayments(ctx, id);
+    return formatOrder(sale, customer, salePayments);
   },
 });
 
@@ -141,7 +221,8 @@ export const updateStatus = mutation({
     await ctx.db.patch(id, { status, updatedAt: ts() });
     const sale = await ctx.db.get(id);
     const customer = sale ? await ctx.db.get(sale.customerId) : null;
-    return formatOrder(sale!, customer);
+    const salePayments = sale ? await loadSalePayments(ctx, sale._id) : [];
+    return formatOrder(sale!, customer, salePayments);
   },
 });
 
@@ -182,12 +263,22 @@ export const create = mutation({
     }
     const t = ts();
     const orderNumber = `ORD-${t}`;
+    const metadataInput = (args.metadata ?? {}) as Record<string, unknown>;
+    const paymentInput = (metadataInput.payment ?? {}) as Record<string, unknown>;
+    const paymentAmountInput = Number(paymentInput.amount ?? 0);
+    const paymentStatusInput = String(paymentInput.status ?? "PENDING").toUpperCase();
+    const initialPaid =
+      paymentAmountInput > 0 && paymentStatusInput === "COMPLETED"
+        ? paymentAmountInput
+        : 0;
+    const initialPaymentState = derivePaymentState(args.totalAmount, initialPaid);
+
     const id = await ctx.db.insert("sales", {
       customerId: args.customerId,
       orderNumber,
       orderDate: new Date(t).toISOString(),
       trackingId: randomTracking(),
-      status: args.status ?? "Pending",
+      status: args.status ?? (initialPaymentState.outstanding <= 0 ? "Completed" : "In-Progress"),
       orderType: args.orderType ?? "Standard",
       saleVariant: variant,
       outsourcedSupplierName:
@@ -205,13 +296,48 @@ export const create = mutation({
       items: args.items,
       totalAmount: args.totalAmount,
       paymentMethod: args.paymentMethod,
-      metadata: args.metadata,
+      payment: initialPaymentState.payment,
+      paymentAmount: initialPaid > 0 ? initialPaid : undefined,
+      metadata: {
+        ...metadataInput,
+        outstandingBalance: initialPaymentState.outstanding,
+        outstandingAfter: initialPaymentState.outstanding,
+      },
       createdAt: t,
       updatedAt: t,
     });
+
+    if (paymentAmountInput > 0) {
+      await ctx.db.insert("payments", {
+        saleId: id,
+        customerId: args.customerId,
+        amount: paymentAmountInput,
+        method: (paymentInput.method as string | undefined) ?? args.paymentMethod,
+        status: paymentStatusInput || "PENDING",
+        reference: paymentInput.reference as string | undefined,
+        metadata: {
+          senderName: paymentInput.senderName,
+          transactionReference: paymentInput.transactionReference,
+          chequeNumber: paymentInput.chequeNumber,
+          accountName: paymentInput.accountName,
+        },
+        createdAt: t,
+        updatedAt: t,
+      });
+    }
+
+    if (initialPaymentState.outstanding > 0) {
+      await adjustCustomerOutstanding(
+        ctx,
+        args.customerId,
+        initialPaymentState.outstanding
+      );
+    }
+
     const sale = await ctx.db.get(id);
     const customer = await ctx.db.get(args.customerId);
-    return formatOrder(sale!, customer);
+    const salePayments = await loadSalePayments(ctx, id);
+    return formatOrder(sale!, customer, salePayments);
   },
 });
 
@@ -226,7 +352,8 @@ export const byCustomer = query({
     const out = [];
     for (const sale of rows) {
       const customer = await ctx.db.get(sale.customerId);
-      out.push(formatOrder(sale, customer));
+      const salePayments = await loadSalePayments(ctx, sale._id);
+      out.push(formatOrder(sale, customer, salePayments));
     }
     return out;
   },
@@ -242,7 +369,8 @@ export const searchOrders = query({
     const out = [];
     for (const sale of filtered.slice(0, 50)) {
       const customer = await ctx.db.get(sale.customerId);
-      out.push(formatOrder(sale, customer));
+      const salePayments = await loadSalePayments(ctx, sale._id);
+      out.push(formatOrder(sale, customer, salePayments));
     }
     return out;
   },
@@ -268,7 +396,8 @@ export const byDateRange = query({
     const out = [];
     for (const sale of filtered) {
       const customer = await ctx.db.get(sale.customerId);
-      out.push(formatOrder(sale, customer));
+      const salePayments = await loadSalePayments(ctx, sale._id);
+      out.push(formatOrder(sale, customer, salePayments));
     }
     return out;
   },
@@ -283,7 +412,8 @@ export const dailyOrders = query({
     const out = [];
     for (const sale of filtered) {
       const customer = await ctx.db.get(sale.customerId);
-      out.push(formatOrder(sale, customer));
+      const salePayments = await loadSalePayments(ctx, sale._id);
+      out.push(formatOrder(sale, customer, salePayments));
     }
     return out;
   },
@@ -305,7 +435,8 @@ export const pendingPaymentSales = query({
     const out = [];
     for (const sale of pending) {
       const customer = await ctx.db.get(sale.customerId);
-      out.push(formatOrder(sale, customer));
+      const salePayments = await loadSalePayments(ctx, sale._id);
+      out.push(formatOrder(sale, customer, salePayments));
     }
     return out;
   },
@@ -324,6 +455,9 @@ export const approvePayment = mutation({
       throw new Error("Not found");
     }
     const t = ts();
+    const beforePayments = await loadSalePayments(ctx, args.id);
+    const paidBefore = sumCompletedPayments(beforePayments);
+    const outstandingBefore = Math.max(sale.totalAmount - paidBefore, 0);
     await ctx.db.insert("payments", {
       saleId: args.id,
       customerId: sale.customerId,
@@ -344,16 +478,29 @@ export const approvePayment = mutation({
       note: args.note,
       timestamp: new Date().toISOString(),
     });
+    const paidAfter = paidBefore + args.amountPaid;
+    const paymentState = derivePaymentState(sale.totalAmount, paidAfter);
+    await adjustCustomerOutstanding(
+      ctx,
+      sale.customerId,
+      paymentState.outstanding - outstandingBefore
+    );
     await ctx.db.patch(args.id, {
-      status: "Completed",
-      payment: "paid",
-      paymentAmount: args.amountPaid,
-      metadata: { ...prevMeta, approvalTrail: trail },
+      status: paymentState.outstanding <= 0 ? "Completed" : "In-Progress",
+      payment: paymentState.payment,
+      paymentAmount: paidAfter,
+      metadata: {
+        ...prevMeta,
+        approvalTrail: trail,
+        outstandingBalance: paymentState.outstanding,
+        outstandingAfter: paymentState.outstanding,
+      },
       updatedAt: t,
     });
     const updated = await ctx.db.get(args.id);
     const customer = await ctx.db.get(sale.customerId);
-    return formatOrder(updated!, customer);
+    const payments = await loadSalePayments(ctx, args.id);
+    return formatOrder(updated!, customer, payments);
   },
 });
 
@@ -382,7 +529,8 @@ export const queryPayment = mutation({
     });
     const updated = await ctx.db.get(id);
     const customer = await ctx.db.get(sale.customerId);
-    return formatOrder(updated!, customer);
+    const payments = await loadSalePayments(ctx, id);
+    return formatOrder(updated!, customer, payments);
   },
 });
 
@@ -415,6 +563,7 @@ export const rejectPayment = mutation({
     });
     const updated = await ctx.db.get(id);
     const customer = await ctx.db.get(sale.customerId);
-    return formatOrder(updated!, customer);
+    const payments = await loadSalePayments(ctx, id);
+    return formatOrder(updated!, customer, payments);
   },
 });

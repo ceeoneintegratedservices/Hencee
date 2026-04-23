@@ -7,6 +7,16 @@ function ts() {
   return Date.now();
 }
 
+function normalizeExpiryDate(input: unknown): string | undefined {
+  if (typeof input !== "string") return undefined;
+  const raw = input.trim();
+  if (!raw) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return undefined;
+  return parsed.toISOString().slice(0, 10);
+}
+
 function mapProduct(doc: Doc<"inventoryItems">) {
   return {
     id: doc._id,
@@ -26,8 +36,10 @@ function mapProduct(doc: Doc<"inventoryItems">) {
     pricePerPiece: doc.pricePerPiece,
     pricePerCarton: doc.pricePerCarton,
     pricePerRoll: doc.pricePerRoll,
+    pricePerDozen: doc.pricePerDozen,
     piecesPerCarton: doc.piecesPerCarton,
     piecesPerRoll: doc.piecesPerRoll,
+    piecesPerDozen: doc.piecesPerDozen,
     inventoryUnits: doc.inventoryUnits,
     productSize: doc.productSize,
     productSizeUnit: doc.productSizeUnit,
@@ -102,8 +114,10 @@ export const create = mutation({
     pricePerPiece: v.optional(v.number()),
     pricePerCarton: v.optional(v.number()),
     pricePerRoll: v.optional(v.number()),
+    pricePerDozen: v.optional(v.number()),
     piecesPerCarton: v.optional(v.number()),
     piecesPerRoll: v.optional(v.number()),
+    piecesPerDozen: v.optional(v.number()),
     inventoryUnits: v.optional(v.any()),
     expiryDate: v.string(),
     productSize: v.optional(v.string()),
@@ -134,8 +148,10 @@ export const create = mutation({
       pricePerPiece: args.pricePerPiece,
       pricePerCarton: args.pricePerCarton,
       pricePerRoll: args.pricePerRoll,
+      pricePerDozen: args.pricePerDozen,
       piecesPerCarton: args.piecesPerCarton,
       piecesPerRoll: args.piecesPerRoll,
+      piecesPerDozen: args.piecesPerDozen,
       inventoryUnits: args.inventoryUnits,
       expiryDate: args.expiryDate,
       productSize: args.productSize,
@@ -241,15 +257,41 @@ export const importProducts = mutation({
     for (const row of rows) {
       try {
         const sku = String(row.sku ?? "");
+        const parsedExpiryDate = normalizeExpiryDate(row.expiryDate);
+        const inventoryUnits = row.inventoryUnits ?? {
+          piecesInStock: Number(row.piecesInStock ?? 0),
+          cartonsInStock: Number(row.cartonsInStock ?? row.cartonInStock ?? 0),
+          rollsInStock: Number(row.rollsInStock ?? 0),
+        };
         const id = await ctx.db.insert("inventoryItems", {
           name: String(row.name ?? "Item"),
           sku,
           categoryName: String(row.categoryName ?? "General"),
           warehouseId: row.warehouseId as Id<"warehouses">,
+          expiryWarehouseId: (row.expiryWarehouseId as Id<"warehouses"> | undefined) ?? undefined,
+          barcode: row.barcode ? String(row.barcode) : undefined,
+          description: row.description ? String(row.description) : undefined,
           purchasePrice: Number(row.purchasePrice ?? 0),
           sellingPrice: Number(row.sellingPrice ?? 0),
-          expiryDate: String(row.expiryDate ?? new Date().toISOString()),
-          status: "PUBLISHED",
+          pricePerPiece: row.pricePerPiece !== undefined ? Number(row.pricePerPiece) : undefined,
+          pricePerCarton: row.pricePerCarton !== undefined ? Number(row.pricePerCarton) : undefined,
+          pricePerRoll: row.pricePerRoll !== undefined ? Number(row.pricePerRoll) : undefined,
+          pricePerDozen: row.pricePerDozen !== undefined ? Number(row.pricePerDozen) : undefined,
+          piecesPerCarton: row.piecesPerCarton !== undefined ? Number(row.piecesPerCarton) : undefined,
+          piecesPerRoll: row.piecesPerRoll !== undefined ? Number(row.piecesPerRoll) : undefined,
+          piecesPerDozen: row.piecesPerDozen !== undefined ? Number(row.piecesPerDozen) : undefined,
+          inventoryUnits,
+          productSize: row.productSize !== undefined ? String(row.productSize) : undefined,
+          productSizeUnit: row.productSizeUnit !== undefined ? String(row.productSizeUnit) : undefined,
+          packSize: row.packSize !== undefined ? String(row.packSize) : undefined,
+          expiryDate: parsedExpiryDate ?? new Date().toISOString().slice(0, 10),
+          reorderPoint: row.reorderPoint !== undefined ? Number(row.reorderPoint) : undefined,
+          expiryAlertThreshold:
+            row.expiryAlertThreshold !== undefined ? Number(row.expiryAlertThreshold) : undefined,
+          isOutsourced: row.isOutsourced === true,
+          outsourcedDetails: row.outsourcedDetails ?? undefined,
+          status: row.status ? String(row.status) : "PUBLISHED",
+          metadata: row.metadata ?? undefined,
           createdAt: t,
           updatedAt: t,
         });

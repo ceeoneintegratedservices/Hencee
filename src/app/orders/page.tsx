@@ -29,6 +29,7 @@ export default function OrdersPage() {
   const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createSaleVariant, setCreateSaleVariant] = useState<"standard" | "outsourced">("standard");
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showDateFilterModal, setShowDateFilterModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -83,6 +84,7 @@ export default function OrdersPage() {
       await createSale(salePayload);
       showSuccess("Order Created", "The order has been created successfully.");
       setShowCreateModal(false);
+      setCreateSaleVariant("standard");
       
       // Refresh the orders list after creating a new order
       await fetchOrdersData();
@@ -500,15 +502,29 @@ export default function OrdersPage() {
           {/* Header Row with Orders Summary and Create Order Button */}
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4">
             <h2 className="text-[18px] font-semibold text-[#45464e]">Orders Summary</h2>
-            <button 
-              onClick={() => setShowCreateModal(true)}
-              className="bg-[#02016a] text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#03024a] transition-colors w-full sm:w-auto justify-center"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Create a New Order
-            </button>
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <button
+                onClick={() => {
+                  setCreateSaleVariant("standard");
+                  setShowCreateModal(true);
+                }}
+                className="bg-[#02016a] text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-[#03024a] transition-colors w-full sm:w-auto justify-center"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Create a New Order
+              </button>
+              <button
+                onClick={() => {
+                  setCreateSaleVariant("outsourced");
+                  setShowCreateModal(true);
+                }}
+                className="bg-gray-900 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-black transition-colors w-full sm:w-auto justify-center"
+              >
+                Add Outsourced Goods
+              </button>
+            </div>
           </div>
 
           {/* Orders Summary Section */}
@@ -536,12 +552,12 @@ export default function OrdersPage() {
                     <div className="font-semibold text-[#45464e] text-lg">{timePeriodData.allOrders}</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-sm text-[#8b8d97] mb-1">Pending</div>
-                    <div className="font-semibold text-[#45464e] text-lg">{timePeriodData.pendingOrders}</div>
+                    <div className="text-sm text-[#8b8d97] mb-1">Canceled</div>
+                    <div className="font-semibold text-[#45464e] text-lg">{timePeriodData.canceledOrders}</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-sm text-[#8b8d97] mb-1">Completed</div>
-                    <div className="font-semibold text-[#45464e] text-lg">{timePeriodData.completedOrders}</div>
+                    <div className="text-sm text-[#8b8d97] mb-1">Damaged</div>
+                    <div className="font-semibold text-[#45464e] text-lg">{timePeriodData.damagedOrders}</div>
                   </div>
                 </div>
               </div>
@@ -944,15 +960,6 @@ export default function OrdersPage() {
                                   <button 
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleStatusChange(index, 'Completed');
-                                    }}
-                                    className="w-full text-left px-3 py-2 text-sm text-[#45464e] hover:bg-gray-50"
-                                  >
-                                    Completed
-                                  </button>
-                                  <button 
-                                    onClick={(e) => {
-                                      e.stopPropagation();
                                       handleStatusChange(index, 'In-Progress');
                                     }}
                                     className="w-full text-left px-3 py-2 text-sm text-[#45464e] hover:bg-gray-50"
@@ -962,11 +969,11 @@ export default function OrdersPage() {
                                   <button 
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleStatusChange(index, 'Pending');
+                                      handleStatusChange(index, 'Cancelled');
                                     }}
                                     className="w-full text-left px-3 py-2 text-sm text-[#45464e] hover:bg-gray-50"
                                   >
-                                    Pending
+                                    Cancelled
                                   </button>
                                 </div>
                               </div>
@@ -1039,15 +1046,6 @@ export default function OrdersPage() {
                                     <button 
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleStatusChange(index, 'Completed');
-                                      }}
-                                      className="w-full text-left px-3 py-2 text-sm text-[#45464e] hover:bg-gray-50"
-                                    >
-                                      Completed
-                                    </button>
-                                    <button 
-                                      onClick={(e) => {
-                                        e.stopPropagation();
                                         handleStatusChange(index, 'In-Progress');
                                       }}
                                       className="w-full text-left px-3 py-2 text-sm text-[#45464e] hover:bg-gray-50"
@@ -1057,11 +1055,11 @@ export default function OrdersPage() {
                                     <button 
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleStatusChange(index, 'Pending');
+                                        handleStatusChange(index, 'Cancelled');
                                       }}
                                       className="w-full text-left px-3 py-2 text-sm text-[#45464e] hover:bg-gray-50"
                                     >
-                                      Pending
+                                      Cancelled
                                     </button>
                                   </div>
                                 </div>
@@ -1168,6 +1166,7 @@ export default function OrdersPage() {
             isOpen={showCreateModal}
             onClose={() => setShowCreateModal(false)}
             onCreate={handleCreateOrder}
+            initialSaleVariant={createSaleVariant}
           />
         </div>
       </main>

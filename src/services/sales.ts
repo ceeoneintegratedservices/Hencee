@@ -37,6 +37,11 @@ export interface CreateSalePayload {
   payment?: SalePaymentPayload;
   notes?: string;
   showDiscountOnInvoice?: boolean;
+  saleVariant?: "standard" | "outsourced";
+  outsourcedSupplierName?: string;
+  outsourcedCost?: number;
+  outsourcedSellingPrice?: number;
+  outsourcedNotes?: string;
 }
 
 export interface SalePayment
@@ -195,6 +200,10 @@ function computeSaleTotal(items: SaleItemPayload[]): number {
 function derivePaymentStatus(o: Record<string, unknown>): PaymentStatus {
   const pay = String(o.payment ?? "").toLowerCase();
   const st = String(o.status ?? "").toUpperCase();
+  const outstanding = Number(o.outstandingBalance ?? (o.metadata as Record<string, unknown> | undefined)?.outstandingBalance ?? 0);
+  if (!Number.isNaN(outstanding) && outstanding <= 0) return "COMPLETED";
+  if (pay.includes("part")) return "PENDING";
+  if (pay.includes("unpaid")) return "PENDING";
   if (st.includes("COMPLET") || pay === "paid") return "COMPLETED";
   if (st.includes("FAIL")) return "FAILED";
   if (st.includes("REFUND")) return "REFUNDED";
@@ -248,6 +257,12 @@ export function convexOrderToSale(o: Record<string, unknown>): Sale {
     paymentStatus: derivePaymentStatus(o),
     paymentMethod: o.paymentMethod as Sale["paymentMethod"],
     status: String(o.status),
+    isOutsourced: Boolean(o.isOutsourced ?? o.saleVariant === "outsourced"),
+    outstandingBalance: Number(
+      o.outstandingBalance ??
+        (meta as { outstandingBalance?: number }).outstandingBalance ??
+        0
+    ),
     notes:
       typeof meta.notes === "string"
         ? meta.notes
@@ -263,7 +278,7 @@ export function convexOrderToSale(o: Record<string, unknown>): Sale {
 export async function fetchSalesDashboard(
   params: SalesListParams = {}
 ): Promise<SalesDashboardResponse> {
-  return getConvexClient().query(api.sales.ordersDashboard, {
+  const raw = await getConvexClient().query(api.sales.ordersDashboard, {
     page: params.page,
     limit: params.limit,
     search: params.search,
@@ -273,6 +288,19 @@ export async function fetchSalesDashboard(
     sortBy: params.sortBy,
     sortDir: params.sortDir,
   });
+  return {
+    ...raw,
+    orders: (raw.orders ?? []).map((o) => ({
+      ...o,
+      id: String(o.id),
+      paymentStatus:
+        o.paymentStatus === "COMPLETED" ||
+        o.paymentStatus === "FAILED" ||
+        o.paymentStatus === "REFUNDED"
+          ? (o.paymentStatus as PaymentStatus)
+          : "PENDING",
+    })),
+  };
 }
 
 export async function createSale(payload: CreateSalePayload): Promise<Sale> {
@@ -281,6 +309,11 @@ export async function createSale(payload: CreateSalePayload): Promise<Sale> {
     customerId: payload.customerId as Id<"customers">,
     items: payload.items,
     totalAmount,
+    saleVariant: payload.saleVariant,
+    outsourcedSupplierName: payload.outsourcedSupplierName,
+    outsourcedCost: payload.outsourcedCost,
+    outsourcedSellingPrice: payload.outsourcedSellingPrice,
+    outsourcedNotes: payload.outsourcedNotes,
     paymentMethod: payload.payment?.method,
     metadata: {
       notes: payload.notes,

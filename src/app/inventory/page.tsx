@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useConvexAuth } from 'convex/react';
-import { InventoryDataService, InventoryItem, InventorySummary } from '@/services/InventoryDataService';
+import { InventoryDataService, InventoryItem } from '@/services/InventoryDataService';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
 import {
   getInventoryProducts,
@@ -38,6 +38,10 @@ type InventoryRow = InventoryItem & {
   expiryStatus?: string;
   inventoryUnits?: InventoryUnitsState;
   supplier?: string;
+  reorderPoint?: number;
+  piecesPerCarton?: number;
+  piecesPerRoll?: number;
+  piecesPerDozen?: number;
 };
 
 const splitCsvLine = (line: string): string[] => {
@@ -146,9 +150,44 @@ const parseCsvText = (text: string): Record<string, string>[] => {
 };
 
 const mapApiProductToInventoryItem = (product: InventoryProduct): InventoryRow => {
-  const piecesInStock =
-    product.inventoryUnits?.piecesInStock ?? product.quantity ?? 0;
-  const sellingPrice = product.sellingPrice ?? 0;
+  const piecesInStock = Number(product.inventoryUnits?.piecesInStock ?? product.quantity ?? 0);
+  const cartonsInStock = Number(product.inventoryUnits?.cartonsInStock ?? 0);
+  const rollsInStock = Number(product.inventoryUnits?.rollsInStock ?? 0);
+  const dozensInStock = Number(
+    (product.inventoryUnits as Record<string, number | undefined> | undefined)
+      ?.dozensInStock ?? 0
+  );
+  const piecesPerCarton = Number(product.piecesPerCarton ?? 0);
+  const piecesPerRoll = Number(product.piecesPerRoll ?? 0);
+  const piecesPerDozen = Number(product.piecesPerDozen ?? 12);
+
+  // Normalize all stock units to piece-equivalent counts for consistent dashboard math.
+  const normalizedPiecesInStock =
+    piecesInStock +
+    cartonsInStock * piecesPerCarton +
+    rollsInStock * piecesPerRoll +
+    dozensInStock * piecesPerDozen;
+
+  const derivedPiecePriceFromCarton =
+    product.pricePerCarton && piecesPerCarton > 0
+      ? product.pricePerCarton / piecesPerCarton
+      : undefined;
+  const derivedPiecePriceFromRoll =
+    product.pricePerRoll && piecesPerRoll > 0
+      ? product.pricePerRoll / piecesPerRoll
+      : undefined;
+  const derivedPiecePriceFromDozen =
+    product.pricePerDozen && piecesPerDozen > 0
+      ? product.pricePerDozen / piecesPerDozen
+      : undefined;
+  const sellingPrice = Number(
+    product.pricePerPiece ??
+      derivedPiecePriceFromCarton ??
+      derivedPiecePriceFromRoll ??
+      derivedPiecePriceFromDozen ??
+      product.sellingPrice ??
+      0
+  );
 
   return {
     id: String(product.id),
@@ -156,9 +195,9 @@ const mapApiProductToInventoryItem = (product: InventoryProduct): InventoryRow =
     category: product.category ?? product.categoryName ?? 'General',
     unitPrice: sellingPrice,
     costPrice: product.purchasePrice ?? 0,
-    inStock: piecesInStock,
+    inStock: normalizedPiecesInStock,
     discount: 0,
-    totalValue: sellingPrice * piecesInStock,
+    totalValue: sellingPrice * normalizedPiecesInStock,
     status:
       product.status === 'PUBLISHED'
         ? 'Published'
@@ -183,6 +222,10 @@ const mapApiProductToInventoryItem = (product: InventoryProduct): InventoryRow =
     sku: product.sku,
     expiryStatus: product.expiryStatus,
     inventoryUnits: product.inventoryUnits,
+    reorderPoint: product.reorderPoint,
+    piecesPerCarton: product.piecesPerCarton,
+    piecesPerRoll: product.piecesPerRoll,
+    piecesPerDozen: product.piecesPerDozen,
   };
 };
 
@@ -225,7 +268,6 @@ export default function InventoryPage() {
   
   // Data states
   const [inventoryItems, setInventoryItems] = useState<InventoryRow[]>([]);
-  const [summaryData, setSummaryData] = useState<InventorySummary | null>(null);
   const [filteredItems, setFilteredItems] = useState<InventoryRow[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   
@@ -320,14 +362,11 @@ export default function InventoryPage() {
       setFilteredItems(mappedItems);
       localStorage.setItem('inventoryItems', JSON.stringify(mappedItems));
       
-      const summary = InventoryDataService.generateInventorySummary(mappedItems);
-      setSummaryData(summary);
     } catch (err: any) {
       setApiError(err.message || 'Failed to load inventory');
       showError('Error', err.message || 'Failed to load inventory');
       setInventoryItems([]);
       setFilteredItems([]);
-      setSummaryData(null);
     } finally {
       setApiLoading(false);
     }
@@ -846,27 +885,34 @@ export default function InventoryPage() {
     fetchDamageLog();
   }, [fetchDamageLog]);
 
-  const getTimePeriodData = () => {
-    if (!summaryData) return summaryData;
-    
-    if (selectedTimePeriod === 'This Week') {
-      return {
-        ...summaryData,
-        allProducts: Math.floor(summaryData.allProducts * 0.8),
-        activeProducts: Math.floor(summaryData.activeProducts * 0.85),
-        lowStockAlert: Math.floor(summaryData.lowStockAlert * 1.2),
-        expired: Math.floor(summaryData.expired * 0.9),
-        oneStarRating: Math.floor(summaryData.oneStarRating * 0.8)
-      };
-    } else if (selectedTimePeriod === 'All Time') {
-      // For "All Time", return the full summary data without modifications
-      return summaryData;
-    } else {
-      return summaryData;
+  const isItemInSelectedPeriod = (item: InventoryRow) => {
+    if (selectedTimePeriod === "All Time") return true;
+    const itemDate = item.dateAdded ? new Date(item.dateAdded) : null;
+    if (!itemDate || Number.isNaN(itemDate.getTime())) return false;
+
+    const now = new Date();
+    if (selectedTimePeriod === "This Week") {
+      const startOfWeek = new Date(now);
+      const day = startOfWeek.getDay(); // 0=Sun ... 6=Sat
+      const diffToMonday = day === 0 ? 6 : day - 1;
+      startOfWeek.setDate(startOfWeek.getDate() - diffToMonday);
+      startOfWeek.setHours(0, 0, 0, 0);
+      return itemDate >= startOfWeek && itemDate <= now;
     }
+
+    // "This Month"
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    return itemDate >= startOfMonth && itemDate <= now;
+  };
+
+  const getTimePeriodData = () => {
+    const periodItems = inventoryItems.filter(isItemInSelectedPeriod);
+    return InventoryDataService.generateInventorySummary(periodItems);
   };
 
   const currentSummaryData = getTimePeriodData();
+  const getLowStockThreshold = (item: InventoryRow) => Number(item.reorderPoint ?? 10);
   const formatNumber = (value?: number | null) => {
     if (value === undefined || value === null || Number.isNaN(value)) return "0";
     return Number(value).toLocaleString();
@@ -1987,7 +2033,7 @@ export default function InventoryPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {item.inStock === 0 ? (
                           <span className="text-red-600 font-medium">Out of Stock</span>
-                        ) : item.inStock < 10 ? (
+                        ) : item.inStock < getLowStockThreshold(item) ? (
                           <span className="text-orange-600 font-medium">Low Stock ({item.inStock})</span>
                         ) : (
                           item.inStock
@@ -2156,11 +2202,11 @@ export default function InventoryPage() {
                               <span className="text-gray-500">Stock:</span>
                               <span className={
                                 item.inStock === 0 ? "text-red-600 font-medium" : 
-                                item.inStock < 10 ? "text-orange-600 font-medium" : 
+                                item.inStock < getLowStockThreshold(item) ? "text-orange-600 font-medium" : 
                                 "text-gray-900"
                               }>
                                 {item.inStock === 0 ? "Out of Stock" : 
-                                 item.inStock < 10 ? `Low Stock (${item.inStock})` : 
+                                 item.inStock < getLowStockThreshold(item) ? `Low Stock (${item.inStock})` : 
                                  item.inStock}
                               </span>
                             </div>
@@ -2418,6 +2464,27 @@ export default function InventoryPage() {
               <p className="text-xs text-gray-500 mt-1">
                 Optional: productSize, productSizeUnit (dosage strength), packSize (unit of sale: Tablet, Capsule, etc.)
               </p>
+              <div className="mt-3 text-left bg-blue-50 border border-blue-100 rounded-lg p-3">
+                <p className="text-xs font-semibold text-blue-900">Inventory calculation breakdown</p>
+                <div className="mt-1 space-y-1 text-xs text-blue-900">
+                  <p>
+                    Total pieces in stock = <code className="bg-white px-1 rounded">piecesInStock</code> + (
+                    <code className="bg-white px-1 rounded">cartonsInStock × piecesPerCarton</code>) + (
+                    <code className="bg-white px-1 rounded">rollsInStock × piecesPerRoll</code>) + (
+                    <code className="bg-white px-1 rounded">dozensInStock × piecesPerDozen</code>, if provided).
+                  </p>
+                  <p>
+                    Price priority by sale unit: <code className="bg-white px-1 rounded">pricePerCarton</code>,{" "}
+                    <code className="bg-white px-1 rounded">pricePerRoll</code>,{" "}
+                    <code className="bg-white px-1 rounded">pricePerDozen</code>, then{" "}
+                    <code className="bg-white px-1 rounded">pricePerPiece</code>/<code className="bg-white px-1 rounded">sellingPrice</code>.
+                  </p>
+                  <p>
+                    Example: 5 cartons (50 pieces each), 2 rolls (10 pieces each), and 100 loose pieces ={" "}
+                    <code className="bg-white px-1 rounded">5×50 + 2×10 + 100 = 370 pieces</code>.
+                  </p>
+                </div>
+              </div>
               <div className="mt-2 flex items-center gap-2">
                 <a
                   href="/inventory-import-template.csv"

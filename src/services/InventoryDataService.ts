@@ -21,6 +21,7 @@ export interface InventoryItem {
   brand?: string;
   description?: string;
   warehouseNumber?: string;
+  reorderPoint?: number;
 }
 
 export interface InventorySummary {
@@ -185,7 +186,7 @@ export class InventoryDataService {
   static generateInventorySummary(items: InventoryItem[]): InventorySummary {
     const allProducts = items.length;
     const activeProducts = items.filter(item => item.status === "Published").length;
-    const lowStockAlert = items.filter(item => item.inStock < 10).length;
+    const lowStockAlert = items.filter(item => item.inStock < (item.reorderPoint ?? 10)).length;
     const expired = items.filter(item => 
       item.expiryDate && new Date(item.expiryDate) < new Date()
     ).length;

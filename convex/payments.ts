@@ -6,6 +6,26 @@ function ts() {
   return Date.now();
 }
 
+function sumCompletedPayments(
+  rows: Array<{ status: string; amount: number }>
+): number {
+  return rows.reduce((acc, row) => {
+    if (String(row.status).toUpperCase() !== "COMPLETED") return acc;
+    return acc + (Number(row.amount) || 0);
+  }, 0);
+}
+
+function derivePaymentState(totalAmount: number, paidAmount: number) {
+  const outstanding = Math.max(totalAmount - paidAmount, 0);
+  if (outstanding <= 0) {
+    return { payment: "Full Payment", paymentStatus: "COMPLETED", outstanding };
+  }
+  if (paidAmount > 0) {
+    return { payment: "Part Payment", paymentStatus: "PENDING", outstanding };
+  }
+  return { payment: "Unpaid", paymentStatus: "PENDING", outstanding };
+}
+
 export const list = query({
   args: {
     page: v.optional(v.number()),
@@ -51,11 +71,59 @@ export const create = mutation({
   handler: async (ctx, args) => {
     await requireStaff(ctx);
     const t = ts();
-    return ctx.db.insert("payments", {
+    const paymentId = await ctx.db.insert("payments", {
       ...args,
       createdAt: t,
       updatedAt: t,
     });
+
+    if (args.saleId) {
+      const sale = await ctx.db.get(args.saleId);
+      if (sale) {
+        const customer = await ctx.db.get(sale.customerId);
+        const salePayments = await ctx.db
+          .query("payments")
+          .withIndex("by_sale", (q) => q.eq("saleId", args.saleId))
+          .collect();
+        const paidAmount = sumCompletedPayments(salePayments);
+        const paymentState = derivePaymentState(sale.totalAmount, paidAmount);
+        const previousOutstanding = Math.max(
+          sale.totalAmount - (sumCompletedPayments(salePayments.filter((p) => p._id !== paymentId))),
+          0
+        );
+        const delta = paymentState.outstanding - previousOutstanding;
+
+        await ctx.db.patch(args.saleId, {
+          payment: paymentState.payment,
+          paymentAmount: paidAmount > 0 ? paidAmount : undefined,
+          status:
+            String(sale.status).toLowerCase().includes("cancel") ||
+            String(sale.status).toLowerCase().includes("reject")
+              ? sale.status
+              : paymentState.outstanding <= 0
+              ? "Completed"
+              : "In-Progress",
+          metadata: {
+            ...(sale.metadata ?? {}),
+            outstandingBalance: paymentState.outstanding,
+            outstandingAfter: paymentState.outstanding,
+          },
+          updatedAt: t,
+        });
+
+        if (customer && delta !== 0) {
+          await ctx.db.patch(customer._id, {
+            outstandingBalance: Math.max(
+              Number(customer.outstandingBalance ?? 0) + delta,
+              0
+            ),
+            updatedAt: t,
+          });
+        }
+      }
+    }
+
+    return paymentId;
   },
 });
 

@@ -17,6 +17,7 @@ interface CreateOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreate: (payload: CreateSalePayload) => void;
+  initialSaleVariant?: "standard" | "outsourced";
 }
 
 interface OrderData {
@@ -24,12 +25,14 @@ interface OrderData {
   paymentType: string;
   payment: string;
   paymentAmount: string;
-  orderDate: string;
-  orderTime: string;
-  orderStatus: string;
   orderNote: string;
   showDiscountOnInvoice: boolean;
   items: OrderItem[];
+  saleVariant: "standard" | "outsourced";
+  outsourcedSupplierName: string;
+  outsourcedCost: string;
+  outsourcedSellingPrice: string;
+  outsourcedNotes: string;
 }
 
 interface OrderItem {
@@ -103,18 +106,25 @@ const FALLBACK_PAYMENT_STATUS_OPTIONS: Array<{ value: PaymentStatus; label: stri
   { value: "REFUNDED", label: "Refunded" },
 ];
 
-export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOrderModalProps) {
+export default function CreateOrderModal({
+  isOpen,
+  onClose,
+  onCreate,
+  initialSaleVariant = "standard",
+}: CreateOrderModalProps) {
   const [orderData, setOrderData] = useState<OrderData>({
     customer: "",
     paymentType: "",
     payment: "",
     paymentAmount: "",
-    orderDate: "12/12/2020",
-    orderTime: "12:00 PM",
-    orderStatus: "Pending",
     orderNote: "",
     showDiscountOnInvoice: true,
-    items: []
+    items: [],
+    saleVariant: initialSaleVariant,
+    outsourcedSupplierName: "",
+    outsourcedCost: "",
+    outsourcedSellingPrice: "",
+    outsourcedNotes: "",
   });
 
   const [isNewCustomer, setIsNewCustomer] = useState(false);
@@ -458,6 +468,14 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
     };
   }, [isOpen, appliedPresetDefaults]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    setOrderData((prev) => ({
+      ...prev,
+      saleVariant: initialSaleVariant,
+    }));
+  }, [initialSaleVariant, isOpen]);
+
   // Fetch customers from API
   useEffect(() => {
     const fetchCustomers = async () => {
@@ -787,8 +805,8 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
             <div class="customer-info">
               <h3>Bill To:</h3>
               <p><strong>${orderData.customer || 'Customer Name'}</strong></p>
-              <p>Date: ${orderData.orderDate}</p>
-              <p>Time: ${orderData.orderTime}</p>
+              <p>Date: ${currentDate}</p>
+              <p>Time: ${currentTime}</p>
             </div>
           </div>
           
@@ -1017,7 +1035,28 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
         })),
         notes: orderData.orderNote || undefined,
         showDiscountOnInvoice: orderData.showDiscountOnInvoice,
+        saleVariant: orderData.saleVariant,
       };
+
+      if (orderData.saleVariant === "outsourced") {
+        const supplier = orderData.outsourcedSupplierName.trim();
+        const cost = Number(orderData.outsourcedCost);
+        const selling = Number(orderData.outsourcedSellingPrice);
+        if (!supplier) {
+          throw new Error("Outsourced sale requires supplier name.");
+        }
+        if (!Number.isFinite(cost) || cost < 0) {
+          throw new Error("Outsourced sale requires a valid source cost.");
+        }
+        if (!Number.isFinite(selling) || selling <= 0) {
+          throw new Error("Outsourced sale requires a valid selling price.");
+        }
+        salePayload.outsourcedSupplierName = supplier;
+        salePayload.outsourcedCost = cost;
+        salePayload.outsourcedSellingPrice = selling;
+        salePayload.outsourcedNotes =
+          orderData.outsourcedNotes.trim() || undefined;
+      }
 
       const legacyMethodMap: Record<string, PaymentMethod> = {
         Cash: "cash",
@@ -1128,8 +1167,8 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                   <div className="flex-1 text-right">
                     <h3 className="text-lg font-semibold text-gray-900 mb-3">Bill To:</h3>
                     <p className="text-gray-600 font-medium">{orderData.customer || 'Customer Name'}</p>
-                    <p className="text-gray-600">Date: {orderData.orderDate}</p>
-                    <p className="text-gray-600">Time: {orderData.orderTime}</p>
+                    <p className="text-gray-600">Date: {new Date().toLocaleDateString()}</p>
+                    <p className="text-gray-600">Time: {new Date().toLocaleTimeString()}</p>
                     <p className="text-gray-600">Payment Method: {getPaymentMethodLabel(paymentForm.method || orderData.paymentType)}</p>
                     <p className="text-gray-600">Payment Status: {getPaymentStatusLabel(paymentForm.status)}</p>
                     <p className="text-gray-600">Amount: {paymentForm.amount && paymentForm.amount.trim() !== '' ? formatAmount(Number(paymentForm.amount)) : formatAmount(calculateTotal())}</p>
@@ -1666,71 +1705,97 @@ export default function CreateOrderModal({ isOpen, onClose, onCreate }: CreateOr
                 </div>
               </div>
 
-              {/* Order Time & Date */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[14px] text-[#45464e] mb-2">Order Date</label>
-                  <div className="relative">
-                    <input
-                      type="date"
-                      value={orderData.orderDate}
-                      onChange={(e) => setOrderData(prev => ({ ...prev, orderDate: e.target.value }))}
-                      className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent pl-10"
-                      placeholder="Select date or type"
-                    />
-                    <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" fill="none" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" stroke="currentColor" />
-                    </svg>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[14px] text-[#45464e] mb-2">Order Time</label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={orderData.orderTime}
-                      onChange={(e) => setOrderData(prev => ({ ...prev, orderTime: e.target.value }))}
-                      className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent pl-10 pr-10"
-                    />
-                    <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const now = new Date();
-                        const timeString = now.toLocaleTimeString('en-US', {
-                          hour: 'numeric',
-                          minute: '2-digit',
-                          hour12: true
-                        });
-                        setOrderData(prev => ({ ...prev, orderTime: timeString }));
-                      }}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded transition-colors"
-                      title="Set current time"
-                    >
-                      <svg className="w-4 h-4 text-gray-500 hover:text-[#02016a]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
+              <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+                <p className="text-[13px] font-medium text-blue-900">
+                  Order date and time are set automatically at submission.
+                </p>
+                <p className="text-[12px] text-blue-800 mt-1">
+                  Recorded from server time for reconciliation accuracy.
+                </p>
               </div>
 
-              {/* Order Status */}
               <div>
-                <label className="block text-[14px] text-[#45464e] mb-2">Order Status</label>
+                <label className="block text-[14px] text-[#45464e] mb-2">Sale Type</label>
                 <select
-                  value={orderData.orderStatus}
-                  onChange={(e) => setOrderData(prev => ({ ...prev, orderStatus: e.target.value }))}
+                  value={orderData.saleVariant}
+                  onChange={(e) =>
+                    setOrderData((prev) => ({
+                      ...prev,
+                      saleVariant: e.target.value as "standard" | "outsourced",
+                    }))
+                  }
                   className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
                 >
-                  <option value="Pending">Pending</option>
-                  <option value="In-Progress">In-Progress</option>
-                  <option value="Completed">Completed</option>
-                  <option value="Canceled">Canceled</option>
+                  <option value="standard">Standard Stock Sale</option>
+                  <option value="outsourced">Outsourced Goods Sale</option>
                 </select>
               </div>
+
+              {orderData.saleVariant === "outsourced" && (
+                <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                  <div>
+                    <label className="block text-[14px] text-[#45464e] mb-2">Supplier Name</label>
+                    <input
+                      type="text"
+                      value={orderData.outsourcedSupplierName}
+                      onChange={(e) =>
+                        setOrderData((prev) => ({
+                          ...prev,
+                          outsourcedSupplierName: e.target.value,
+                        }))
+                      }
+                      placeholder="Supplier for outsourced goods"
+                      className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[14px] text-[#45464e] mb-2">Source Cost</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={orderData.outsourcedCost}
+                        onChange={(e) =>
+                          setOrderData((prev) => ({
+                            ...prev,
+                            outsourcedCost: e.target.value,
+                          }))
+                        }
+                        className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[14px] text-[#45464e] mb-2">Selling Price</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={orderData.outsourcedSellingPrice}
+                        onChange={(e) =>
+                          setOrderData((prev) => ({
+                            ...prev,
+                            outsourcedSellingPrice: e.target.value,
+                          }))
+                        }
+                        className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[14px] text-[#45464e] mb-2">Outsourced Notes</label>
+                    <textarea
+                      rows={2}
+                      value={orderData.outsourcedNotes}
+                      onChange={(e) =>
+                        setOrderData((prev) => ({
+                          ...prev,
+                          outsourcedNotes: e.target.value,
+                        }))
+                      }
+                      className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent resize-none"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Order Note */}
               <div>

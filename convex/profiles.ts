@@ -5,6 +5,7 @@ import { requireIdentity, getProfileDoc, requireStaff } from "./lib/auth";
 const DEFAULT_ADMIN_PERMISSIONS = [
   "view_users",
   "users.view",
+  "users.assign_roles",
   "view_reports",
   "reports.view",
   "inventory.view",

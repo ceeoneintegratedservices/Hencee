@@ -61,8 +61,10 @@ export interface InventoryProduct {
   pricePerPiece?: number;
   pricePerCarton?: number;
   pricePerRoll?: number;
+  pricePerDozen?: number;
   piecesPerCarton?: number;
   piecesPerRoll?: number;
+  piecesPerDozen?: number;
   quantity?: number;
   inventoryUnits?: InventoryUnits;
   productSize?: string;
@@ -266,8 +268,10 @@ export async function createInventoryProduct(
     pricePerPiece: payload.pricePerPiece,
     pricePerCarton: payload.pricePerCarton,
     pricePerRoll: payload.pricePerRoll,
+    pricePerDozen: payload.pricePerDozen,
     piecesPerCarton: payload.piecesPerCarton,
     piecesPerRoll: payload.piecesPerRoll,
+    piecesPerDozen: payload.piecesPerDozen,
     inventoryUnits: payload.inventoryUnits,
     expiryDate: payload.expiryDate,
     productSize: payload.productSize,
@@ -487,6 +491,7 @@ export function mapFlatRecordToPayload(
   record: Record<string, string>
 ): Partial<CreateInventoryProduct> {
   const payload: Record<string, any> = {};
+  let dozensInStockRaw: number | undefined;
 
   // Field name aliases/mappings
   const fieldMappings: Record<string, string> = {
@@ -510,11 +515,6 @@ export function mapFlatRecordToPayload(
     // Apply field name mapping
     const mappedKey = fieldMappings[key] || key;
     
-    // Skip unsupported fields
-    if (mappedKey === "dozensInStock") {
-      continue;
-    }
-    
     const coerced = coerceValue(mappedKey, value);
     
     // Only skip if coerced is explicitly undefined (not 0 or empty string for required fields)
@@ -529,11 +529,24 @@ export function mapFlatRecordToPayload(
       setNestedValue(payload, "inventoryUnits.cartonsInStock", coerced);
     } else if (mappedKey === "rollsInStock") {
       setNestedValue(payload, "inventoryUnits.rollsInStock", coerced);
+    } else if (mappedKey === "dozensInStock") {
+      dozensInStockRaw = Number(coerced);
     } else if (mappedKey.includes(".")) {
       setNestedValue(payload, mappedKey, coerced);
     } else {
       payload[mappedKey] = coerced;
     }
+  }
+
+  // Support CSV rows that provide dozensInStock by converting to loose pieces.
+  if (dozensInStockRaw !== undefined && !Number.isNaN(dozensInStockRaw) && dozensInStockRaw > 0) {
+    const piecesPerDozen = Number(payload.piecesPerDozen ?? 12);
+    const existingPieces = Number(payload.inventoryUnits?.piecesInStock ?? 0);
+    setNestedValue(
+      payload,
+      "inventoryUnits.piecesInStock",
+      existingPieces + dozensInStockRaw * piecesPerDozen
+    );
   }
 
   return payload;

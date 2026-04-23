@@ -148,13 +148,21 @@ export default function CustomersPage() {
 
   // Handle customer deletion
   const handleDeleteCustomer = async (id: string) => {
+    const target = customers.find((c) => c.id === id);
+    const confirmed = window.confirm(
+      `Delete customer ${target?.name ?? ""}? This is only allowed when there is no order history.`
+    );
+    if (!confirmed) return;
     try {
       await deleteCustomer(id);
       setCustomers(prev => prev.filter(customer => customer.id !== id));
       showSuccess('Success', 'Customer deleted successfully');
     } catch (err: any) {
       console.error('Error deleting customer:', err);
-      showError('Error', err.message || 'Failed to delete customer');
+      showError(
+        'Delete blocked',
+        err.message || 'Failed to delete customer'
+      );
     }
   };
 
@@ -235,14 +243,26 @@ export default function CustomersPage() {
         break;
       case 'delete':
         if (confirm(`Are you sure you want to delete ${selectedCustomers.length} customer(s)?`)) {
+          let deleted = 0;
+          let blocked = 0;
           for (const id of selectedCustomers) {
             try {
               await deleteCustomer(id);
+              deleted += 1;
             } catch (err) {
               console.error(`Failed to delete customer ${id}:`, err);
+              blocked += 1;
             }
           }
-          showSuccess('Success', `${selectedCustomers.length} customer(s) deleted`);
+          if (deleted > 0) {
+            showSuccess('Success', `${deleted} customer(s) deleted`);
+          }
+          if (blocked > 0) {
+            showError(
+              'Delete blocked',
+              `${blocked} customer(s) could not be deleted (likely due to order history).`
+            );
+          }
           setSelectedCustomers([]);
           fetchCustomers();
         }

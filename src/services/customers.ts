@@ -91,6 +91,14 @@ export interface CustomerStats {
   outstandingBalance: number;
   lastPurchaseDate?: string;
   averagePurchaseAmount: number;
+  orderHistory?: Array<{
+    id: string;
+    orderNumber: string;
+    orderDate: string;
+    totalAmount: number;
+    status: string;
+    payment?: string;
+  }>;
 }
 
 export interface TopCustomer {
@@ -112,6 +120,8 @@ export interface OutstandingBalanceCustomer {
   outstandingBalance: number;
   creditLimit: number;
   lastPurchaseDate?: string;
+  totalOrders?: number;
+  totalPurchases?: number;
 }
 
 export async function getCustomerStats(id: string): Promise<CustomerStats> {
@@ -123,22 +133,31 @@ export async function getCustomerStats(id: string): Promise<CustomerStats> {
   return {
     totalPurchases,
     totalAmount,
-    outstandingBalance: 0,
+    outstandingBalance: s.outstandingBalance ?? 0,
     lastPurchaseDate: s.lastOrderDate,
     averagePurchaseAmount: totalPurchases ? totalAmount / totalPurchases : 0,
+    orderHistory: (s.orderHistory ?? []).map((row: any) => ({
+      id: String(row.id),
+      orderNumber: String(row.orderNumber ?? ""),
+      orderDate: String(row.orderDate ?? ""),
+      totalAmount: Number(row.totalAmount ?? 0),
+      status: String(row.status ?? ""),
+      payment: row.payment ? String(row.payment) : undefined,
+    })),
   };
 }
 
 export async function getOutstandingBalanceCustomers(): Promise<OutstandingBalanceCustomer[]> {
   const rows = await getConvexClient().query(api.customers.outstandingBalanceCustomers, {});
-  return rows.map((r, i) => ({
+  return rows.map((r) => ({
     id: String(r.id),
     name: r.name,
     email: r.email,
     phone: undefined,
     outstandingBalance: r.outstandingBalance,
-    creditLimit: 0,
-    lastPurchaseDate: undefined,
-    rank: i + 1,
+    creditLimit: r.creditLimit ?? 0,
+    lastPurchaseDate: r.lastPurchaseDate,
+    totalOrders: r.totalOrders,
+    totalPurchases: r.totalPurchases,
   }));
 }

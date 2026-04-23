@@ -4,6 +4,7 @@ import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { SignIn, useAuth, useClerk } from "@clerk/nextjs";
 import { getClerkHostedAccountLinks } from "@/lib/clerkHostedUrls";
+import Link from "next/link";
 
 function LoginLoading() {
   return (
@@ -82,6 +83,12 @@ function LoginContent() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#f7f7f8] px-4 py-10">
       <div className="w-full max-w-md space-y-4">
+        <Link
+          href="/"
+          className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          ← Back to Home
+        </Link>
         {notice === "password" && (
           <div
             className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950"
