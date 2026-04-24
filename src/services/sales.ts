@@ -14,6 +14,7 @@ export type PaymentStatus = "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED";
 
 export interface SaleItemPayload {
   productId: string;
+  productName?: string;
   quantity: number;
   unitType?: SaleUnitType;
   unitPrice?: number;

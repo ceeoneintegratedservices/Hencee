@@ -290,9 +290,9 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
           {/* Logout section */}
           <div className="mt-8 pt-4 border-t border-gray-100">
             <Link
-              href="/account"
+              href="/settings#account-section"
               className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium hover:bg-[#02016a] hover:text-white transition-colors ${
-                currentPage === "account"
+                currentPage === "account" || currentPage === "settings"
                   ? "bg-[#02016a] text-white"
                   : "text-[#101828]"
               }`}

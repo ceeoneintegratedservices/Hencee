@@ -14,7 +14,37 @@ export async function listProducts(params: {
     search: params.search,
   });
   return (rows as { _id?: string; id?: string }[]).map((r) => ({
-    ...(r as Record<string, unknown>),
+    ...(() => {
+      const row = r as Record<string, unknown>;
+      const inventoryUnits =
+        (row.inventoryUnits as
+          | {
+              piecesInStock?: number;
+              cartonsInStock?: number;
+              rollsInStock?: number;
+              dozensInStock?: number;
+            }
+          | undefined) ?? {};
+      const pieces = Number(inventoryUnits.piecesInStock ?? row.quantity ?? 0);
+      const cartons = Number(inventoryUnits.cartonsInStock ?? 0);
+      const rolls = Number(inventoryUnits.rollsInStock ?? 0);
+      const dozens = Number(inventoryUnits.dozensInStock ?? 0);
+      const piecesPerCarton = Number(row.piecesPerCarton ?? 0);
+      const piecesPerRoll = Number(row.piecesPerRoll ?? 0);
+      const piecesPerDozen = Number(row.piecesPerDozen ?? 12);
+      const normalizedStock =
+        pieces +
+        cartons * piecesPerCarton +
+        rolls * piecesPerRoll +
+        dozens * piecesPerDozen;
+      return {
+        ...row,
+        inventoryUnits,
+        // Keep both fields for legacy consumers (order page/customer portal)
+        stock: normalizedStock,
+        quantity: normalizedStock,
+      };
+    })(),
     id: String(r.id ?? r._id ?? ""),
   }));
 }
