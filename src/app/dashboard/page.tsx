@@ -58,6 +58,16 @@ export default function AdminDashboard() {
     }
   }, [authLoading, isAuthenticated, router]);
 
+  // Redirect users without dashboard.view to their natural landing page
+  useEffect(() => {
+    if (!isInitialized) return;
+    if (hasPermission("dashboard.view")) return;
+    if (hasPermission("sales.view")) { router.replace("/orders"); return; }
+    if (hasPermission("inventory.view")) { router.replace("/inventory"); return; }
+    if (hasPermission("reports.view")) { router.replace("/reports"); return; }
+    if (hasPermission("expenses.view")) { router.replace("/expenses"); return; }
+  }, [isInitialized, hasPermission, router]);
+
   // Handle sidebar keyboard events
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

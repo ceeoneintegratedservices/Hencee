@@ -7,11 +7,14 @@ export async function listProducts(params: {
   limit?: number;
   search?: string;
   category?: string;
+  /** Only return PUBLISHED items — always true when called from order forms */
+  publishedOnly?: boolean;
 } = {}): Promise<Record<string, unknown>[]> {
   const rows = await getConvexClient().query(api.products.list, {
     page: params.page,
     limit: params.limit,
     search: params.search,
+    publishedOnly: params.publishedOnly,
   });
   return (rows as { _id?: string; id?: string }[]).map((r) => ({
     ...(() => {

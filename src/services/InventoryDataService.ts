@@ -306,6 +306,9 @@ export class InventoryDataService {
 
   static filterItemsByStatus(items: InventoryItem[], status: string): InventoryItem[] {
     if (status === "All") return items;
+    if (status === "Low Stock") {
+      return items.filter(item => item.inStock < (item.reorderPoint ?? 10));
+    }
     return items.filter(item => item.status === status);
   }
 

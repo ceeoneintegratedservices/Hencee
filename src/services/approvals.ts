@@ -23,10 +23,10 @@ export interface ApprovalRequest {
 }
 
 export interface CreateApprovalRequest {
-  type: "expense" | "purchase" | "refund" | "other";
+  type: "expense" | "purchase" | "refund" | "permission_request" | "other";
   title: string;
-  description: string;
-  amount: number;
+  description?: string;
+  amount?: number;
   currency: string;
   attachments?: string[];
 }

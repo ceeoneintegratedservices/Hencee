@@ -26,7 +26,7 @@ export const saveUserPermissions = mutation({
     permissions: v.any(),
   },
   handler: async (ctx, { userId, permissions }) => {
-    await requireStaff(ctx);
+    const actor = await requireStaff(ctx);
     const list = Object.entries(permissions as Record<string, boolean>)
       .filter(([, v]) => v)
       .map(([k]) => k);
@@ -34,5 +34,18 @@ export const saveUserPermissions = mutation({
       permissions: list,
       updatedAt: Date.now(),
     });
+
+    // Notify the affected user that their permissions were updated
+    const targetProfile = await ctx.db.get(userId);
+    if (targetProfile?.clerkId && targetProfile.clerkId !== actor.clerkId) {
+      await ctx.db.insert("notifications", {
+        userId: targetProfile.clerkId,
+        title: "Permissions Updated",
+        body: `Your account permissions have been updated by ${actor.name ?? "an administrator"}. The changes are now active.`,
+        type: "user",
+        read: false,
+        createdAt: Date.now(),
+      });
+    }
   },
 });

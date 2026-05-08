@@ -15,6 +15,7 @@ import {
   getInventoryExpirySummary,
   listInventoryDamages,
   mapFlatRecordToPayload,
+  bulkPublishInventoryProducts,
   type InventoryProduct,
   type InventoryImportResult,
   type CreateInventoryProduct,
@@ -299,6 +300,9 @@ export default function InventoryPage() {
   const [importingRows, setImportingRows] = useState(false);
   const [importResult, setImportResult] = useState<InventoryImportResult | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [lastImportedIds, setLastImportedIds] = useState<string[]>([]);
+  const [publishingToWarehouse, setPublishingToWarehouse] = useState(false);
+  const [publishWarehouseId, setPublishWarehouseId] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const validateFileInputRef = useRef<HTMLInputElement | null>(null);
   const [expiryAlerts, setExpiryAlerts] = useState<InventoryRow[]>([]);
@@ -749,9 +753,14 @@ export default function InventoryPage() {
       const result = await importInventoryProducts(rows as CreateInventoryProduct[]);
       
       setImportResult(result);
+      // Capture IDs of successfully imported items for the Publish-to-Warehouse flow
+      const importedIds = (result.results ?? [])
+        .filter((r: any) => r.success && r.id)
+        .map((r: any) => String(r.id));
+      setLastImportedIds(importedIds);
       
       if (result.created > 0) {
-        showSuccess('Success', `Imported ${result.created} item(s) successfully`);
+        showSuccess('Success', `Imported ${result.created} item(s) as UNPUBLISHED. Use "Publish to Warehouse" below to make them available for orders.`);
       }
       if (result.failed > 0) {
         showError('Partial Import', `${result.created} created, ${result.failed} failed. Check results below.`);
@@ -2595,6 +2604,47 @@ export default function InventoryPage() {
                     )}
                   </>
                 )}
+              </div>
+            )}
+
+            {importResult && importResult.created > 0 && lastImportedIds.length > 0 && (
+              <div className="border border-green-200 bg-green-50 rounded-lg p-4 space-y-3">
+                <p className="text-sm font-semibold text-green-900">
+                  Publish imported items to a warehouse
+                </p>
+                <p className="text-xs text-green-700">
+                  Imported items are UNPUBLISHED by default. Select a warehouse below and click Publish to make them available for orders.
+                </p>
+                <select
+                  value={publishWarehouseId}
+                  onChange={(e) => setPublishWarehouseId(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-lg text-sm text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                >
+                  <option value="">— Select warehouse —</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id} value={w.id}>{w.name}</option>
+                  ))}
+                </select>
+                <button
+                  disabled={!publishWarehouseId || publishingToWarehouse}
+                  onClick={async () => {
+                    if (!publishWarehouseId) return;
+                    setPublishingToWarehouse(true);
+                    try {
+                      const r = await bulkPublishInventoryProducts(lastImportedIds, publishWarehouseId);
+                      showSuccess('Published', `${r.published} item(s) published and assigned to warehouse.`);
+                      setLastImportedIds([]);
+                      await fetchInventoryData(searchQuery);
+                    } catch (e: any) {
+                      showError('Publish failed', e.message || 'Could not publish items');
+                    } finally {
+                      setPublishingToWarehouse(false);
+                    }
+                  }}
+                  className="w-full py-2 px-4 bg-[#02016a] text-white text-sm font-medium rounded-lg hover:bg-[#03024a] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {publishingToWarehouse ? 'Publishing...' : `Publish ${lastImportedIds.length} item(s) to Warehouse`}
+                </button>
               </div>
             )}
 

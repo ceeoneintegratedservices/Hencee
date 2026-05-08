@@ -9,7 +9,9 @@ export type PaymentMethod =
   | "card"
   | "bank_transfer"
   | "cheque"
-  | "mobile_money";
+  | "mobile_money"
+  | "card_and_cash"
+  | "bank_transfer_and_cash";
 export type PaymentStatus = "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED";
 
 export interface SaleItemPayload {

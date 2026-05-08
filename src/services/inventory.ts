@@ -303,6 +303,16 @@ export async function deleteInventoryProduct(id: string): Promise<void> {
   await getConvexClient().mutation(api.inventory.remove, { id: id as Id<"inventoryItems"> });
 }
 
+export async function bulkPublishInventoryProducts(
+  ids: string[],
+  warehouseId?: string
+): Promise<{ published: number }> {
+  return getConvexClient().mutation(api.inventory.bulkPublish, {
+    ids: ids as Id<"inventoryItems">[],
+    warehouseId: warehouseId as Id<"warehouses"> | undefined,
+  }) as Promise<{ published: number }>;
+}
+
 export async function importInventoryProducts(
   rows: CreateInventoryProduct[]
 ): Promise<InventoryImportResult> {

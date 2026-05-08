@@ -172,6 +172,18 @@ export const approve = mutation({
       updatedAt: now,
     });
 
+    // Notify the user whose role was approved
+    if (profile.clerkId) {
+      await ctx.db.insert("notifications", {
+        userId: profile.clerkId,
+        title: "Role Request Approved",
+        body: `Your request for the "${role.name}" role has been approved. Your new permissions are now active.`,
+        type: "user",
+        read: false,
+        createdAt: now,
+      });
+    }
+
     return { ok: true };
   },
 });
@@ -205,6 +217,21 @@ export const reject = mutation({
       pendingRoleRequestId: undefined,
       updatedAt: now,
     });
+
+    // Notify the user whose role request was rejected
+    const profile = await ctx.db.get(req.profileId);
+    if (profile?.clerkId) {
+      await ctx.db.insert("notifications", {
+        userId: profile.clerkId,
+        title: "Role Request Declined",
+        body: note
+          ? `Your role request was declined. Reason: ${note}. Please re-submit with an appropriate role.`
+          : "Your role request was declined. Please re-submit with an appropriate role.",
+        type: "user",
+        read: false,
+        createdAt: now,
+      });
+    }
 
     return { ok: true };
   },

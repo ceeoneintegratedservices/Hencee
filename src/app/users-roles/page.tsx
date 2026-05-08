@@ -59,6 +59,67 @@ function buildPermissionKey(entity: string, action: string) {
   return `${entity}:${action}`;
 }
 
+/** Maps UI entity labels to Convex permission namespace */
+const ENTITY_TO_PERM: Record<string, string> = {
+  Dashboard: "dashboard",
+  Orders: "sales",
+  Inventory: "inventory",
+  Reports: "reports",
+  Customers: "customers",
+  Settings: "settings",
+  Approvals: "approvals",
+  Audits: "audit",
+  Expenses: "expenses",
+  "Users & Roles": "users",
+};
+
+/** Maps UI action labels to Convex permission action */
+const ACTION_TO_PERM: Record<string, string> = {
+  View: "view",
+  Create: "create",
+  Edit: "edit",
+  Delete: "delete",
+  Approve: "approve",
+};
+
+/**
+ * Converts the UI "Entity:Action" format to the Convex runtime "entity.action" format
+ * so that saved permissions are understood by hasPermission() at runtime.
+ */
+function convertUIPermsToConvex(uiPerms: Record<string, boolean>): Record<string, boolean> {
+  const result: Record<string, boolean> = {};
+  for (const [key, val] of Object.entries(uiPerms)) {
+    const colonIdx = key.indexOf(":");
+    if (colonIdx === -1) {
+      result[key] = val;
+      continue;
+    }
+    const entity = key.slice(0, colonIdx);
+    const action = key.slice(colonIdx + 1);
+    // Special cases
+    if (entity === "Audits" && action === "View") {
+      result["audit.view_logs"] = val;
+      continue;
+    }
+    if (entity === "Users & Roles" && action === "Approve") {
+      result["users.assign_roles"] = val;
+      continue;
+    }
+    if (entity === "Approvals" && action === "Approve") {
+      result["approve.daily_expense"] = val;
+      result["approve.user_accounts"] = val;
+      result["approve.refund"] = val;
+      result["approve.payment_request"] = val;
+      result["approval.view_requests"] = val;
+      continue;
+    }
+    const mappedEntity = ENTITY_TO_PERM[entity] ?? entity.toLowerCase().replace(/[^a-z]/g, "_");
+    const mappedAction = ACTION_TO_PERM[action] ?? action.toLowerCase();
+    result[`${mappedEntity}.${mappedAction}`] = val;
+  }
+  return result;
+}
+
 export default function UsersRolesPage() {
   const router = useRouter();
   const { isLoading: authLoading, isAuthenticated } = useConvexAuth();
@@ -939,8 +1000,9 @@ export default function UsersRolesPage() {
                 <button
                   onClick={async () => {
                     const overrides = userPermissionOverrides[selectedUser.id] || {};
-                    await saveUserPermissions(selectedUser.id, overrides);
-                    showSuccess('Saved', 'Permissions updated');
+                    const convexPerms = convertUIPermsToConvex(overrides);
+                    await saveUserPermissions(selectedUser.id, convexPerms);
+                    showSuccess('Saved', `Permissions updated for ${selectedUser.name}. They will take effect immediately.`);
                   }}
                   className="px-3 py-1.5 text-sm border border-blue-600 text-blue-600 rounded hover:bg-blue-50"
                 >

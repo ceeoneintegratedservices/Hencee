@@ -7,6 +7,8 @@ export const list = query({
     page: v.optional(v.number()),
     limit: v.optional(v.number()),
     search: v.optional(v.string()),
+    /** When true, only PUBLISHED items are returned (used by orders modal) */
+    publishedOnly: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     await requireStaff(ctx);
@@ -14,6 +16,12 @@ export const list = query({
     if (args.search) {
       const s = args.search.toLowerCase();
       rows = rows.filter((r) => r.name.toLowerCase().includes(s));
+    }
+    if (args.publishedOnly) {
+      rows = rows.filter((r) => {
+        const s = String(r.status ?? "PUBLISHED").toUpperCase();
+        return s === "PUBLISHED";
+      });
     }
     return rows;
   },
@@ -33,9 +41,12 @@ export const create = mutation({
     await requireStaff(ctx);
     const t = Date.now();
     const b = body as Record<string, unknown>;
+    const dateStamp = new Date(t).toISOString().slice(0, 10).replace(/-/g, "");
+    const rawSku = String(b.sku ?? "").trim();
+    const sku = rawSku ? `${rawSku}-${dateStamp}` : `SKU-${dateStamp}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
     return ctx.db.insert("inventoryItems", {
       name: String(b.name ?? "Product"),
-      sku: String(b.sku ?? `SKU-${t}`),
+      sku,
       categoryName: String(b.categoryName ?? "General"),
       warehouseId: b.warehouseId as import("./_generated/dataModel").Id<"warehouses">,
       purchasePrice: Number(b.purchasePrice ?? 0),

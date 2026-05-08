@@ -287,15 +287,13 @@ export const getDefaultPermissions = (role: string): string[] => {
     case ROLES.SALES:
     case ROLES.SALES_REPRESENTATIVE:
       return [
-        PERMISSIONS.DASHBOARD_VIEW,
+        // No dashboard access, no approvals access per business rule
         PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE,
         PERMISSIONS.CUSTOMERS_VIEW, PERMISSIONS.CUSTOMERS_CREATE,
         PERMISSIONS.PRODUCTS_VIEW,
         PERMISSIONS.INVENTORY_VIEW,
-        // Allow sales staff to access Approvals
-        PERMISSIONS.APPROVALS_VIEW,
-        // Sales reps should be able to create expense requests (travel, meals, etc.)
-        PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE
+        // Expenses: view page + create request only (no edit/delete/approve)
+        PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE,
       ];
     case ROLES.SUPPORT:
       return [

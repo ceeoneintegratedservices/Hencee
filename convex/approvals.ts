@@ -111,7 +111,19 @@ export const approveAccount = mutation({
   args: { userId: v.id("profiles") },
   handler: async (ctx, { userId }) => {
     await requireStaff(ctx);
-    await ctx.db.patch(userId, { approvalStatus: "approved", updatedAt: ts() });
+    const now = ts();
+    await ctx.db.patch(userId, { approvalStatus: "approved", updatedAt: now });
+    const profile = await ctx.db.get(userId);
+    if (profile?.clerkId) {
+      await ctx.db.insert("notifications", {
+        userId: profile.clerkId,
+        title: "Account Approved",
+        body: "Your account has been approved. You can now log in and use the platform.",
+        type: "user",
+        read: false,
+        createdAt: now,
+      });
+    }
     return ctx.db.get(userId);
   },
 });
@@ -120,7 +132,19 @@ export const rejectAccount = mutation({
   args: { userId: v.id("profiles"), reason: v.string() },
   handler: async (ctx, { userId }) => {
     await requireStaff(ctx);
-    await ctx.db.patch(userId, { approvalStatus: "rejected", updatedAt: ts() });
+    const now = ts();
+    await ctx.db.patch(userId, { approvalStatus: "rejected", updatedAt: now });
+    const profile = await ctx.db.get(userId);
+    if (profile?.clerkId) {
+      await ctx.db.insert("notifications", {
+        userId: profile.clerkId,
+        title: "Account Not Approved",
+        body: "Your account registration was not approved. Please contact the administrator for more information.",
+        type: "user",
+        read: false,
+        createdAt: now,
+      });
+    }
     return ctx.db.get(userId);
   },
 });

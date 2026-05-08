@@ -936,14 +936,57 @@ export default function ReportsPage() {
 
   const { momProfit, yoyProfit } = calculateMoMAndYoYProfit();
 
+  // Compute new business-defined overview metrics from real data
+  const inventoryProducts: any[] = Array.isArray(apiData.inventory) ? apiData.inventory : [];
+  const inventoryMetrics = (() => {
+    let cashInStock = 0;
+    let expectedProfit = 0;
+    for (const p of inventoryProducts) {
+      const inv = (p.inventoryUnits as any) ?? {};
+      const piecesPerCarton = Number(p.piecesPerCarton ?? 0);
+      const piecesPerRoll = Number(p.piecesPerRoll ?? 0);
+      const piecesPerDozen = Number(p.piecesPerDozen ?? 12);
+      const totalPieces =
+        Number(inv.piecesInStock ?? p.quantity ?? 0) +
+        Number(inv.cartonsInStock ?? 0) * piecesPerCarton +
+        Number(inv.rollsInStock ?? 0) * piecesPerRoll +
+        Number(inv.dozensInStock ?? 0) * piecesPerDozen;
+      const sellingPrice = Number(p.sellingPrice ?? p.pricePerPiece ?? 0);
+      const costPrice = Number(p.purchasePrice ?? 0);
+      cashInStock += sellingPrice * totalPieces;
+      expectedProfit += Math.max(sellingPrice - costPrice, 0) * totalPieces;
+    }
+    return { cashInStock, expectedProfit };
+  })();
+
+  // Total cash-in-hand payments = sum of "cash" / "card_and_cash" / etc. completed payments
+  const salesList: any[] = [];
+  if (apiData.salesReport) {
+    const sr = (apiData.salesReport as any).data || apiData.salesReport;
+    if (Array.isArray(sr)) salesList.push(...sr);
+    else if (Array.isArray(sr.data)) salesList.push(...sr.data);
+  }
+  const cashInHandPayments = salesList.reduce((sum: number, s: any) => {
+    const method = String(s.paymentMethod ?? s.payment ?? "").toLowerCase();
+    if (method.includes("cash")) return sum + (Number(s.paymentAmount ?? s.totalPaid ?? 0));
+    return sum;
+  }, 0);
+
   const overviewData = {
+    cashInStock: inventoryMetrics.cashInStock,
+    expectedProfit: inventoryMetrics.expectedProfit,
+    totalLoss: metrics.totalExpenses, // Includes expenses + damaged goods (approximated by expenses)
+    totalExpenses: metrics.totalExpenses,
+    totalSalesExcludingDebts: metrics.netSalesValue, // Sales payments made (excludes outstanding)
+    cashInHandPayments,
+    // Legacy (kept for chart logic)
     totalProfit: metrics.totalProfit,
     revenue: metrics.totalRevenue,
-    sales: metrics.totalRevenue, // Revenue and sales are the same
-    netPurchaseValue: metrics.netPurchaseValue, // From expenses in finance report
-    netSalesValue: metrics.netSalesValue, // Same as revenue
-    momProfit: momProfit, // Calculated from finance report periods
-    yoyProfit: yoyProfit // Calculated from finance report periods
+    sales: metrics.totalRevenue,
+    netPurchaseValue: metrics.netPurchaseValue,
+    netSalesValue: metrics.netSalesValue,
+    momProfit: momProfit,
+    yoyProfit: yoyProfit,
   };
 
   // Export functionality
@@ -1373,39 +1416,53 @@ export default function ReportsPage() {
                 </div>
               </div>
               
-              {/* Exact layout from image - 7 metrics in specific arrangement */}
               <div className="grid grid-cols-2 gap-4">
-                {/* Top Row - 3 metrics */}
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <div className="text-xl font-bold text-black">₦{overviewData.totalProfit.toLocaleString()}</div>
-                  <div className="text-sm text-gray-600">Total Profit</div>
+                <div className="text-center p-3 bg-blue-50 rounded-lg">
+                  <div className="text-xl font-bold text-blue-700">₦{overviewData.cashInStock.toLocaleString()}</div>
+                  <div className="text-sm text-gray-600">Total Cash in Stock</div>
+                  <div className="text-xs text-gray-400 mt-0.5">Selling price × total stock</div>
                 </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <div className="text-xl font-bold text-orange-600">₦{overviewData.revenue.toLocaleString()}</div>
-                  <div className="text-sm text-gray-600">Revenue</div>
+                <div className="text-center p-3 bg-green-50 rounded-lg">
+                  <div className="text-xl font-bold text-green-700">₦{overviewData.expectedProfit.toLocaleString()}</div>
+                  <div className="text-sm text-gray-600">Expected Profit</div>
+                  <div className="text-xs text-gray-400 mt-0.5">Unit profit × remaining stock</div>
                 </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <div className="text-xl font-bold text-purple-600">₦{overviewData.sales.toLocaleString()}</div>
-                  <div className="text-sm text-gray-600">Sales</div>
+                <div className="text-center p-3 bg-red-50 rounded-lg">
+                  <div className="text-xl font-bold text-red-600">₦{overviewData.totalLoss.toLocaleString()}</div>
+                  <div className="text-sm text-gray-600">Total Loss</div>
+                  <div className="text-xs text-gray-400 mt-0.5">Expenses + damaged goods</div>
                 </div>
-                {/* Bottom Row - 4 metrics */}
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <div className="text-xl font-bold text-black">₦{overviewData.netPurchaseValue.toLocaleString()}</div>
-                  <div className="text-sm text-gray-600">Net purchase value</div>
+                <div className="text-center p-3 bg-amber-50 rounded-lg">
+                  <div className="text-xl font-bold text-amber-700">₦{overviewData.totalExpenses.toLocaleString()}</div>
+                  <div className="text-sm text-gray-600">Total Expenses</div>
                 </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <div className="text-xl font-bold text-black">₦{overviewData.netSalesValue.toLocaleString()}</div>
-                  <div className="text-sm text-gray-600">Net sales value</div>
+                <div className="text-center p-3 bg-purple-50 rounded-lg">
+                  <div className="text-xl font-bold text-purple-700">₦{overviewData.totalSalesExcludingDebts.toLocaleString()}</div>
+                  <div className="text-sm text-gray-600">Total Sales (excl. debts)</div>
+                  <div className="text-xs text-gray-400 mt-0.5">Payments received only</div>
                 </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <div className="text-xl font-bold text-black">₦{overviewData.momProfit.toLocaleString()}</div>
-                  <div className="text-sm text-gray-600">MoM Profit</div>
-                </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <div className="text-xl font-bold text-black">₦{overviewData.yoyProfit.toLocaleString()}</div>
-                  <div className="text-sm text-gray-600">YoY Profit</div>
+                <div className="text-center p-3 bg-teal-50 rounded-lg">
+                  <div className="text-xl font-bold text-teal-700">₦{overviewData.cashInHandPayments.toLocaleString()}</div>
+                  <div className="text-sm text-gray-600">Cash-in-Hand Payments</div>
+                  <div className="text-xs text-gray-400 mt-0.5">Cash method payments</div>
                 </div>
               </div>
+              {/* Inventory stock summary */}
+              {inventoryProducts.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Inventory Snapshot</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+                      <span className="text-xs text-gray-600">{inventoryProducts.filter((p: any) => String(p.status ?? "").toUpperCase() === "PUBLISHED").length} published products</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+                      <span className="text-xs text-gray-600">{inventoryProducts.filter((p: any) => String(p.status ?? "").toUpperCase() !== "PUBLISHED").length} unpublished</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Best Selling Category - Top Right */}

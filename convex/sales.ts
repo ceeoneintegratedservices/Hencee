@@ -334,6 +334,33 @@ export const create = mutation({
       );
     }
 
+    // Deduct sold quantities from inventory
+    const saleItems = Array.isArray(args.items) ? args.items : [];
+    for (const item of saleItems) {
+      try {
+        const productId = (item as Record<string, unknown>).id as Id<"inventoryItems"> | undefined;
+        if (!productId) continue;
+        const product = await ctx.db.get(productId);
+        if (!product) continue;
+        const soldQty = Number((item as Record<string, unknown>).quantity ?? 0);
+        if (soldQty <= 0) continue;
+        const unitType = String((item as Record<string, unknown>).unitType ?? "piece").toLowerCase();
+        const inventoryUnits = { ...((product.inventoryUnits as Record<string, number> | undefined) ?? {}) };
+        if (unitType === "carton") {
+          inventoryUnits.cartonsInStock = Math.max((Number(inventoryUnits.cartonsInStock) || 0) - soldQty, 0);
+        } else if (unitType === "roll") {
+          inventoryUnits.rollsInStock = Math.max((Number(inventoryUnits.rollsInStock) || 0) - soldQty, 0);
+        } else if (unitType === "dozen") {
+          inventoryUnits.dozensInStock = Math.max((Number(inventoryUnits.dozensInStock) || 0) - soldQty, 0);
+        } else {
+          inventoryUnits.piecesInStock = Math.max((Number(inventoryUnits.piecesInStock) || 0) - soldQty, 0);
+        }
+        await ctx.db.patch(productId, { inventoryUnits, updatedAt: t });
+      } catch {
+        // Non-fatal: stock deduction failure must not block the sale
+      }
+    }
+
     const sale = await ctx.db.get(id);
     const customer = await ctx.db.get(args.customerId);
     const salePayments = await loadSalePayments(ctx, id);

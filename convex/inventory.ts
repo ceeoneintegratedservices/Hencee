@@ -256,7 +256,9 @@ export const importProducts = mutation({
     const t = ts();
     for (const row of rows) {
       try {
-        const sku = String(row.sku ?? "");
+        const dateStamp = new Date(t).toISOString().slice(0, 10).replace(/-/g, "");
+        const rawSku = String(row.sku ?? "").trim();
+        const sku = rawSku ? `${rawSku}-${dateStamp}` : `SKU-${dateStamp}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
         const parsedExpiryDate = normalizeExpiryDate(row.expiryDate);
         const inventoryUnits = row.inventoryUnits ?? {
           piecesInStock: Number(row.piecesInStock ?? 0),
@@ -290,7 +292,8 @@ export const importProducts = mutation({
             row.expiryAlertThreshold !== undefined ? Number(row.expiryAlertThreshold) : undefined,
           isOutsourced: row.isOutsourced === true,
           outsourcedDetails: row.outsourcedDetails ?? undefined,
-          status: row.status ? String(row.status) : "PUBLISHED",
+          // Bulk imports are always UNPUBLISHED until manually published to a warehouse
+          status: "UNPUBLISHED",
           metadata: row.metadata ?? undefined,
           createdAt: t,
           updatedAt: t,
@@ -305,6 +308,28 @@ export const importProducts = mutation({
       }
     }
     return { total: rows.length, created, failed: rows.length - created, results };
+  },
+});
+
+/** Publish a batch of UNPUBLISHED items to the given warehouse, making them available for orders. */
+export const bulkPublish = mutation({
+  args: {
+    ids: v.array(v.id("inventoryItems")),
+    warehouseId: v.optional(v.id("warehouses")),
+  },
+  handler: async (ctx, { ids, warehouseId }) => {
+    await requireStaff(ctx);
+    const t = ts();
+    let published = 0;
+    for (const id of ids) {
+      const item = await ctx.db.get(id);
+      if (!item) continue;
+      const patch: Record<string, unknown> = { status: "PUBLISHED", updatedAt: t };
+      if (warehouseId) patch.warehouseId = warehouseId;
+      await ctx.db.patch(id, patch);
+      published++;
+    }
+    return { published };
   },
 });
 

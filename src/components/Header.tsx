@@ -4,8 +4,10 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 import { usePermissions } from "@/hooks/usePermissions";
-import { getAllNotifications, type Notification } from "@/services/notifications";
+import { getAllNotifications, markNotificationAsRead, type Notification } from "@/services/notifications";
 
 interface HeaderProps {
   title: string;
@@ -25,6 +27,11 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
   const permissionsRef = useRef<HTMLDivElement>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [popupNotification, setPopupNotification] = useState<{ title: string; body: string } | null>(null);
+  const popupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Subscribe to live Convex notifications for real-time inbox
+  const convexNotifications = useQuery(api.notifications.list);
 
   // Load read notification IDs from localStorage
   const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(() => {
@@ -80,6 +87,40 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
       }
     }
   }, [isInitialized, user, getUserRole]);
+
+  // Merge live Convex notifications into the notification list and show popup for urgent ones
+  const seenConvexIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!convexNotifications || convexNotifications.length === 0) return;
+    const convexMapped: Notification[] = convexNotifications.map((n) => ({
+      id: n._id,
+      title: n.title,
+      message: n.body ?? "",
+      time: "Just now",
+      type: (n.type as Notification["type"]) ?? "system",
+      unread: !n.read,
+      timestamp: new Date(n.createdAt),
+    }));
+
+    // Show popup for brand-new unread expense/urgent notifications
+    for (const n of convexNotifications) {
+      if (!n.read && !seenConvexIdsRef.current.has(n._id)) {
+        seenConvexIdsRef.current.add(n._id);
+        if (n.type === "expense") {
+          setPopupNotification({ title: n.title, body: n.body ?? "" });
+          if (popupTimerRef.current) clearTimeout(popupTimerRef.current);
+          popupTimerRef.current = setTimeout(() => setPopupNotification(null), 6000);
+        }
+      }
+    }
+
+    setNotifications((prev) => {
+      const existingIds = new Set(prev.map((n) => n.id));
+      const newOnes = convexMapped.filter((n) => !existingIds.has(n.id));
+      if (newOnes.length === 0) return prev;
+      return [...newOnes, ...prev].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    });
+  }, [convexNotifications]);
 
   // Fetch notifications - Get ALL activities (not just filtered important ones)
   useEffect(() => {
@@ -201,6 +242,29 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
   };
 
   return (
+    <>
+    {/* Popup notification overlay for urgent/high-priority alerts */}
+    {popupNotification && (
+      <div className="fixed top-5 right-5 z-[9999] w-80 bg-white border-l-4 border-amber-500 rounded-lg shadow-xl p-4 animate-slide-in flex items-start gap-3">
+        <div className="flex-shrink-0 w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center">
+          <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-gray-900">{popupNotification.title}</p>
+          <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{popupNotification.body}</p>
+        </div>
+        <button
+          onClick={() => setPopupNotification(null)}
+          className="flex-shrink-0 text-gray-400 hover:text-gray-600 ml-1"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    )}
     <header className="bg-white flex items-center justify-between px-5 py-4 shadow-sm sticky top-0 z-10 w-full">
       <div className="flex items-center gap-4">
         {/* Hamburger for mobile */}
@@ -373,9 +437,10 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
                             <div 
                               className="flex-1 min-w-0 cursor-pointer"
                               onClick={() => {
-                                // Mark as read when clicked
                                 if (!isRead) {
                                   setReadNotificationIds(prev => new Set([...prev, notification.id]));
+                                  // Mark as read in Convex DB for server-side notifications
+                                  markNotificationAsRead(notification.id).catch(() => {});
                                 }
                               }}
                             >
@@ -466,5 +531,6 @@ export default function Header({ title, sidebarOpen, setSidebarOpen }: HeaderPro
         )}
       </div>
     </header>
+    </>
   );
 }

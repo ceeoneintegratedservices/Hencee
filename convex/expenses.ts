@@ -84,6 +84,15 @@ export const get = query({
   },
 });
 
+const MANAGER_ROLE_TYPES = new Set([
+  "Admin",
+  "MD",
+  "GM",
+  "Managing Director",
+  "General Manager",
+  "Manager",
+]);
+
 export const create = mutation({
   args: {
     title: v.string(),
@@ -95,9 +104,12 @@ export const create = mutation({
     metadata: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
-    await requireStaff(ctx);
+    const actor = await requireStaff(ctx);
     const t = ts();
-    return ctx.db.insert("expenses", {
+    const meta = args.metadata as { priority?: string } | undefined;
+    const priority = (meta?.priority ?? "").toUpperCase();
+
+    const expenseId = await ctx.db.insert("expenses", {
       title: args.title,
       amount: args.amount,
       category: args.category,
@@ -109,6 +121,31 @@ export const create = mutation({
       createdAt: t,
       updatedAt: t,
     });
+
+    // Fan out popup notifications to Admin/MD/GM for high-priority expenses
+    if (priority === "HIGH" || priority === "URGENT") {
+      const allProfiles = await ctx.db.query("profiles").collect();
+      const managers = allProfiles.filter(
+        (p) => p.roleType && MANAGER_ROLE_TYPES.has(p.roleType) && p.clerkId
+      );
+      const amountFormatted = `₦${args.amount.toLocaleString()}`;
+      const urgencyLabel = priority === "URGENT" ? "Urgent" : "High Priority";
+      for (const manager of managers) {
+        if (manager.clerkId !== actor.clerkId) {
+          await ctx.db.insert("notifications", {
+            userId: manager.clerkId,
+            title: `[${urgencyLabel}] Expense Request`,
+            body: `${args.title} — ${amountFormatted}${args.department ? ` (${args.department})` : ""}. Requires your approval.`,
+            type: "expense",
+            read: false,
+            metadata: { expenseId, priority },
+            createdAt: t,
+          });
+        }
+      }
+    }
+
+    return expenseId;
   },
 });
 

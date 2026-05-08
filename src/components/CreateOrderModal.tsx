@@ -11,6 +11,7 @@ import { useCloudinaryUpload } from '@/hooks/useCloudinaryUpload';
 import { createUser } from "@/services/users";
 import { listRoles } from "@/services/permissions";
 import { useNotifications } from "@/components/Notification";
+import { usePermissions } from "@/hooks/usePermissions";
 import { getWarehouses, type Warehouse } from "@/services/warehouses";
 
 interface CreateOrderModalProps {
@@ -50,6 +51,12 @@ interface OrderItem {
   warehouseName?: string;
   productSize?: string;
   productSizeUnit?: string;
+  /** Per-unit-type prices stored at add time so unit selection can auto-sync price */
+  pricePerPiece?: number;
+  pricePerCarton?: number;
+  pricePerRoll?: number;
+  pricePerDozen?: number;
+  baseSellingPrice?: number;
 }
 
 interface PaymentFormState {
@@ -98,6 +105,8 @@ const FALLBACK_PAYMENT_METHOD_OPTIONS: Array<{ value: PaymentMethod; label: stri
   { value: "cash", label: "Cash" },
   { value: "card", label: "Card" },
   { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "card_and_cash", label: "Card + Cash" },
+  { value: "bank_transfer_and_cash", label: "Bank Transfer + Cash" },
   { value: "cheque", label: "Cheque" },
   { value: "mobile_money", label: "Mobile Money" },
 ];
@@ -148,6 +157,7 @@ export default function CreateOrderModal({
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [warehouseMap, setWarehouseMap] = useState<Map<string, string>>(new Map());
   const [showInvoicePreview, setShowInvoicePreview] = useState(false);
+  const { user: currentUser } = usePermissions();
 
   // New customer form state
   const [newCustomerData, setNewCustomerData] = useState({
@@ -160,6 +170,8 @@ export default function CreateOrderModal({
   });
   const [creatingCustomer, setCreatingCustomer] = useState(false);
   const [customerBalance, setCustomerBalance] = useState<number | null>(null);
+  /** For card+cash / bank_transfer+cash: how much of the split came as cash */
+  const [splitCashAmount, setSplitCashAmount] = useState<string>("");
   const { uploadImage, uploadProgress } = useCloudinaryUpload();
   const { showSuccess, showError } = useNotifications();
   const [showCreateAccountModal, setShowCreateAccountModal] = useState(false);
@@ -251,7 +263,7 @@ export default function CreateOrderModal({
       setProductsError(null);
       
       try {
-        const productsArray = await listProducts({ limit: 100 });
+        const productsArray = await listProducts({ limit: 200, publishedOnly: true });
         
         // Debug: Log the actual structure of the API response
         if (process.env.NODE_ENV === 'development' && productsArray.length > 0) {
@@ -295,16 +307,20 @@ export default function CreateOrderModal({
               Number(product.piecesPerDozen ?? 12);
 
           return {
-          id: String(product.id || ''),
-          name: String(product.name || 'Unknown Product'),
-          price: Number(product.price || product.sellingPrice || 0),
-          sellingPrice: Number(product.sellingPrice || product.price || 0),
-          category: typeof product.category === 'object' && product.category !== null 
-            ? ((product.category as any).name || (product.category as any).label || 'General')
-            : String(product.category || 'General'),
-          stock: normalizedStock,
-          quantity: normalizedStock,
-          description: String(product.description || ''),
+            id: String(product.id || ''),
+            name: String(product.name || 'Unknown Product'),
+            price: Number(product.price || product.sellingPrice || 0),
+            sellingPrice: Number(product.sellingPrice || product.price || 0),
+            pricePerPiece: product.pricePerPiece ? Number(product.pricePerPiece) : undefined,
+            pricePerCarton: product.pricePerCarton ? Number(product.pricePerCarton) : undefined,
+            pricePerRoll: product.pricePerRoll ? Number(product.pricePerRoll) : undefined,
+            pricePerDozen: product.pricePerDozen ? Number(product.pricePerDozen) : undefined,
+            category: typeof product.category === 'object' && product.category !== null
+              ? ((product.category as any).name || (product.category as any).label || 'General')
+              : String(product.category || 'General'),
+            stock: normalizedStock,
+            quantity: normalizedStock,
+            description: String(product.description || ''),
             productSize: productSize ? String(productSize) : undefined,
             productSizeUnit: productSizeUnit ? String(productSizeUnit) : undefined,
             warehouseId: product.warehouseId || product.warehouse?.id || undefined,
@@ -582,6 +598,37 @@ export default function CreateOrderModal({
     }
   };
 
+  /** Download the invoice as a PDF-ready HTML file that the browser can Save as PDF */
+  const shareInvoiceAsPDF = async () => {
+    try {
+      const invoiceContent = generateInvoiceHTML();
+      const blob = new Blob([invoiceContent], { type: "text/html" });
+      const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
+      // Try native share API first (mobile / modern browsers)
+      if (navigator.share && navigator.canShare) {
+        const file = new File([blob], `${invoiceNumber}.html`, { type: "text/html" });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: `Invoice ${invoiceNumber}`, text: "Invoice from Hencee Pharmaceuticals" });
+          return;
+        }
+      }
+      // Fallback: open in new tab with print-to-PDF prompt
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(invoiceContent);
+        printWindow.document.close();
+        printWindow.focus();
+        // Add a save/print note at the top
+        showSuccess("Invoice ready", "In the print dialog, choose 'Save as PDF' to download.");
+        setTimeout(() => printWindow.print(), 500);
+      }
+    } catch (err: any) {
+      if (err?.name !== "AbortError") {
+        showError("Share failed", err?.message || "Could not share invoice");
+      }
+    }
+  };
+
   // Create customer account
   const handleCreateCustomerAccount = async () => {
     if (!explicitCustomerId && !orderData.customer) {
@@ -646,19 +693,24 @@ export default function CreateOrderModal({
 
   // Generate invoice HTML for printing
   const generateInvoiceHTML = () => {
-    const currentDate = new Date().toLocaleDateString();
-    const currentTime = new Date().toLocaleTimeString();
+    const currentDate = new Date().toLocaleDateString("en-NG", { year: "numeric", month: "long", day: "numeric" });
+    const currentTime = new Date().toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" });
     const invoiceNumber = `INV-${Date.now().toString().slice(-6)}`;
     const showDiscountColumn = orderData.showDiscountOnInvoice;
     const discountColumnHeader = showDiscountColumn ? "<th>Discount</th>" : "";
     const paymentMethodLabel = getPaymentMethodLabel(paymentForm.method || orderData.paymentType);
-    const paymentStatusLabel = getPaymentStatusLabel(paymentForm.status);
-    const formattedPaymentAmount = paymentForm.amount
-      ? formatAmount(Number(paymentForm.amount))
-      : formatAmount(calculateTotal());
-    
-    // Show bank transfer details if payment method is bank transfer
-    const isBankTransfer = paymentForm.method === "bank_transfer";
+    const paymentType = paymentForm.status === "COMPLETED" ? "Full Payment" : "Part Payment";
+    const paidAmount = paymentForm.amount
+      ? Number(paymentForm.amount)
+      : (paymentForm.status === "COMPLETED" ? calculateTotal() : 0);
+    const formattedPaymentAmount = formatAmount(paidAmount);
+    const outstanding = Math.max(calculateTotal() - paidAmount, 0);
+    const saleMadeBy = currentUser
+      ? ((currentUser as any).name || `${(currentUser as any).firstName ?? ""} ${(currentUser as any).lastName ?? ""}`.trim() || (currentUser as any).email || "Staff")
+      : "Staff";
+
+    // Show bank/split transfer details
+    const isBankTransfer = paymentForm.method === "bank_transfer" || paymentForm.method === "bank_transfer_and_cash";
     const bankTransferInfo = isBankTransfer
       ? (() => {
           const parts = [];
@@ -667,6 +719,11 @@ export default function CreateOrderModal({
           }
           if (paymentForm.transactionReference && paymentForm.transactionReference.trim()) {
             parts.push(`<p><strong>Transaction Reference:</strong> ${paymentForm.transactionReference}</p>`);
+          }
+          if (splitCashAmount) {
+            parts.push(`<p><strong>Cash Portion:</strong> ${formatAmount(Number(splitCashAmount))}</p>`);
+            const cardPortion = Math.max(paidAmount - Number(splitCashAmount), 0);
+            parts.push(`<p><strong>Transfer/Card Portion:</strong> ${formatAmount(cardPortion)}</p>`);
           }
           return parts.join('');
         })()
@@ -816,16 +873,18 @@ export default function CreateOrderModal({
           <div class="invoice-details">
             <div class="company-info">
               <h3>Hencee Pharmaceuticals</h3>
-              <p>123 Business Street</p>
+              <p>12 Pharmaceutical Avenue, Victoria Island</p>
               <p>Lagos, Nigeria</p>
-              <p>Phone: +234 800 123 4567</p>
-              <p>Email: henceepharmaceuticals@outlook.com</p>
+              <p>Phone: +234 901 234 5678</p>
+              <p>Email: info@henceepharmaceuticals.com</p>
             </div>
             <div class="customer-info">
               <h3>Bill To:</h3>
               <p><strong>${orderData.customer || 'Customer Name'}</strong></p>
               <p>Date: ${currentDate}</p>
               <p>Time: ${currentTime}</p>
+              <p><strong>Invoice #:</strong> ${invoiceNumber}</p>
+              <p><strong>Sale Made By:</strong> ${saleMadeBy}</p>
             </div>
           </div>
           
@@ -841,19 +900,21 @@ export default function CreateOrderModal({
               </tr>
             </thead>
             <tbody>
-              ${orderData.items.map(item => `
+              ${orderData.items.map(item => {
+                const unitLabel = item.unitType ? item.unitType.charAt(0).toUpperCase() + item.unitType.slice(1) + (item.quantity !== 1 ? 's' : '') : '';
+                return `
                 <tr>
                   <td>
                     <strong>${item.name}</strong>
                     ${item.productSize && item.productSizeUnit ? `<br><span style="font-size: 0.85em; color: #666;">${item.productSize} ${item.productSizeUnit}</span>` : ''}
                   </td>
                   <td>${item.warehouseName || item.warehouseNumber || 'N/A'}</td>
-                  <td>${item.quantity}</td>
+                  <td>${item.quantity}${unitLabel ? ` <span style="font-size:0.85em;color:#555;">${unitLabel}</span>` : ''}</td>
                   <td>${formatAmount(item.unitPrice)}</td>
                   ${showDiscountColumn ? `<td>${formatAmount(item.discountAmount || 0)}</td>` : ''}
                   <td><strong>${formatAmount(item.total)}</strong></td>
                 </tr>
-              `).join('')}
+              `}).join('')}
             </tbody>
           </table>
           
@@ -863,8 +924,9 @@ export default function CreateOrderModal({
           
           <div class="payment-info">
             <p><strong>Payment Method:</strong> ${paymentMethodLabel}</p>
-            <p><strong>Payment Status:</strong> ${paymentStatusLabel}</p>
+            <p><strong>Payment Type:</strong> ${paymentType}</p>
             <p><strong>Amount Paid:</strong> ${formattedPaymentAmount}</p>
+            ${outstanding > 0 ? `<p style="color:#b45309;font-weight:bold;"><strong>Outstanding Balance:</strong> ${formatAmount(outstanding)}</p>` : '<p style="color:#15803d;font-weight:bold;">Fully Paid ✓</p>'}
             ${bankTransferInfo}
           </div>
           
@@ -909,6 +971,7 @@ export default function CreateOrderModal({
         warehouseName = warehouseMap.get(product.warehouseId);
       }
       
+      const prod = product as unknown as Record<string, unknown>;
       const newItem: OrderItem = {
         id: product.id,
         name: product.name,
@@ -922,6 +985,11 @@ export default function CreateOrderModal({
         productSizeUnit: product.productSizeUnit,
         warehouseNumber: product.warehouseId,
         warehouseName: warehouseName,
+        pricePerPiece: Number(prod.pricePerPiece ?? productPrice) || productPrice,
+        pricePerCarton: prod.pricePerCarton ? Number(prod.pricePerCarton) : undefined,
+        pricePerRoll: prod.pricePerRoll ? Number(prod.pricePerRoll) : undefined,
+        pricePerDozen: prod.pricePerDozen ? Number(prod.pricePerDozen) : undefined,
+        baseSellingPrice: productPrice,
       };
       setOrderData(prev => ({ ...prev, items: [...prev.items, newItem] }));
     }
@@ -952,21 +1020,23 @@ export default function CreateOrderModal({
   const updateItemUnitType = (productId: string, unitType: SaleUnitType) => {
     const updatedItems = orderData.items.map(item => {
       if (item.id === productId) {
-        // When dozen is selected, auto-set price per roll to 12 (since dozen = 12 pieces)
-        // This handles the case where pricePerRoll represents pieces per roll
-        const updatedItem = {
+        let newPrice = item.unitPrice;
+        if (unitType === "piece") {
+          newPrice = item.pricePerPiece ?? item.baseSellingPrice ?? item.unitPrice;
+        } else if (unitType === "carton") {
+          newPrice = item.pricePerCarton ?? item.unitPrice;
+        } else if (unitType === "roll") {
+          newPrice = item.pricePerRoll ?? item.unitPrice;
+        } else if (unitType === "dozen") {
+          newPrice = item.pricePerDozen ?? item.unitPrice;
+        }
+        return {
           ...item,
           unitType,
+          unitPrice: newPrice,
+          price: newPrice,
+          total: calculateLineTotal(newPrice, item.discountAmount, item.quantity),
         };
-        
-        // If dozen is selected and we need to handle price per roll logic
-        // Note: This assumes the product has pricePerRoll field available
-        if (unitType === "dozen") {
-          // Auto-adjust quantity or price calculation based on dozen (12 pieces)
-          // The actual price per roll handling would depend on product data structure
-        }
-        
-        return updatedItem;
       }
       return item;
     });
@@ -1130,6 +1200,7 @@ export default function CreateOrderModal({
       }
 
       if (derivedMethod) {
+        const cashPortion = splitCashAmount ? Number(splitCashAmount) : undefined;
         salePayload.payment = {
           method: derivedMethod as PaymentMethod,
           status: derivedStatus,
@@ -1139,6 +1210,7 @@ export default function CreateOrderModal({
           transactionReference: paymentForm.transactionReference || undefined,
           chequeNumber: paymentForm.chequeNumber || undefined,
           accountName: paymentForm.accountName || undefined,
+          ...(cashPortion !== undefined && { cashPortion }),
         };
       }
 
@@ -1172,12 +1244,21 @@ export default function CreateOrderModal({
               <div className="flex items-center gap-3">
                 <button
                   onClick={printInvoice}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                   </svg>
-                  Print Invoice
+                  Print
+                </button>
+                <button
+                  onClick={shareInvoiceAsPDF}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                  Share PDF
                 </button>
                 <button
                   onClick={() => setShowInvoicePreview(false)}
@@ -1553,28 +1634,40 @@ export default function CreateOrderModal({
                   </select>
                 </div>
 
+                {/* Customer outstanding balance notice */}
+                {customerBalance !== null && customerBalance > 0 && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <p className="text-[13px] font-semibold text-amber-900">
+                      Existing outstanding balance: ₦{customerBalance.toLocaleString()}
+                    </p>
+                    <p className="text-[12px] text-amber-700 mt-0.5">
+                      This balance is carried over from previous unpaid orders.
+                    </p>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                    <label className="block text-[14px] text-[#45464e] mb-2">Payment Status</label>
+                    <label className="block text-[14px] text-[#45464e] mb-2">Payment Type</label>
                   <select
                       value={paymentForm.status}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const st = e.target.value as PaymentStatus;
                         setPaymentForm((prev) => ({
                           ...prev,
-                          status: e.target.value as PaymentStatus,
-                        }))
-                      }
+                          status: st,
+                          // Auto-fill amount to full total for Full Payment
+                          amount: st === "COMPLETED" ? String(calculateTotal()) : prev.amount,
+                        }));
+                      }}
                     className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
                   >
-                      {paymentStatusOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
+                    <option value="PENDING">Part Payment</option>
+                    <option value="COMPLETED">Full Payment</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[14px] text-[#45464e] mb-2">Payment Amount</label>
+                  <label className="block text-[14px] text-[#45464e] mb-2">Amount Paid (₦)</label>
                   <div className="relative">
                     <input
                       type="number"
@@ -1586,16 +1679,69 @@ export default function CreateOrderModal({
                             amount: e.target.value,
                           }))
                         }
-                        placeholder="Enter amount or leave blank"
+                        placeholder={paymentForm.status === "COMPLETED" ? String(calculateTotal()) : "Amount received"}
                       className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent pl-8"
                     />
                     <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-[14px]">₦</span>
                   </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Required when marking status as Completed.
-                    </p>
+                  {(() => {
+                    const total = calculateTotal();
+                    const paid = Number(paymentForm.amount) || (paymentForm.status === "COMPLETED" ? total : 0);
+                    const outstanding = Math.max(total - paid, 0);
+                    return outstanding > 0 ? (
+                      <p className="text-xs text-amber-600 mt-1 font-medium">
+                        Outstanding balance: ₦{outstanding.toLocaleString()}
+                      </p>
+                    ) : paid >= total && total > 0 ? (
+                      <p className="text-xs text-green-600 mt-1 font-medium">Fully paid ✓</p>
+                    ) : null;
+                  })()}
                   </div>
                 </div>
+
+                {/* Split-payment cash portion for card+cash and bank_transfer+cash */}
+                {(paymentForm.method === "card_and_cash" || paymentForm.method === "bank_transfer_and_cash") && (
+                  <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-3 space-y-3">
+                    <p className="text-[13px] font-medium text-indigo-900">
+                      Split Payment Breakdown
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[12px] text-[#45464e] mb-1">
+                          {paymentForm.method === "card_and_cash" ? "Card" : "Bank Transfer"} Amount (₦)
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            value={
+                              paymentForm.amount && splitCashAmount
+                                ? String(Math.max(Number(paymentForm.amount) - Number(splitCashAmount), 0))
+                                : paymentForm.amount
+                            }
+                            readOnly
+                            className="w-full p-2 border border-gray-300 rounded-lg text-[13px] bg-white text-[#45464e] pl-6"
+                          />
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-[12px]">₦</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[12px] text-[#45464e] mb-1">Cash Amount (₦)</label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            value={splitCashAmount}
+                            onChange={(e) => setSplitCashAmount(e.target.value)}
+                            placeholder="Cash portion"
+                            className="w-full p-2 border border-gray-300 rounded-lg text-[13px] text-[#45464e] pl-6 focus:outline-none focus:ring-2 focus:ring-[#02016a]"
+                          />
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500 text-[12px]">₦</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-[14px] text-[#45464e] mb-2">Payment Reference</label>
@@ -1613,7 +1759,7 @@ export default function CreateOrderModal({
                   />
                 </div>
 
-                {paymentForm.method === "bank_transfer" && (
+                {(paymentForm.method === "bank_transfer" || paymentForm.method === "bank_transfer_and_cash") && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[14px] text-[#45464e] mb-2">Sender Name</label>
@@ -2134,6 +2280,16 @@ export default function CreateOrderModal({
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
               </svg>
               Print Invoice
+            </button>
+            <button
+              onClick={shareInvoiceAsPDF}
+              disabled={orderData.items.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg font-medium text-[14px] hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+              Share PDF
             </button>
             <button
               onClick={() => setShowCreateAccountModal(true)}
