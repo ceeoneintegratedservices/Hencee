@@ -1,4 +1,3 @@
-name,sku,categoryName,warehouseId,purchasePrice,sellingPrice,expiryDate
-Ibuprofen,AC-IBU-400,Tablets,9b40f144-e2e8-4d04-8ce9-598d396c2257,25000,35000,3/5/2026
-Piroxicam,PIRO-CAP-20,Capsules,9b40f144-e2e8-4d04-8ce9-598d396c2257,25000,35000,3/5/2026
-Paracetamol,PARA-500,Tablets,9b40f144-e2e8-4d04-8ce9-598d396c2257,15000,25000,6/15/2026
+name,categoryName,sku,warehouseId,purchasePrice,sellingPrice,expirydate
+Ibuprofen,Tablets,ac-ibu-400,warehouse001,25000,35000,3/5/2026
+Piroxicam,Capsules,piro-cap-20,warehouse001,25000,35000,3/5/2026

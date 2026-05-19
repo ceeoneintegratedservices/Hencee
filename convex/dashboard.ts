@@ -171,3 +171,36 @@ export const summary = query({
     return { ok: true };
   },
 });
+
+/** Aggregates for overview: discounts on sales + damaged inventory value. */
+export const lossMetrics = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireStaff(ctx);
+    const sales = await ctx.db.query("sales").collect();
+    const products = await ctx.db.query("inventoryItems").collect();
+    const damages = await ctx.db.query("inventoryDamages").collect();
+
+    const productById = new Map(products.map((p) => [p._id, p]));
+
+    let totalDiscounts = 0;
+    for (const sale of sales) {
+      const items = Array.isArray(sale.items) ? sale.items : [];
+      for (const item of items) {
+        const row = item as Record<string, unknown>;
+        totalDiscounts += Number(row.discountAmount ?? 0);
+      }
+      const meta = (sale.metadata ?? {}) as Record<string, unknown>;
+      totalDiscounts += Number(meta.discountTotal ?? 0);
+    }
+
+    let totalDamagedValue = 0;
+    for (const d of damages) {
+      const product = productById.get(d.productId);
+      const cost = Number(product?.purchasePrice ?? product?.sellingPrice ?? 0);
+      totalDamagedValue += cost * Number(d.quantity ?? 0);
+    }
+
+    return { totalDiscounts, totalDamagedValue, totalLoss: totalDiscounts + totalDamagedValue };
+  },
+});

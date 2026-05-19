@@ -43,6 +43,10 @@ type InventoryRow = InventoryItem & {
   piecesPerCarton?: number;
   piecesPerRoll?: number;
   piecesPerDozen?: number;
+  stockPieces?: number;
+  stockCartons?: number;
+  stockRolls?: number;
+  stockDozens?: number;
 };
 
 const splitCsvLine = (line: string): string[] => {
@@ -197,6 +201,10 @@ const mapApiProductToInventoryItem = (product: InventoryProduct): InventoryRow =
     unitPrice: sellingPrice,
     costPrice: product.purchasePrice ?? 0,
     inStock: normalizedPiecesInStock,
+    stockPieces: piecesInStock,
+    stockCartons: cartonsInStock,
+    stockRolls: rollsInStock,
+    stockDozens: dozensInStock,
     discount: 0,
     totalValue: sellingPrice * normalizedPiecesInStock,
     status:
@@ -710,14 +718,6 @@ export default function InventoryPage() {
           throw new Error(`Row ${index + 2}: Missing required fields: ${missingFields.join(', ')}. Payload: ${JSON.stringify(payload)}`);
         }
         
-        // Validate warehouseId exists
-        if (payload.warehouseId && warehouses.length > 0) {
-          const warehouseExists = warehouses.some(w => w.id === payload.warehouseId);
-          if (!warehouseExists) {
-            throw new Error(`Row ${index + 2}: Warehouse ID "${payload.warehouseId}" does not exist. Available warehouses: ${warehouses.map(w => w.id).join(', ')}`);
-          }
-        }
-        
         return payload;
       });
       
@@ -768,6 +768,14 @@ export default function InventoryPage() {
       
       await fetchInventoryData(searchQuery);
       await fetchExpiryAlerts(expiryThreshold);
+      if ((result.warehousesCreated ?? 0) > 0) {
+        try {
+          const data = await getWarehouses();
+          setWarehouses(data);
+        } catch {
+          // non-fatal
+        }
+      }
     } catch (error: any) {
       const errorMessage = error.message || 'Failed to import inventory';
       setImportError(errorMessage);
@@ -1929,7 +1937,7 @@ export default function InventoryPage() {
                       onClick={() => handleSort('inStock')}
                     >
                       <div className="flex items-center gap-1">
-                        In-Stock
+                        Stock (P / C / R / D)
                         <svg className="w-3 h-3 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
                         </svg>
@@ -2040,13 +2048,18 @@ export default function InventoryPage() {
                         {InventoryDataService.formatCurrency(item.unitPrice)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.inStock === 0 ? (
-                          <span className="text-red-600 font-medium">Out of Stock</span>
-                        ) : item.inStock < getLowStockThreshold(item) ? (
-                          <span className="text-orange-600 font-medium">Low Stock ({item.inStock})</span>
-                        ) : (
-                          item.inStock
-                        )}
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-xs text-gray-500">
+                            P:{item.stockPieces ?? 0} · C:{item.stockCartons ?? 0} · R:{item.stockRolls ?? 0} · D:{item.stockDozens ?? 0}
+                          </span>
+                          {item.inStock === 0 ? (
+                            <span className="text-red-600 font-medium">Out of Stock</span>
+                          ) : item.inStock < getLowStockThreshold(item) ? (
+                            <span className="text-orange-600 font-medium">Low ({item.inStock} pcs eq.)</span>
+                          ) : (
+                            <span>{item.inStock} pcs eq.</span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {InventoryDataService.formatCurrency(item.discount)}
@@ -2468,10 +2481,11 @@ export default function InventoryPage() {
                 <strong>Tip:</strong> Use "Validate CSV" first to preview the JSON and check for errors before importing.
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                Required columns: name, sku, categoryName, warehouseId, purchasePrice, sellingPrice, expiryDate.
+                Required columns: name, sku, categoryName, warehouseId, purchasePrice, sellingPrice, expiryDate
+                (column names are case-insensitive; aliases like <code className="font-mono">desc</code> → description work).
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                Optional: productSize, productSizeUnit (dosage strength), packSize (unit of sale: Tablet, Capsule, etc.)
+                Optional: productSize, productSizeUnit or sizeunit (dosage), packSize (Tablet, Capsule, etc.)
               </p>
               <div className="mt-3 text-left bg-blue-50 border border-blue-100 rounded-lg p-3">
                 <p className="text-xs font-semibold text-blue-900">Inventory calculation breakdown</p>
@@ -2546,7 +2560,8 @@ export default function InventoryPage() {
                   </div>
                 )}
                 <p className="text-xs text-gray-500 mt-2">
-                  Use these warehouse IDs in the <code className="bg-gray-100 px-1 rounded">warehouseId</code> column of your CSV file.
+                  Use a Convex warehouse ID or your own code (e.g. <code className="bg-gray-100 px-1 rounded">warehouse001</code>) in the{" "}
+                  <code className="bg-gray-100 px-1 rounded">warehouseId</code> column. New codes are created automatically on import.
                 </p>
               </div>
             </div>
@@ -2561,6 +2576,11 @@ export default function InventoryPage() {
               <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 space-y-2 border border-gray-100">
                 <p><strong>Processed rows:</strong> {importResult.total}</p>
                 <p className="text-green-600 font-medium">✓ Created: {importResult.created}</p>
+                {(importResult.warehousesCreated ?? 0) > 0 && (
+                  <p className="text-blue-600 font-medium">
+                    ✓ Warehouses created: {importResult.warehousesCreated}
+                  </p>
+                )}
                 {importResult.failed > 0 && (
                   <>
                     <p className="text-red-600 font-medium">✗ Failed: {importResult.failed}</p>

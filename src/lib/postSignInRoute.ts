@@ -10,6 +10,11 @@ export type ProfileForRouting = {
   pendingRoleRequestId?: string | null;
 };
 
+function hasPerm(perms: string[], key: string): boolean {
+  return perms.includes(key);
+}
+
+/** Permission-first landing; role used when permissions are empty. */
 export function getPostSignInPath(profile: ProfileForRouting | null | undefined): string {
   if (!profile) {
     return "/dashboard";
@@ -31,47 +36,42 @@ export function getPostSignInPath(profile: ProfileForRouting | null | undefined)
   const roleName = (profile.roleName ?? "").trim();
   const rt = roleType.toLowerCase();
   const rn = roleName.toLowerCase();
+  const perms = profile.permissions ?? [];
 
   if (roleType === "Customer" || rt === "customer" || rn === "customer" || rt.includes("customer")) {
     return "/customer-portal";
   }
 
-  if (rt === "admin" || roleType === "ADMIN" || roleType === "Admin") {
-    return "/dashboard";
+  // Permission-based routing (highest priority for staff)
+  if (hasPerm(perms, "dashboard.view")) return "/dashboard";
+  if (hasPerm(perms, "sales.view")) return "/orders";
+  if (hasPerm(perms, "inventory.view") || hasPerm(perms, "products.view")) return "/inventory";
+  if (hasPerm(perms, "customers.view")) return "/customers";
+  if (
+    hasPerm(perms, "approvals.view") ||
+    hasPerm(perms, "approval.view_requests") ||
+    hasPerm(perms, "approve.daily_expense")
+  ) {
+    return "/approvals";
   }
+  if (hasPerm(perms, "reports.view") || hasPerm(perms, "view_reports")) return "/reports";
+  if (hasPerm(perms, "users.view") || hasPerm(perms, "view_users")) return "/users-roles";
+  if (hasPerm(perms, "expenses.view") || hasPerm(perms, "view_expenses")) return "/expenses";
+  if (hasPerm(perms, "expenses.create")) return "/expenses?mode=request";
+  if (hasPerm(perms, "settings.view")) return "/settings";
 
-  if (roleType === "Staff" || rt === "staff") {
-    return "/dashboard";
-  }
-
-  if (roleType === "MD" || rt === "md" || rn.includes("managing director")) {
-    return "/dashboard";
-  }
-
-  if (roleType === "GM" || rt === "gm" || rn.includes("general manager")) {
-    return "/dashboard";
-  }
-
-  if (roleType === "Accountant" || rt === "accountant") {
-    return "/expenses";
-  }
-
-  if (roleType === "Auditor" || rt === "auditor") {
-    return "/reports";
-  }
-
-  if (roleType === "HR" || rt === "hr") {
-    return "/users-roles";
-  }
-
-  if (roleType === "IT Support" || rt === "it support") {
-    return "/settings";
-  }
-
+  // Role fallbacks when permissions not yet assigned
+  if (rt === "admin" || roleType === "ADMIN" || roleType === "Admin") return "/dashboard";
+  if (roleType === "MD" || rt === "md" || rn.includes("managing director")) return "/dashboard";
+  if (roleType === "GM" || rt === "gm" || rn.includes("general manager")) return "/dashboard";
+  if (roleType === "Staff" || rt === "staff") return "/orders";
+  if (roleType === "Accountant" || rt === "accountant") return "/expenses";
+  if (roleType === "Auditor" || rt === "auditor") return "/reports";
+  if (roleType === "HR" || rt === "hr") return "/users-roles";
+  if (roleType === "IT Support" || rt === "it support") return "/settings";
   if (roleType === "Book Storekeeper" || rt === "book storekeeper" || rt === "book_storekeeper") {
     return "/inventory";
   }
-
   if (
     roleType === "SALES_REP" ||
     roleType === "sales_staff" ||
@@ -82,24 +82,9 @@ export function getPostSignInPath(profile: ProfileForRouting | null | undefined)
   ) {
     return "/orders";
   }
-
   if (roleType === "Storekeeper" || rt === "storekeeper" || rt.includes("inventory clerk")) {
     return "/inventory";
   }
 
-  const perms = profile.permissions ?? [];
-  if (perms.includes("view_users") || perms.includes("users.view")) {
-    return "/users-roles";
-  }
-  if (perms.includes("view_expenses") || perms.includes("expenses.view")) {
-    return "/expenses";
-  }
-  if (perms.includes("view_reports") || perms.includes("reports.view")) {
-    return "/reports";
-  }
-  if (perms.includes("view_inventory") || perms.includes("inventory.view")) {
-    return "/inventory";
-  }
-
-  return "/dashboard";
+  return "/orders";
 }

@@ -174,6 +174,7 @@ export interface InventoryImportResult {
   total: number;
   created: number;
   failed: number;
+  warehousesCreated?: number;
   results: Array<{
     success: boolean;
     sku?: string;
@@ -464,6 +465,67 @@ export async function getProductPurchaseHistory(
 }
 
 // Utility helpers for CSV import ------------------------------------------------
+
+/** Normalize header for lookup: trim, lowercase, strip spaces/underscores/dots/dashes */
+function compactHeaderKey(header: string): string {
+  return header.trim().toLowerCase().replace(/[\s_.-]+/g, "");
+}
+
+/**
+ * Map CSV column headers to canonical camelCase field names.
+ * Accepts any common casing (expirydate, EXPIRY_DATE, expiryDate) and aliases (desc → description).
+ */
+const IMPORT_HEADER_ALIASES: Record<string, string> = {
+  name: "name",
+  sku: "sku",
+  categoryname: "categoryName",
+  category: "categoryName",
+  warehouseid: "warehouseId",
+  purchaseprice: "purchasePrice",
+  sellingprice: "sellingPrice",
+  expirydate: "expiryDate",
+  expiry: "expiryDate",
+  barcode: "barcode",
+  description: "description",
+  desc: "description",
+  priceperpiece: "pricePerPiece",
+  pricepercarton: "pricePerCarton",
+  priceperroll: "pricePerRoll",
+  priceperdozen: "pricePerDozen",
+  piecespercarton: "piecesPerCarton",
+  piecesperroll: "piecesPerRoll",
+  piecesperdozen: "piecesPerDozen",
+  piecesinstock: "piecesInStock",
+  cartonsinstock: "cartonsInStock",
+  cartoninstock: "cartonsInStock",
+  rollsinstock: "rollsInStock",
+  dozensinstock: "dozensInStock",
+  productsize: "productSize",
+  productsizeunit: "productSizeUnit",
+  sizeunit: "productSizeUnit",
+  packsize: "packSize",
+  unitofsale: "packSize",
+  packaging: "packSize",
+  packtype: "packSize",
+  dispensingunit: "packSize",
+  salesunit: "packSize",
+  reorderpoint: "reorderPoint",
+  expiryalertthreshold: "expiryAlertThreshold",
+  expirythreshold: "expiryAlertThreshold",
+  isoutsourced: "isOutsourced",
+  expirywarehouseid: "expiryWarehouseId",
+  dosagestrength: "productSize",
+  strength: "productSize",
+  dosage: "productSize",
+  concentration: "productSize",
+  potency: "productSize",
+};
+
+export function normalizeImportHeader(header: string): string {
+  const compact = compactHeaderKey(header);
+  return IMPORT_HEADER_ALIASES[compact] ?? header.trim();
+}
+
 export function setNestedValue(target: Record<string, any>, path: string, value: any) {
   const segments = path.split(".");
   let current = target;
@@ -503,27 +565,11 @@ export function mapFlatRecordToPayload(
   const payload: Record<string, any> = {};
   let dozensInStockRaw: number | undefined;
 
-  // Field name aliases/mappings
-  const fieldMappings: Record<string, string> = {
-    "cartonInStock": "cartonsInStock", // Fix singular to plural
-    "unitOfSale": "packSize",
-    "packaging": "packSize",
-    "packType": "packSize",
-    "dispensingUnit": "packSize",
-    "salesUnit": "packSize",
-    "dosageStrength": "productSize", // Alternative name for productSize
-    "strength": "productSize",
-    "dosage": "productSize",
-    "concentration": "productSize",
-    "potency": "productSize",
-  };
-
   for (const [key, value] of Object.entries(record)) {
     // Skip if key is empty
     if (!key || key.trim() === '') continue;
     
-    // Apply field name mapping
-    const mappedKey = fieldMappings[key] || key;
+    const mappedKey = normalizeImportHeader(key);
     
     const coerced = coerceValue(mappedKey, value);
     

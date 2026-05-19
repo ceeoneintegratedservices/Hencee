@@ -18,6 +18,7 @@ import {
 } from "@/services/customers";
 import { getDashboardCustomers, type DashboardCustomers } from "@/services/dashboard";
 import { NotificationContainer, useNotifications } from "@/components/Notification";
+import { getAuditLogs, type AuditLog } from "@/services/auditLogs";
 
 interface Customer {
   id: string;
@@ -66,6 +67,7 @@ export default function CustomersPage() {
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [deletedCustomerRecords, setDeletedCustomerRecords] = useState<AuditLog[]>([]);
 
   // Fetch customers from API
   const fetchCustomers = async (page = currentPage, limit = itemsPerPage) => {
@@ -97,6 +99,13 @@ export default function CustomersPage() {
       setTopCustomers(topCustomersData);
       setOutstandingCustomers(outstandingData);
       setCustomerMetrics(metricsData);
+
+      const deletedLogs = await getAuditLogs({
+        action: 'customer.deleted',
+        entityType: 'customers',
+        limit: 50,
+      });
+      setDeletedCustomerRecords(deletedLogs.data);
     } catch (error: any) {
       console.error('Error fetching summary data:', error);
       showError('Error', 'Failed to load summary data');
@@ -676,6 +685,38 @@ export default function CustomersPage() {
                           ))
                         ) : (
                           <p className="text-gray-500 text-center py-4">No outstanding balances</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-8">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">Deleted Customer Records</h3>
+                      <p className="text-sm text-gray-600 mb-3">
+                        Removed accounts are logged here. Customers with order history cannot be deleted.
+                      </p>
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {deletedCustomerRecords.length > 0 ? (
+                          deletedCustomerRecords.map((log) => {
+                            const details = log.details as { customer?: { name?: string; email?: string } } | undefined;
+                            const name = details?.customer?.name ?? 'Unknown';
+                            const email = details?.customer?.email ?? '';
+                            return (
+                              <div
+                                key={log.id}
+                                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100"
+                              >
+                                <div>
+                                  <p className="font-medium text-gray-900">{name}</p>
+                                  {email ? <p className="text-sm text-gray-600">{email}</p> : null}
+                                </div>
+                                <p className="text-xs text-gray-500">
+                                  {new Date(log.createdAt).toLocaleDateString()}
+                                </p>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <p className="text-gray-500 text-center py-4">No deleted customer records</p>
                         )}
                       </div>
                     </div>

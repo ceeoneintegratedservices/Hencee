@@ -36,6 +36,9 @@ interface OrderData {
   outsourcedCost: string;
   outsourcedSellingPrice: string;
   outsourcedNotes: string;
+  outsourcedUnitType: SaleUnitType;
+  outsourcedProductSize: string;
+  outsourcedProductSizeUnit: string;
 }
 
 interface OrderItem {
@@ -57,6 +60,7 @@ interface OrderItem {
   pricePerRoll?: number;
   pricePerDozen?: number;
   baseSellingPrice?: number;
+  isOutsourced?: boolean;
 }
 
 interface PaymentFormState {
@@ -138,6 +142,9 @@ export default function CreateOrderModal({
     outsourcedCost: "",
     outsourcedSellingPrice: "",
     outsourcedNotes: "",
+    outsourcedUnitType: "piece",
+    outsourcedProductSize: "",
+    outsourcedProductSizeUnit: "mg",
   });
 
   const [isNewCustomer, setIsNewCustomer] = useState(false);
@@ -901,15 +908,20 @@ export default function CreateOrderModal({
             </thead>
             <tbody>
               ${orderData.items.map(item => {
-                const unitLabel = item.unitType ? item.unitType.charAt(0).toUpperCase() + item.unitType.slice(1) + (item.quantity !== 1 ? 's' : '') : '';
+                const unitLabel = item.unitType
+                  ? item.unitType.charAt(0).toUpperCase() + item.unitType.slice(1) + (item.quantity !== 1 ? "s" : "")
+                  : "";
+                const qtyDisplay = unitLabel
+                  ? `${item.quantity} (${unitLabel})`
+                  : String(item.quantity);
                 return `
                 <tr>
                   <td>
-                    <strong>${item.name}</strong>
+                    <strong>${item.name}</strong>${item.isOutsourced ? ' <span style="font-size:0.8em;color:#6b7280;">(Outsourced)</span>' : ''}
                     ${item.productSize && item.productSizeUnit ? `<br><span style="font-size: 0.85em; color: #666;">${item.productSize} ${item.productSizeUnit}</span>` : ''}
                   </td>
                   <td>${item.warehouseName || item.warehouseNumber || 'N/A'}</td>
-                  <td>${item.quantity}${unitLabel ? ` <span style="font-size:0.85em;color:#555;">${unitLabel}</span>` : ''}</td>
+                  <td>${qtyDisplay}</td>
                   <td>${formatAmount(item.unitPrice)}</td>
                   ${showDiscountColumn ? `<td>${formatAmount(item.discountAmount || 0)}</td>` : ''}
                   <td><strong>${formatAmount(item.total)}</strong></td>
@@ -1076,13 +1088,58 @@ export default function CreateOrderModal({
     setOrderData(prev => ({ ...prev, items: updatedItems }));
   };
 
+  const addOutsourcedToOrder = () => {
+    const itemName = orderData.outsourcedItemName.trim();
+    const quantity = Number(orderData.outsourcedQuantity);
+    const selling = Number(orderData.outsourcedSellingPrice);
+    const cost = Number(orderData.outsourcedCost);
+
+    if (!orderData.outsourcedSupplierName.trim()) {
+      showError("Validation", "Enter the supplier name before adding outsourced goods.");
+      return;
+    }
+    if (!itemName) {
+      showError("Validation", "Enter the outsourced goods name.");
+      return;
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      showError("Validation", "Enter a valid quantity greater than zero.");
+      return;
+    }
+    if (!Number.isFinite(selling) || selling <= 0) {
+      showError("Validation", "Enter a valid selling price.");
+      return;
+    }
+
+    const unitType = orderData.outsourcedUnitType || "piece";
+    const newItem: OrderItem = {
+      id: `outsourced-${Date.now()}`,
+      name: itemName,
+      unitPrice: selling,
+      price: selling,
+      quantity,
+      unitType,
+      discountAmount: 0,
+      total: selling * quantity,
+      productSize: orderData.outsourcedProductSize.trim() || undefined,
+      productSizeUnit: orderData.outsourcedProductSizeUnit.trim() || undefined,
+      isOutsourced: true,
+    };
+
+    setOrderData((prev) => ({
+      ...prev,
+      items: [...prev.items, newItem],
+      outsourcedItemName: "",
+      outsourcedQuantity: "1",
+      outsourcedCost: "",
+      outsourcedSellingPrice: "",
+      outsourcedProductSize: "",
+    }));
+    showSuccess("Added", `${itemName} added to this order.`);
+  };
+
   // Calculate total order amount
   const calculateTotal = () => {
-    if (orderData.saleVariant === "outsourced" && orderData.items.length === 0) {
-      const qty = Math.max(Number(orderData.outsourcedQuantity || 0), 0);
-      const unitSelling = Math.max(Number(orderData.outsourcedSellingPrice || 0), 0);
-      return qty * unitSelling;
-    }
     return orderData.items.reduce((total, item) => total + item.total, 0);
   };
 
@@ -1118,6 +1175,21 @@ export default function CreateOrderModal({
         throw new Error('Customer ID is required. Please select a customer or create a new one.');
       }
 
+      if (orderData.items.length === 0) {
+        throw new Error("Add at least one product from stock or use Add Outsourced Item.");
+      }
+
+      const outsourcedLines = orderData.items.filter(
+        (item) => item.isOutsourced || item.id.startsWith("outsourced-")
+      );
+      const stockLines = orderData.items.filter(
+        (item) => !item.isOutsourced && !item.id.startsWith("outsourced-")
+      );
+
+      if (outsourcedLines.length > 0 && !orderData.outsourcedSupplierName.trim()) {
+        throw new Error("Outsourced line items require a supplier name.");
+      }
+
       const salePayload: CreateSalePayload = {
         customerId,
         items: orderData.items.map((item) => ({
@@ -1127,49 +1199,27 @@ export default function CreateOrderModal({
           unitType: item.unitType,
           unitPrice: item.unitPrice,
           discountAmount: item.discountAmount || 0,
+          isOutsourced: item.isOutsourced,
         })),
         notes: orderData.orderNote || undefined,
         showDiscountOnInvoice: orderData.showDiscountOnInvoice,
-        saleVariant: orderData.saleVariant,
+        saleVariant:
+          outsourcedLines.length > 0 && stockLines.length === 0 ? "outsourced" : "standard",
       };
 
-      if (orderData.saleVariant === "outsourced") {
-        const supplier = orderData.outsourcedSupplierName.trim();
-        const itemName = orderData.outsourcedItemName.trim();
-        const quantity = Number(orderData.outsourcedQuantity);
-        const cost = Number(orderData.outsourcedCost);
-        const selling = Number(orderData.outsourcedSellingPrice);
-        if (!supplier) {
-          throw new Error("Outsourced sale requires supplier name.");
-        }
-        if (!itemName) {
-          throw new Error("Outsourced sale requires goods/item name.");
-        }
-        if (!Number.isFinite(quantity) || quantity <= 0) {
-          throw new Error("Outsourced sale requires a valid quantity greater than zero.");
-        }
-        if (!Number.isFinite(cost) || cost < 0) {
-          throw new Error("Outsourced sale requires a valid source cost.");
-        }
-        if (!Number.isFinite(selling) || selling <= 0) {
-          throw new Error("Outsourced sale requires a valid selling price.");
-        }
-        // Ensure outsourced goods always become a visible line item in the order.
-        salePayload.items = [
-          {
-            productId: `outsourced-${Date.now()}`,
-            productName: itemName,
-            quantity,
-            unitType: "piece",
-            unitPrice: selling,
-            discountAmount: 0,
-          },
-        ];
-        salePayload.outsourcedSupplierName = supplier;
-        salePayload.outsourcedCost = cost;
-        salePayload.outsourcedSellingPrice = selling;
-        salePayload.outsourcedNotes =
-          [itemName, orderData.outsourcedNotes.trim()].filter(Boolean).join(" | ") || undefined;
+      if (outsourcedLines.length > 0) {
+        const totalOutsourcedCost = outsourcedLines.reduce((sum, item) => {
+          const lineCost = Number(orderData.outsourcedCost) || 0;
+          return sum + lineCost * item.quantity;
+        }, 0);
+        const totalOutsourcedSelling = outsourcedLines.reduce(
+          (sum, item) => sum + item.total,
+          0
+        );
+        salePayload.outsourcedSupplierName = orderData.outsourcedSupplierName.trim();
+        salePayload.outsourcedCost = totalOutsourcedCost;
+        salePayload.outsourcedSellingPrice = totalOutsourcedSelling;
+        salePayload.outsourcedNotes = orderData.outsourcedNotes.trim() || undefined;
       }
 
       const legacyMethodMap: Record<string, PaymentMethod> = {
@@ -1905,24 +1955,9 @@ export default function CreateOrderModal({
               </div>
 
               <div>
-                <label className="block text-[14px] text-[#45464e] mb-2">Sale Type</label>
-                <select
-                  value={orderData.saleVariant}
-                  onChange={(e) =>
-                    setOrderData((prev) => ({
-                      ...prev,
-                      saleVariant: e.target.value as "standard" | "outsourced",
-                    }))
-                  }
-                  className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent"
-                >
-                  <option value="standard">Standard Stock Sale</option>
-                  <option value="outsourced">Outsourced Goods Sale</option>
-                </select>
-              </div>
-
-              {orderData.saleVariant === "outsourced" && (
-                <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <p className="text-sm font-medium text-[#02016a]">Outsourced goods (optional)</p>
+                <p className="text-xs text-gray-600 mb-2">Add stock products on the right and outsourced items below in the same order.</p>
+                <div className="space-y-3 rounded-lg border border-gray-200 bg-white p-3">
                   <div>
                     <label className="block text-[14px] text-[#45464e] mb-2">Supplier Name</label>
                     <input
@@ -2002,22 +2037,71 @@ export default function CreateOrderModal({
                       />
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-[14px] text-[#45464e] mb-2">Outsourced Notes</label>
-                    <textarea
-                      rows={2}
-                      value={orderData.outsourcedNotes}
-                      onChange={(e) =>
-                        setOrderData((prev) => ({
-                          ...prev,
-                          outsourcedNotes: e.target.value,
-                        }))
-                      }
-                      className="w-full p-3 border border-gray-300 rounded-lg text-[14px] text-[#45464e] focus:outline-none focus:ring-2 focus:ring-[#02016a] focus:border-transparent resize-none"
-                    />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[14px] text-[#45464e] mb-2">Unit Type</label>
+                      <select
+                        value={orderData.outsourcedUnitType}
+                        onChange={(e) =>
+                          setOrderData((prev) => ({
+                            ...prev,
+                            outsourcedUnitType: e.target.value as SaleUnitType,
+                          }))
+                        }
+                        className="w-full p-3 border border-gray-300 rounded-lg text-[14px]"
+                      >
+                        {unitOptions.map((u) => (
+                          <option key={u} value={u}>
+                            {u.charAt(0).toUpperCase() + u.slice(1)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[14px] text-[#45464e] mb-2">Product Size</label>
+                        <input
+                          type="text"
+                          value={orderData.outsourcedProductSize}
+                          onChange={(e) =>
+                            setOrderData((prev) => ({
+                              ...prev,
+                              outsourcedProductSize: e.target.value,
+                            }))
+                          }
+                          className="w-full p-3 border border-gray-300 rounded-lg text-[14px]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[14px] text-[#45464e] mb-2">Size Unit</label>
+                        <select
+                          value={orderData.outsourcedProductSizeUnit}
+                          onChange={(e) =>
+                            setOrderData((prev) => ({
+                              ...prev,
+                              outsourcedProductSizeUnit: e.target.value,
+                            }))
+                          }
+                          className="w-full p-3 border border-gray-300 rounded-lg text-[14px]"
+                        >
+                          {["mg", "g", "ml", "l", "tablet", "capsule"].map((u) => (
+                            <option key={u} value={u}>
+                              {u}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={addOutsourcedToOrder}
+                    className="w-full py-2.5 bg-[#02016a] text-white rounded-lg text-sm font-medium hover:bg-[#03024a]"
+                  >
+                    Add Outsourced Item
+                  </button>
                 </div>
-              )}
+              </div>
 
               {/* Order Note */}
               <div>

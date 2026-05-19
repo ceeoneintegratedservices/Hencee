@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useConvexAuth } from 'convex/react';
 import { ExpensesDataService, ExpenseItem, ExpenseSummary } from '@/services/ExpensesDataService';
 import { NotificationContainer, useNotifications } from '@/components/Notification';
@@ -15,6 +15,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 
 export default function ExpensesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { notifications, removeNotification, showSuccess, showError } = useNotifications();
   const { hasPermission } = usePermissions();
   
@@ -78,6 +79,12 @@ export default function ExpensesPage() {
       }
     }
   }, [authLoading, isAuthenticated, router]);
+
+  useEffect(() => {
+    if (searchParams.get('mode') === 'request' && canCreateExpenses) {
+      setShowAddExpenseModal(true);
+    }
+  }, [searchParams, canCreateExpenses]);
 
   // Fetch expenses from API
   const fetchExpenses = async () => {

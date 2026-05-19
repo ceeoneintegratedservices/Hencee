@@ -20,6 +20,7 @@ import type * as internalRequests from "../internalRequests.js";
 import type * as inventory from "../inventory.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_rbac from "../lib/rbac.js";
+import type * as lib_resolveWarehouse from "../lib/resolveWarehouse.js";
 import type * as notifications from "../notifications.js";
 import type * as payments from "../payments.js";
 import type * as permissions from "../permissions.js";
@@ -55,6 +56,7 @@ declare const fullApi: ApiFromModules<{
   inventory: typeof inventory;
   "lib/auth": typeof lib_auth;
   "lib/rbac": typeof lib_rbac;
+  "lib/resolveWarehouse": typeof lib_resolveWarehouse;
   notifications: typeof notifications;
   payments: typeof payments;
   permissions: typeof permissions;

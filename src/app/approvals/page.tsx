@@ -10,7 +10,7 @@ import Header from '@/components/Header';
 import Breadcrumb from '@/components/Breadcrumb';
 import AccountApprovalsTab from '@/components/approvals/AccountApprovalsTab';
 import RefundApprovalsTab from '@/components/approvals/RefundApprovalsTab';
-import { getApprovals, getPendingApprovals, approveRequest, rejectRequest, markRequestAsPaid, createApprovalRequest } from '@/services/approvals';
+import { getApprovals, getPendingApprovals, approveRequest, rejectRequest, markRequestAsPaid, createApprovalRequest, queryApprovalRequest } from '@/services/approvals';
 import { usePermissions } from '@/hooks/usePermissions';
 
 interface ApprovalItem {
@@ -124,6 +124,7 @@ export default function ApprovalsPage() {
       // Helper function to capitalize status for UI consistency
       const capitalizeStatus = (status: string): string => {
         const normalized = status.toLowerCase();
+        if (normalized === 'queried') return 'Queried';
         return normalized.charAt(0).toUpperCase() + normalized.slice(1);
       };
 
@@ -218,11 +219,16 @@ export default function ApprovalsPage() {
     }
   };
 
-  const handleQuery = (id: string) => {
+  const handleQuery = async (id: string) => {
     const queryNote = prompt('Enter your query or request for more information:');
-    if (queryNote) {
-      handleRejectRequest(id, `Query: ${queryNote}`, queryNote);
-      showSuccess('Query sent', 'Your query has been sent to the requester.');
+    if (!queryNote?.trim()) return;
+    try {
+      await queryApprovalRequest(id, queryNote.trim());
+      showSuccess('Query sent', 'Your query has been sent. The request remains open for the requester to respond.');
+      await fetchApprovalsData();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to send query';
+      showError('Error', msg);
     }
   };
 
@@ -282,6 +288,8 @@ export default function ApprovalsPage() {
         return 'bg-purple-100 text-purple-800';
       case 'Under Review':
         return 'bg-blue-100 text-blue-800';
+      case 'Queried':
+        return 'bg-amber-100 text-amber-800';
       default:
         return 'bg-gray-100 text-gray-800';
     }

@@ -86,6 +86,29 @@ export const reject = mutation({
   },
 });
 
+/** Request more information without rejecting — item stays pending for resubmission. */
+export const queryRequest = mutation({
+  args: { id: v.id("approvals"), note: v.string() },
+  handler: async (ctx, { id, note }) => {
+    await requireStaff(ctx);
+    const cur = await ctx.db.get(id);
+    if (!cur) {
+      throw new Error("Not found");
+    }
+    const prev = (cur?.payload ?? {}) as Record<string, unknown>;
+    const queries = Array.isArray(prev.queries)
+      ? [...(prev.queries as { note: string; at: number }[])]
+      : [];
+    queries.push({ note, at: ts() });
+    await ctx.db.patch(id, {
+      status: "queried",
+      updatedAt: ts(),
+      payload: { ...prev, queryNote: note, queries },
+    });
+    return ctx.db.get(id);
+  },
+});
+
 export const markPaid = mutation({
   args: { id: v.id("approvals") },
   handler: async (ctx, { id }) => {

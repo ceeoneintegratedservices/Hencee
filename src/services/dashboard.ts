@@ -305,6 +305,14 @@ export async function getDashboardActivities(timeframe: TimeFrame = 'thisWeek'):
   };
 }
 
+export async function getLossMetrics(): Promise<{
+  totalDiscounts: number;
+  totalDamagedValue: number;
+  totalLoss: number;
+}> {
+  return getConvexClient().query(api.dashboard.lossMetrics, {});
+}
+
 export async function getDashboardSummary(timeframe: TimeFrame = 'thisWeek'): Promise<DashboardSummary> {
   const data = await getConvexClient().query(api.dashboard.summary, { timeframe });
   return data as unknown as DashboardSummary;

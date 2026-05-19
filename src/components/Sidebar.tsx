@@ -167,7 +167,8 @@ export default function Sidebar({ currentPage = "dashboard", sidebarOpen = true,
       'users': '/users-roles',
       'settings': '/settings',
       'audit': '/audits',
-      'expenses': '/expenses'
+      'expenses': '/expenses',
+      'expense-request': '/expenses?mode=request',
     };
     
     return hrefMap[key] || `/${key}`;

@@ -304,6 +304,17 @@ export async function rejectRequest(
   return getApprovalById(id);
 }
 
+export async function queryApprovalRequest(
+  id: string,
+  note: string
+): Promise<ApprovalRequest> {
+  await getConvexClient().mutation(api.approvals.queryRequest, {
+    id: id as Id<"approvals">,
+    note,
+  });
+  return getApprovalById(id);
+}
+
 export async function markRequestAsPaid(
   id: string,
   _actionData: ApprovalAction

@@ -21,6 +21,7 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { getSalesReport, getFinanceReport, getDashboardOverview, getDashboardSales, getDashboardCustomers, getDashboardProducts, getDashboardOrders } from "@/services/reports";
+import { getLossMetrics } from "@/services/dashboard";
 import { listCustomers } from "@/services/customers";
 import { getInventoryProducts } from "@/services/inventory";
 import { listProducts } from "@/services/products";
@@ -84,7 +85,8 @@ export default function ReportsPage() {
       customers: null as any,
       products: null as any,
       orders: null as any
-    }
+    },
+    lossMetrics: null as { totalDiscounts: number; totalDamagedValue: number; totalLoss: number } | null,
   });
   const [apiError, setApiError] = useState<string | null>(null);
   
@@ -134,7 +136,7 @@ export default function ReportsPage() {
       const dateRange = dateRangeMap[timeframe] || 'this_month';
 
       // Fetch data from working backend endpoints
-      const [salesReport, financeReport, customers, inventory, products] = await Promise.allSettled([
+      const [salesReport, financeReport, customers, inventory, products, lossMetrics] = await Promise.allSettled([
         getSalesReport({ dateRange }).catch((err) => {
           console.error('Error fetching sales report:', err);
           return null;
@@ -154,7 +156,11 @@ export default function ReportsPage() {
         listProducts().catch((err) => {
           console.error('Error fetching products:', err);
           return [];
-        })
+        }),
+        getLossMetrics().catch((err) => {
+          console.error('Error fetching loss metrics:', err);
+          return null;
+        }),
       ]);
 
       const salesData = salesReport.status === 'fulfilled' ? salesReport.value : null;
@@ -191,7 +197,8 @@ export default function ReportsPage() {
           customers: null,
           products: null,
           orders: null
-        }
+        },
+        lossMetrics: lossMetrics.status === 'fulfilled' ? lossMetrics.value : null,
       });
 
     } catch (err: any) {
@@ -975,7 +982,7 @@ export default function ReportsPage() {
   const overviewData = {
     cashInStock: inventoryMetrics.cashInStock,
     expectedProfit: inventoryMetrics.expectedProfit,
-    totalLoss: metrics.totalExpenses, // Includes expenses + damaged goods (approximated by expenses)
+    totalLoss: apiData.lossMetrics?.totalLoss ?? metrics.totalExpenses,
     totalExpenses: metrics.totalExpenses,
     totalSalesExcludingDebts: metrics.netSalesValue, // Sales payments made (excludes outstanding)
     cashInHandPayments,
@@ -1430,7 +1437,7 @@ export default function ReportsPage() {
                 <div className="text-center p-3 bg-red-50 rounded-lg">
                   <div className="text-xl font-bold text-red-600">₦{overviewData.totalLoss.toLocaleString()}</div>
                   <div className="text-sm text-gray-600">Total Loss</div>
-                  <div className="text-xs text-gray-400 mt-0.5">Expenses + damaged goods</div>
+                  <div className="text-xs text-gray-400 mt-0.5">Discounts + damaged stock</div>
                 </div>
                 <div className="text-center p-3 bg-amber-50 rounded-lg">
                   <div className="text-xl font-bold text-amber-700">₦{overviewData.totalExpenses.toLocaleString()}</div>

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireStaff } from "./lib/auth";
+import { createWarehouseResolver } from "./lib/resolveWarehouse";
 import type { Doc, Id } from "./_generated/dataModel";
 
 function ts() {
@@ -254,8 +255,20 @@ export const importProducts = mutation({
     let created = 0;
     const results: { success: boolean; sku?: string; id?: string; message?: string }[] = [];
     const t = ts();
+    const warehouseResolver = await createWarehouseResolver(ctx);
     for (const row of rows) {
       try {
+        const warehouseRef = String(row.warehouseId ?? "").trim();
+        if (!warehouseRef) {
+          throw new Error("warehouseId is required");
+        }
+        const warehouseId = await warehouseResolver.resolve(warehouseRef);
+        let expiryWarehouseId: Id<"warehouses"> | undefined;
+        const expiryRef = String(row.expiryWarehouseId ?? "").trim();
+        if (expiryRef) {
+          expiryWarehouseId = await warehouseResolver.resolve(expiryRef);
+        }
+
         const dateStamp = new Date(t).toISOString().slice(0, 10).replace(/-/g, "");
         const rawSku = String(row.sku ?? "").trim();
         const sku = rawSku ? `${rawSku}-${dateStamp}` : `SKU-${dateStamp}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
@@ -269,8 +282,8 @@ export const importProducts = mutation({
           name: String(row.name ?? "Item"),
           sku,
           categoryName: String(row.categoryName ?? "General"),
-          warehouseId: row.warehouseId as Id<"warehouses">,
-          expiryWarehouseId: (row.expiryWarehouseId as Id<"warehouses"> | undefined) ?? undefined,
+          warehouseId,
+          expiryWarehouseId,
           barcode: row.barcode ? String(row.barcode) : undefined,
           description: row.description ? String(row.description) : undefined,
           purchasePrice: Number(row.purchasePrice ?? 0),
@@ -307,7 +320,13 @@ export const importProducts = mutation({
         });
       }
     }
-    return { total: rows.length, created, failed: rows.length - created, results };
+    return {
+      total: rows.length,
+      created,
+      failed: rows.length - created,
+      warehousesCreated: warehouseResolver.createdCount,
+      results,
+    };
   },
 });
 

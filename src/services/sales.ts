@@ -21,6 +21,7 @@ export interface SaleItemPayload {
   unitType?: SaleUnitType;
   unitPrice?: number;
   discountAmount?: number;
+  isOutsourced?: boolean;
 }
 
 export interface SalePaymentPayload {

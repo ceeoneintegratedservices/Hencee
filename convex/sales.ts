@@ -246,19 +246,25 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     await requireStaff(ctx);
-    const variant = args.saleVariant ?? "standard";
-    if (variant === "outsourced") {
+    const saleItems = Array.isArray(args.items) ? args.items : [];
+    const hasOutsourcedLine = saleItems.some((item) => {
+      const row = item as Record<string, unknown>;
+      if (row.isOutsourced === true) return true;
+      const pid = String(row.productId ?? row.id ?? "");
+      return pid.startsWith("outsourced-");
+    });
+    const hasStockLine = saleItems.some((item) => {
+      const row = item as Record<string, unknown>;
+      if (row.isOutsourced === true) return false;
+      const pid = String(row.productId ?? row.id ?? "");
+      return Boolean(pid) && !pid.startsWith("outsourced-");
+    });
+    const saleVariant =
+      hasOutsourcedLine && !hasStockLine ? "outsourced" : "standard";
+    if (hasOutsourcedLine) {
       const supplier = args.outsourcedSupplierName?.trim();
       if (!supplier) {
-        throw new Error("Outsourced sales require outsourcedSupplierName");
-      }
-      if (
-        args.outsourcedCost == null ||
-        args.outsourcedSellingPrice == null
-      ) {
-        throw new Error(
-          "Outsourced sales require outsourcedCost and outsourcedSellingPrice"
-        );
+        throw new Error("Outsourced line items require outsourcedSupplierName");
       }
     }
     const t = ts();
@@ -266,10 +272,9 @@ export const create = mutation({
     const metadataInput = (args.metadata ?? {}) as Record<string, unknown>;
     const paymentInput = (metadataInput.payment ?? {}) as Record<string, unknown>;
     const paymentAmountInput = Number(paymentInput.amount ?? 0);
-    const paymentStatusInput = String(paymentInput.status ?? "PENDING").toUpperCase();
     const initialPaid =
-      paymentAmountInput > 0 && paymentStatusInput === "COMPLETED"
-        ? paymentAmountInput
+      paymentAmountInput > 0
+        ? Math.min(paymentAmountInput, args.totalAmount)
         : 0;
     const initialPaymentState = derivePaymentState(args.totalAmount, initialPaid);
 
@@ -280,19 +285,16 @@ export const create = mutation({
       trackingId: randomTracking(),
       status: args.status ?? (initialPaymentState.outstanding <= 0 ? "Completed" : "In-Progress"),
       orderType: args.orderType ?? "Standard",
-      saleVariant: variant,
-      outsourcedSupplierName:
-        variant === "outsourced"
-          ? args.outsourcedSupplierName?.trim()
-          : undefined,
-      outsourcedCost:
-        variant === "outsourced" ? args.outsourcedCost : undefined,
-      outsourcedSellingPrice:
-        variant === "outsourced" ? args.outsourcedSellingPrice : undefined,
-      outsourcedNotes:
-        variant === "outsourced" ? args.outsourcedNotes : undefined,
-      outsourcedImageUrl:
-        variant === "outsourced" ? args.outsourcedImageUrl : undefined,
+      saleVariant,
+      outsourcedSupplierName: hasOutsourcedLine
+        ? args.outsourcedSupplierName?.trim()
+        : undefined,
+      outsourcedCost: hasOutsourcedLine ? args.outsourcedCost : undefined,
+      outsourcedSellingPrice: hasOutsourcedLine
+        ? args.outsourcedSellingPrice
+        : undefined,
+      outsourcedNotes: hasOutsourcedLine ? args.outsourcedNotes : undefined,
+      outsourcedImageUrl: hasOutsourcedLine ? args.outsourcedImageUrl : undefined,
       items: args.items,
       totalAmount: args.totalAmount,
       paymentMethod: args.paymentMethod,
@@ -302,6 +304,8 @@ export const create = mutation({
         ...metadataInput,
         outstandingBalance: initialPaymentState.outstanding,
         outstandingAfter: initialPaymentState.outstanding,
+        hasOutsourcedItems: hasOutsourcedLine,
+        isMixedOrder: hasOutsourcedLine && hasStockLine,
       },
       createdAt: t,
       updatedAt: t,
@@ -313,7 +317,8 @@ export const create = mutation({
         customerId: args.customerId,
         amount: paymentAmountInput,
         method: (paymentInput.method as string | undefined) ?? args.paymentMethod,
-        status: paymentStatusInput || "PENDING",
+        // Funds recorded at sale time count toward paid total (part vs full is on the sale row).
+        status: "COMPLETED",
         reference: paymentInput.reference as string | undefined,
         metadata: {
           senderName: paymentInput.senderName,
@@ -334,31 +339,49 @@ export const create = mutation({
       );
     }
 
-    // Deduct sold quantities from inventory
-    const saleItems = Array.isArray(args.items) ? args.items : [];
+    // Deduct sold quantities from inventory (stock lines only)
     for (const item of saleItems) {
+      const row = item as Record<string, unknown>;
+      if (row.isOutsourced === true) continue;
+      const rawId = row.productId ?? row.id;
+      const productIdStr = String(rawId ?? "");
+      if (!productIdStr || productIdStr.startsWith("outsourced-")) continue;
+      let productId: Id<"inventoryItems">;
       try {
-        const productId = (item as Record<string, unknown>).id as Id<"inventoryItems"> | undefined;
-        if (!productId) continue;
-        const product = await ctx.db.get(productId);
-        if (!product) continue;
-        const soldQty = Number((item as Record<string, unknown>).quantity ?? 0);
-        if (soldQty <= 0) continue;
-        const unitType = String((item as Record<string, unknown>).unitType ?? "piece").toLowerCase();
-        const inventoryUnits = { ...((product.inventoryUnits as Record<string, number> | undefined) ?? {}) };
-        if (unitType === "carton") {
-          inventoryUnits.cartonsInStock = Math.max((Number(inventoryUnits.cartonsInStock) || 0) - soldQty, 0);
-        } else if (unitType === "roll") {
-          inventoryUnits.rollsInStock = Math.max((Number(inventoryUnits.rollsInStock) || 0) - soldQty, 0);
-        } else if (unitType === "dozen") {
-          inventoryUnits.dozensInStock = Math.max((Number(inventoryUnits.dozensInStock) || 0) - soldQty, 0);
-        } else {
-          inventoryUnits.piecesInStock = Math.max((Number(inventoryUnits.piecesInStock) || 0) - soldQty, 0);
-        }
-        await ctx.db.patch(productId, { inventoryUnits, updatedAt: t });
+        productId = productIdStr as Id<"inventoryItems">;
       } catch {
-        // Non-fatal: stock deduction failure must not block the sale
+        continue;
       }
+      const product = await ctx.db.get(productId);
+      if (!product) continue;
+      const soldQty = Number(row.quantity ?? 0);
+      if (soldQty <= 0) continue;
+      const unitType = String(row.unitType ?? "piece").toLowerCase();
+      const inventoryUnits = {
+        ...((product.inventoryUnits as Record<string, number> | undefined) ?? {}),
+      };
+      if (unitType === "carton") {
+        inventoryUnits.cartonsInStock = Math.max(
+          (Number(inventoryUnits.cartonsInStock) || 0) - soldQty,
+          0
+        );
+      } else if (unitType === "roll") {
+        inventoryUnits.rollsInStock = Math.max(
+          (Number(inventoryUnits.rollsInStock) || 0) - soldQty,
+          0
+        );
+      } else if (unitType === "dozen") {
+        inventoryUnits.dozensInStock = Math.max(
+          (Number(inventoryUnits.dozensInStock) || 0) - soldQty,
+          0
+        );
+      } else {
+        inventoryUnits.piecesInStock = Math.max(
+          (Number(inventoryUnits.piecesInStock) || 0) - soldQty,
+          0
+        );
+      }
+      await ctx.db.patch(productId, { inventoryUnits, updatedAt: t });
     }
 
     const sale = await ctx.db.get(id);

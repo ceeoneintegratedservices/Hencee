@@ -143,7 +143,13 @@ export class PermissionService {
       { key: 'users', label: 'Users & Roles', icon: 'users', permissions: ['users.view'] },
       { key: 'settings', label: 'Settings', icon: 'settings', permissions: ['settings.view'] },
       { key: 'audit', label: 'Audit Logs', icon: 'audit', permissions: ['audit.view_logs'] },
-      { key: 'expenses', label: 'Expenses', icon: 'expenses', permissions: ['expenses.view'] }
+      { key: 'expenses', label: 'Expenses', icon: 'expenses', permissions: ['expenses.view'] },
+      {
+        key: 'expense-request',
+        label: 'Request Expense',
+        icon: 'expenses',
+        permissions: ['expenses.create'],
+      },
     ];
 
     if (isAdministratorRole(this.userRole, this.userRoleType)) {
@@ -292,8 +298,8 @@ export const getDefaultPermissions = (role: string): string[] => {
         PERMISSIONS.CUSTOMERS_VIEW, PERMISSIONS.CUSTOMERS_CREATE,
         PERMISSIONS.PRODUCTS_VIEW,
         PERMISSIONS.INVENTORY_VIEW,
-        // Expenses: view page + create request only (no edit/delete/approve)
-        PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE,
+        // Expenses: request only (no full expenses page unless granted explicitly)
+        PERMISSIONS.EXPENSES_CREATE,
       ];
     case ROLES.SUPPORT:
       return [
